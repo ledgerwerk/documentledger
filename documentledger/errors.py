@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-import json
-from typing import IO
 
-import click
+class DocumentledgerError(Exception):
+    """Structured Documentledger error with a machine-readable code.
 
+    This is a plain exception on purpose: the CLI layer owns error rendering so
+    that command names and JSON-vs-human output stay consistent. It does not
+    subclass ``click.ClickException`` because Click would intercept it and
+    bypass that control.
+    """
 
-class DocumentledgerError(click.ClickException):
     def __init__(
         self,
         code: str,
@@ -16,22 +19,6 @@ class DocumentledgerError(click.ClickException):
     ) -> None:
         super().__init__(message)
         self.code = code
+        self.message = message
         self.remediation = remediation or []
-
-    def show(self, file: IO[str] | None = None) -> None:
-        click.echo(
-            json.dumps(
-                {
-                    "ok": False,
-                    "command": "unknown",
-                    "error": {
-                        "code": self.code,
-                        "message": self.message,
-                        "remediation": self.remediation,
-                    },
-                    "events": [],
-                },
-                sort_keys=True,
-            ),
-            file=file,
-        )
+        self.exit_code = exit_code

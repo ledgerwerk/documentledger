@@ -26,7 +26,7 @@ def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
     return details
 
 
-def render_context(workspace: Workspace, docs: list[str] | None = None) -> str:
+def render_context(workspace: Workspace, docs: list[str] | None = None, include_unlinked: bool = False) -> str:
     scan = latest_scan(workspace)
     scan_id = str(scan.get("scan_id", "")) if scan else ""
     selected = stale_details(workspace)
@@ -67,10 +67,27 @@ def render_context(workspace: Workspace, docs: list[str] | None = None) -> str:
             "",
             "These files changed but have no linked documentation. Decide whether a doc link should be added.",
             "",
-            "## Validation commands",
-            "",
         ]
     )
+    if include_unlinked:
+        lines.extend(["## Unlinked sources (bootstrap)", ""])
+        all_sources = set((scan.get("source_hashes", {}) or {}).keys()) if scan else set()
+        linked_sources: set[str] = set()
+        for record in iter_doc_records(workspace):
+            linked_sources.update(str(source) for source in (record.get("linked_sources", []) or []))
+        unlinked_all = sorted(all_sources - linked_sources)
+        if not unlinked_all:
+            lines.append("- None")
+        else:
+            lines.extend(f"- {source}" for source in unlinked_all)
+        lines.extend(
+            [
+                "",
+                "These sources have no linked documentation. Create or update the relevant docs, then add links with `docledger links add`.",
+                "",
+            ]
+        )
+    lines.extend(["## Validation commands", ""])
     if workspace.config.validation_commands:
         lines.extend(f"- `{command}`" for command in workspace.config.validation_commands)
     else:

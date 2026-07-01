@@ -220,3 +220,15 @@ workspace/
 todo.md
 uv.lock
 /plan.md
+run.html
+
+# Documentledger state
+# Commit storage.yaml, scans/*.yaml, and docs/*.yaml as source of truth.
+# Ignore regenerated rendered context.
+.documentledger/rendered/
+
+# Generated local artifacts
+docs/venv/
+docs/_build/
+*:Zone.Identifier
+documentledger_coding_agent_review.md

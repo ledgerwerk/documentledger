@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import functools
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import typer
 
@@ -48,9 +49,29 @@ def emit(ctx: typer.Context, command: str, result: Any, human: str) -> None:
         typer.echo(human)
 
 
-def fail(command: str, exc: DocumentledgerError) -> None:
-    typer.echo(json.dumps(error_envelope(command, exc), sort_keys=True))
-    raise typer.Exit(exc.exit_code) from exc
+def render_error(ctx: typer.Context, command: str, exc: DocumentledgerError) -> None:
+    if ctx.obj.get("json"):
+        typer.echo(json.dumps(error_envelope(command, exc), sort_keys=True))
+    else:
+        lines = [f"Error: {exc.message}"]
+        for hint in exc.remediation:
+            lines.append(f"  hint: {hint}")
+        typer.echo("\n".join(lines), err=True)
+
+
+def handle_errors(command: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(ctx: typer.Context, *args: Any, **kwargs: Any) -> Any:
+            try:
+                return func(ctx, *args, **kwargs)
+            except DocumentledgerError as exc:
+                render_error(ctx, command, exc)
+                raise typer.Exit(code=exc.exit_code)
+
+        return wrapper
+
+    return decorator
 
 
 @app.callback()
@@ -59,16 +80,14 @@ def main(ctx: typer.Context, json_output: bool = typer.Option(False, "--json", h
 
 
 @app.command()
+@handle_errors("init")
 def init(
     ctx: typer.Context,
     project_name: str | None = typer.Option(None, "--project-name"),
     documentledger_dir: str = typer.Option(".documentledger", "--documentledger-dir"),
     hidden_config: bool = typer.Option(False, "--hidden-config"),
 ) -> None:
-    try:
-        workspace = init_workspace(project_name, documentledger_dir, hidden_config)
-    except DocumentledgerError as exc:
-        fail("init", exc)
+    workspace = init_workspace(project_name, documentledger_dir, hidden_config)
     result = status_result(workspace)
     emit(ctx, "init", result, f"Initialized Documentledger for {workspace.config.project_name}")
 
@@ -77,6 +96,8 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
     if workspace is None:
         return {
             "initialized": False,
+            "state": "uninitialized",
+            "storage_present": False,
             "config_path": None,
             "storage_dir": None,
             "project_name": None,
@@ -86,8 +107,23 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
         }
     config_rel = workspace.config.path.relative_to(workspace.config.root).as_posix()
     storage_rel = workspace.config.storage_dir.relative_to(workspace.config.root).as_posix()
+    storage_present = (workspace.config.storage_dir / "storage.yaml").exists()
+    if not storage_present:
+        return {
+            "initialized": False,
+            "state": "config_only",
+            "storage_present": False,
+            "config_path": config_rel,
+            "storage_dir": storage_rel,
+            "project_name": workspace.config.project_name,
+            "project_uuid": workspace.config.project_uuid,
+            "last_scan_id": None,
+            "remediation": ["Run `docledger init` from the project root to create storage metadata."],
+        }
     return {
         "initialized": True,
+        "state": "initialized",
+        "storage_present": True,
         "config_path": config_rel,
         "storage_dir": storage_rel,
         "project_name": workspace.config.project_name,
@@ -97,6 +133,7 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
 
 
 @app.command()
+@handle_errors("status")
 def status(ctx: typer.Context) -> None:
     workspace = load_workspace(required=False)
     result = status_result(workspace)
@@ -105,6 +142,7 @@ def status(ctx: typer.Context) -> None:
 
 
 @app.command()
+@handle_errors("doctor")
 def doctor(ctx: typer.Context) -> None:
     workspace = load_workspace()
     issues: list[dict[str, str]] = []
@@ -131,6 +169,7 @@ def doctor(ctx: typer.Context) -> None:
 
 
 @app.command()
+@handle_errors("scan")
 def scan(ctx: typer.Context) -> None:
     result_obj = run_scan(load_workspace())
     result = {
@@ -144,32 +183,33 @@ def scan(ctx: typer.Context) -> None:
 
 
 @links_app.command("list")
+@handle_errors("links list")
 def links_list(ctx: typer.Context) -> None:
     records = list_links(load_workspace())
     emit(ctx, "links list", {"docs": records}, "\n".join(str(r["doc_path"]) for r in records) or "No links.")
 
 
 @links_app.command("add")
+@handle_errors("links add")
 def links_add(
     ctx: typer.Context,
     doc: str = typer.Option(..., "--doc"),
     source: str = typer.Option(..., "--source"),
     reason: str | None = typer.Option(None, "--reason"),
 ) -> None:
-    try:
-        record = add_link(load_workspace(), doc, source, reason)
-    except DocumentledgerError as exc:
-        fail("links add", exc)
+    record = add_link(load_workspace(), doc, source, reason)
     emit(ctx, "links add", record, f"Linked {source} to {doc}")
 
 
 @links_app.command("remove")
+@handle_errors("links remove")
 def links_remove(ctx: typer.Context, doc: str = typer.Option(..., "--doc"), source: str = typer.Option(..., "--source")) -> None:
     record = remove_link(load_workspace(), doc, source)
     emit(ctx, "links remove", record, f"Removed {source} from {doc}")
 
 
 @docs_app.command("list")
+@handle_errors("docs list")
 def docs_list(ctx: typer.Context) -> None:
     scan_record = latest_scan(load_workspace())
     docs = sorted((scan_record or {}).get("doc_hashes", {}).keys())
@@ -177,6 +217,7 @@ def docs_list(ctx: typer.Context) -> None:
 
 
 @docs_app.command("stale")
+@handle_errors("docs stale")
 def docs_stale(ctx: typer.Context) -> None:
     details = stale_details(load_workspace())
     human = ["Stale documentation:"]
@@ -191,10 +232,12 @@ def docs_stale(ctx: typer.Context) -> None:
 
 
 @docs_app.command("build-context")
+@handle_errors("docs build-context")
 def docs_build_context(
     ctx: typer.Context,
     doc: str | None = typer.Option(None, "--doc"),
     all_docs: bool = typer.Option(False, "--all"),
+    include_unlinked: bool = typer.Option(False, "--include-unlinked"),
     out: str | None = typer.Option(None, "--out"),
     print_output: bool = typer.Option(False, "--print"),
 ) -> None:
@@ -202,7 +245,7 @@ def docs_build_context(
     if doc and all_docs:
         raise DocumentledgerError("invalid_selector", "Use --doc or --all, not both.")
     selected = [normalize_repo_path(doc)] if doc else None
-    content = render_context(workspace, selected)
+    content = render_context(workspace, selected, include_unlinked=include_unlinked)
     if out:
         Path(out).write_text(content, encoding="utf-8")
     else:
@@ -216,10 +259,12 @@ def docs_build_context(
 
 
 @app.command("mark-fresh")
+@handle_errors("mark-fresh")
 def mark_fresh(
     ctx: typer.Context,
     doc: str | None = typer.Option(None, "--doc"),
     all_docs: bool = typer.Option(False, "--all"),
+    allow_unlinked: bool = typer.Option(False, "--allow-unlinked"),
     reason: str = typer.Option(..., "--reason"),
 ) -> None:
     if not reason.strip():
@@ -241,10 +286,20 @@ def mark_fresh(
             "linked_sources": [],
             "notes": "",
         }
+        linked = record.get("linked_sources", []) or []
+        if not linked and not allow_unlinked:
+            raise DocumentledgerError(
+                "unlinked_doc",
+                f"{doc_path} has no linked sources; mark-fresh is rejected for unlinked docs by default.",
+                [
+                    "Add links with `docledger links add` before marking this doc fresh.",
+                    "Pass --allow-unlinked to record this doc as intentionally unlinked.",
+                ],
+            )
         record["last_fresh_scan_id"] = scan_record["scan_id"]
         record["last_fresh_hash"] = file_hash(workspace.config.root / doc_path)
         record["updated_at"] = now_iso()
-        record["notes"] = reason
+        record["notes"] = reason if linked else f"{reason} (intentionally unlinked)"
         save_doc_record(workspace, record)
         updated.append(doc_path)
     emit(ctx, "mark-fresh", {"updated_docs": updated, "scan_id": scan_record["scan_id"]}, "Marked docs fresh.")
@@ -254,6 +309,5 @@ def run() -> None:
     try:
         app()
     except DocumentledgerError as exc:
-        command = "unknown"
-        typer.echo(json.dumps(error_envelope(command, exc), sort_keys=True), err=False)
-        raise typer.Exit(exc.exit_code) from exc
+        typer.echo(f"Error: {exc.message}", err=True)
+        raise typer.Exit(code=exc.exit_code)
