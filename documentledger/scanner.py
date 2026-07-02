@@ -5,8 +5,10 @@ from typing import Any
 
 from ledgercore.hashing import sha256_bytes
 
+from documentledger.impact import linked_source_map, resolve_affected_sections, unmapped_changed_units
 from documentledger.models import ScanResult, Workspace
-from documentledger.storage import iter_doc_records, latest_scan, next_scan_id, save_scan
+from documentledger.source_index import source_inventory
+from documentledger.storage import latest_scan, save_scan
 
 EXCLUDED_NAMES = {".git", ".cache", "__pycache__", "build", "dist", ".tox", ".nox", ".venv", "venv", "env"}
 
@@ -48,19 +50,88 @@ def changed_source_paths(previous: dict[str, Any] | None, current_hashes: dict[s
     return changed, deleted
 
 
-def linked_source_map(workspace: Workspace) -> dict[str, list[str]]:
-    mapping: dict[str, list[str]] = {}
-    for record in iter_doc_records(workspace):
-        doc_path = str(record.get("doc_path", ""))
-        for source in record.get("linked_sources", []) or []:
-            mapping.setdefault(str(source), []).append(doc_path)
-    return {source: sorted(docs) for source, docs in mapping.items()}
-
-
 def scan_state_changed(previous: dict[str, Any] | None, source_hashes: dict[str, str], doc_hashes: dict[str, str]) -> bool:
     if previous is None:
         return True
     return dict(previous.get("source_hashes", {})) != source_hashes or dict(previous.get("doc_hashes", {})) != doc_hashes
+
+
+def changed_units(
+    previous: dict[str, Any] | None,
+    current_units: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    if previous is None:
+        return [], [], []
+    previous_units = dict(previous.get("source_units", {}))
+    changed: list[dict[str, Any]] = []
+    added: list[dict[str, Any]] = []
+    deleted: list[dict[str, Any]] = []
+    for source_id, unit in sorted(current_units.items()):
+        old_unit = previous_units.get(source_id)
+        if old_unit is None:
+            added.append(
+                {
+                    "source_id": source_id,
+                    "path": str(unit.get("path", "")),
+                    "kind": str(unit.get("kind", "")),
+                    "qualname": str(unit.get("qualname", "")),
+                    "change_type": "added",
+                    "changed_hashes": sorted(dict(unit.get("hashes", {})).keys()),
+                    "old_line_span": [0, 0],
+                    "new_line_span": list(unit.get("line_span", [0, 0])),
+                }
+            )
+            continue
+        old_hashes = dict(old_unit.get("hashes", {}))
+        new_hashes = dict(unit.get("hashes", {}))
+        mismatched = sorted(name for name, value in new_hashes.items() if old_hashes.get(name) != value)
+        if not mismatched:
+            continue
+        changed.append(
+            {
+                "source_id": source_id,
+                "path": str(unit.get("path", "")),
+                "kind": str(unit.get("kind", "")),
+                "qualname": str(unit.get("qualname", "")),
+                "change_type": "modified",
+                "changed_hashes": mismatched,
+                "old_line_span": list(old_unit.get("line_span", [0, 0])),
+                "new_line_span": list(unit.get("line_span", [0, 0])),
+            }
+        )
+    for source_id, old_unit in sorted(previous_units.items()):
+        if source_id in current_units:
+            continue
+        deleted.append(
+            {
+                "source_id": source_id,
+                "path": str(old_unit.get("path", "")),
+                "kind": str(old_unit.get("kind", "")),
+                "qualname": str(old_unit.get("qualname", "")),
+                "change_type": "deleted",
+                "changed_hashes": sorted(dict(old_unit.get("hashes", {})).keys()),
+                "old_line_span": list(old_unit.get("line_span", [0, 0])),
+                "new_line_span": [0, 0],
+            }
+        )
+    return filter_unit_changes(changed), filter_unit_changes(added), filter_unit_changes(deleted)
+
+
+def filter_unit_changes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_path: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        by_path.setdefault(str(item.get("path", "")), []).append(item)
+    filtered: list[dict[str, Any]] = []
+    for path_items in by_path.values():
+        kinds = {str(item.get("kind", "")) for item in path_items}
+        for item in path_items:
+            kind = str(item.get("kind", ""))
+            if kind == "file" and (kinds - {"file"}):
+                continue
+            if kind == "module" and (kinds & {"function", "method", "class"}):
+                continue
+            filtered.append(item)
+    return sorted(filtered, key=lambda item: (str(item.get("path", "")), str(item.get("source_id", ""))))
 
 
 def run_scan(workspace: Workspace) -> ScanResult:
@@ -68,48 +139,70 @@ def run_scan(workspace: Workspace) -> ScanResult:
     doc_paths = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
     source_hashes = hash_paths(workspace, source_paths)
     doc_hashes = hash_paths(workspace, doc_paths)
+    source_units = source_inventory(workspace.config.root, source_paths)
     previous = latest_scan(workspace)
     changed, deleted = changed_source_paths(previous, source_hashes)
+    changed_unit_records, added_unit_records, deleted_unit_records = changed_units(previous, source_units)
     mapping = linked_source_map(workspace)
-    stale = sorted({doc for source in [*changed, *deleted] for doc in mapping.get(source, [])})
     unlinked = sorted(source for source in changed if source not in mapping)
     if previous is None:
         changed = []
         deleted = []
-        stale = []
         unlinked = []
+        changed_unit_records = []
+        added_unit_records = []
+        deleted_unit_records = []
     if not scan_state_changed(previous, source_hashes, doc_hashes):
+        assert previous is not None
         return ScanResult(
-            scan_id=str(previous["scan_id"]),
+            version=int(str(previous.get("version", 0))),
             changed_sources=[],
             deleted_sources=[],
             stale_docs=[],
             unlinked_changed_sources=[],
+            changed_units=[],
+            added_units=[],
+            deleted_units=[],
+            affected_sections=[],
+            unmapped_changed_units=[],
+            source_units=source_units,
             source_hashes=source_hashes,
             doc_hashes=doc_hashes,
             unchanged=True,
-            version=int(str(previous.get("version", 0))),
         )
-    scan_id = next_scan_id(workspace)
     scan = {
-        "schema": "documentledger.scan.v2",
-        "scan_id": scan_id,
+        "schema": "documentledger.scan.v4",
         "source_hashes": source_hashes,
         "doc_hashes": doc_hashes,
+        "source_units": source_units,
         "changed_sources": changed,
         "deleted_sources": deleted,
-        "stale_docs": stale,
+        "changed_units": changed_unit_records,
+        "added_units": added_unit_records,
+        "deleted_units": deleted_unit_records,
+        "affected_sections": [],
+        "stale_docs": [],
         "unlinked_changed_sources": unlinked,
+        "unmapped_changed_units": [],
     }
-    save_scan(workspace, scan)
+    affected_sections = resolve_affected_sections(workspace, scan=scan)
+    scan["affected_sections"] = affected_sections
+    scan["stale_docs"] = sorted({str(item["doc_path"]) for item in affected_sections})
+    scan["unmapped_changed_units"] = unmapped_changed_units(workspace, scan=scan)
+    saved = save_scan(workspace, scan)
     return ScanResult(
-        scan_id=scan_id,
+        version=int(str(saved.get("version", 0))),
         changed_sources=changed,
         deleted_sources=deleted,
-        stale_docs=stale,
+        stale_docs=list(saved["stale_docs"]),
         unlinked_changed_sources=unlinked,
+        changed_units=changed_unit_records,
+        added_units=added_unit_records,
+        deleted_units=deleted_unit_records,
+        affected_sections=list(saved["affected_sections"]),
+        unmapped_changed_units=list(saved["unmapped_changed_units"]),
+        source_units=source_units,
         source_hashes=source_hashes,
         doc_hashes=doc_hashes,
         unchanged=False,
-        version=int(str(scan.get("version", 0))),
     )

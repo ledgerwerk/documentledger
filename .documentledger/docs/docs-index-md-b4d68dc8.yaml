@@ -1,0 +1,89 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/index.md
+linked_sources:
+  - documentledger/cli.py
+sections:
+  - section_id: md:section:docs/index.md::whole-doc
+    doc_path: docs/index.md
+    heading_path: []
+    heading_slug: whole-doc
+    line_span:
+      - 1
+      - 27
+    section_hash: 421e05c8034514d0b9e4b266fdcdacee26e7298bbeb62e2d0ee6c4e811090cbf
+    summary: Whole document.
+    links: []
+  - section_id: md:section:docs/index.md::index-documentation-freshness-workflow
+    doc_path: docs/index.md
+    heading_path:
+      - Documentledger
+      - Documentation freshness workflow
+    heading_slug: index-documentation-freshness-workflow
+    line_span:
+      - 16
+      - 27
+    section_hash: 77e2f43292b60bd98b51b352fdd602a936955a52bc9ce8646ac73e4a9b0e85d3
+    summary: Documentation freshness workflow
+    text: '## Documentation freshness workflow
+
+
+      The supported workflow is:
+
+
+      1. Run `docledger --json status` to confirm that the workspace is initialized.
+
+      2. Run `docledger --json scan` to rewrite `.documentledger/scan.yaml` when current
+      source hashes, documentation hashes, source-unit inventory, or changed source
+      units differ from the latest baseline.
+
+      3. Run `docledger --json docs affected` to find the documentation sections whose
+      linked source units changed.
+
+      4. Run `docledger docs build-context --affected --print` to render update context
+      for affected sections and unlinked changed sources.
+
+      5. Inspect the affected sections and linked changed source units before editing
+      documentation.
+
+      6. Update only the affected sections by default, run configured validation commands,
+      then mark the updated section or doc fresh with `docledger mark-fresh --doc DOC
+      --section SECTION --reason "Docs updated after scan version VERSION."`.
+
+
+      Documentledger stores its own state under the configured `.documentledger/` directory.
+      Do not edit that directory directly.'
+    links:
+      - source_id: py:function:documentledger/cli.py::docs_affected
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents the affected-sections step.
+        tracked_hashes:
+          public_contract_hash: 7f77168ac466940a741662a6e144f0d6d1645ac2d3e9f485555f1d40d8d87fb6
+      - source_id: py:function:documentledger/cli.py::docs_build_context
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents the context-building step.
+        tracked_hashes:
+          public_contract_hash: 62eca799ab226250450564199bb5e32953bb85d9a54e634a8414e8cda18c2ae8
+      - source_id: py:function:documentledger/cli.py::scan
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents the scan step.
+        tracked_hashes:
+          public_contract_hash: 546bc8eab422b33f797e0c1549b9126accb5da9cb200a3e0b7a6d2c700cf714b
+      - source_id: py:function:documentledger/cli.py::status
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents the status step.
+        tracked_hashes:
+          public_contract_hash: 2e72fb46a38a3eed482c9ee82d61786b7d76f5193a1df96462e319e54343c5b7
+last_fresh_scan_version: 1
+last_fresh_hash: c6d6b9d12749d8416eb888ce19dcfe690d06c96fb07f8275bbc99d72a1afd77a
+notes:
+  Verified accurate against current source after scan version 1; no content change
+  required.
+version: 35

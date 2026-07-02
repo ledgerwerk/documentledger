@@ -6,7 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from documentledger.cli import app
-from tests.conftest import assert_no_timestamp_keys, dump_yaml, invoke_json, load_yaml
+from tests.conftest import assert_no_timestamp_keys, invoke_json, load_yaml
 
 
 def timestamp_key(prefix: str) -> str:
@@ -57,7 +57,7 @@ def test_build_context_useful_with_unlinked_changed_no_stale(project: Path, runn
     invoke_json(runner, ["scan"])
     result = runner.invoke(app, ["docs", "build-context", "--all", "--print"])
     assert result.exit_code == 0
-    assert "No stale docs." in result.output
+    assert "No affected sections." in result.output
     assert "documentledger/new.py" in result.output
 
 
@@ -100,53 +100,21 @@ def test_timestamp_keys_absent_from_persisted_state_and_rendered_context(project
     invoke_json(runner, ["scan"])
     (project / "documentledger" / "cli.py").write_text("changed\n", encoding="utf-8")
     invoke_json(runner, ["scan"])
-    invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", "Docs updated after scan scan-0002."])
+    invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", "Docs updated after scan version 2."])
     storage_dir = project / ".documentledger"
     assert_no_timestamp_keys(load_yaml(storage_dir / "storage.yaml"))
-    assert_no_timestamp_keys(load_yaml(storage_dir / "scans" / "scan-0002.yaml"))
+    assert_no_timestamp_keys(load_yaml(storage_dir / "scan.yaml"))
     assert_no_timestamp_keys(load_yaml(next((storage_dir / "docs").glob("*.yaml"))))
     result = runner.invoke(app, ["docs", "build-context", "--all", "--print"])
     assert f"{timestamp_key('generated')}:" not in result.output
 
 
-def test_workspace_load_migrates_v1_state(project: Path, runner: CliRunner) -> None:
+def test_workspace_state_uses_single_scan_file(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
     invoke_json(runner, ["scan"])
     storage_path = project / ".documentledger" / "storage.yaml"
-    scan_path = project / ".documentledger" / "scans" / "scan-0001.yaml"
-    doc_path = next((project / ".documentledger" / "docs").glob("*.yaml"))
-
-    legacy_storage = load_yaml(storage_path)
-    legacy_storage["schema_version"] = 1
-    legacy_storage[timestamp_key("created")] = "2026-01-01T00:00:00Z"
-    legacy_storage[timestamp_key("updated")] = "2026-01-01T00:00:00Z"
-    legacy_storage.pop("state_version", None)
-    dump_yaml(storage_path, legacy_storage)
-
-    legacy_scan = load_yaml(scan_path)
-    legacy_scan["schema"] = "documentledger.scan.v1"
-    legacy_scan[timestamp_key("created")] = "2026-01-01T00:00:00Z"
-    legacy_scan.pop("version", None)
-    dump_yaml(scan_path, legacy_scan)
-
-    legacy_doc = load_yaml(doc_path)
-    legacy_doc["schema"] = "documentledger.doc_record.v1"
-    legacy_doc[timestamp_key("updated")] = "2026-01-01T00:00:00Z"
-    legacy_doc.pop("version", None)
-    dump_yaml(doc_path, legacy_doc)
-
-    status = invoke_json(runner, ["status"])["result"]
-    migrated_storage = load_yaml(storage_path)
-    migrated_scan = load_yaml(scan_path)
-    migrated_doc = load_yaml(doc_path)
-    assert status["initialized"] is True
-    assert migrated_storage["schema_version"] == 2
-    assert int(migrated_storage["state_version"]) >= 1
-    assert migrated_scan["schema"] == "documentledger.scan.v2"
-    assert "version" in migrated_scan
-    assert migrated_doc["schema"] == "documentledger.doc_record.v2"
-    assert "version" in migrated_doc
-    assert_no_timestamp_keys(migrated_storage)
-    assert_no_timestamp_keys(migrated_scan)
-    assert_no_timestamp_keys(migrated_doc)
+    storage = load_yaml(storage_path)
+    assert (project / ".documentledger" / "scan.yaml").exists()
+    assert not (project / ".documentledger" / "scans").exists()
+    assert "next_scan_number" not in storage
+    assert "last_scan_id" not in storage

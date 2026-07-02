@@ -1,0 +1,284 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/usage.md
+linked_sources:
+  - documentledger/cli.py
+sections:
+  - section_id: md:section:docs/usage.md::whole-doc
+    doc_path: docs/usage.md
+    heading_path: []
+    heading_slug: whole-doc
+    line_span:
+      - 1
+      - 167
+    section_hash: dfca1bfab615b608a64c78f8f1a3148fdcf998e6f5b7b4a9db831c370d787dff
+    summary: Whole document.
+    links: []
+  - section_id: md:section:docs/usage.md::usage-run-scan
+    doc_path: docs/usage.md
+    heading_path:
+      - Usage
+      - Scan source and documentation files
+    heading_slug: usage-run-scan
+    line_span:
+      - 30
+      - 48
+    section_hash: 2d14fb58b3999fe90199b16621b5efb4347bfa54dbf3de2e785a22aa86134542
+    summary: Scan source and documentation files
+    text: "## Scan source and documentation files
+
+
+      ```bash
+
+      docledger --json scan
+
+      ```
+
+
+      A scan collects files from the configured source and documentation roots, hashes
+      them, indexes Python source units, and compares the current state to the previous
+      scan. The first scan establishes a baseline and does not report changed, deleted,
+      stale, or unlinked sources.
+
+
+      Later scans report:
+
+
+      - `unchanged`, `true` when the source and documentation hashes match the previous
+      scan exactly. No scan state is rewritten and the previous scan version is reused;
+      the human output prints `No tracked file changes since scan version <version>`
+      instead of `Recorded scan version <version>`.
+
+      - `changed_sources`, source files whose hash changed or that are new since the
+      previous scan.
+
+      - `changed_units`, source units whose tracked semantic hashes changed. For Python
+      this is usually the changed function, method, class, or module contract rather
+      than the whole file.
+
+      - `deleted_sources`, source files that were present in the previous scan and are
+      now gone.
+
+      - `affected_sections`, the documentation sections currently impacted by changed
+      or deleted linked source units.
+
+      - `stale_docs`, a compatibility projection of the docs that still contain affected
+      sections.
+
+      - `unlinked_changed_sources`, changed source files that do not have documentation
+      links.
+
+
+      <!-- docledger-section: usage-link-documentation-to-sources -->"
+    links:
+      - source_id: py:function:documentledger/cli.py::scan
+        source_path: documentledger/cli.py
+        coverage: cli-command
+        impact: behavior
+        reason: Documents the scan command.
+        tracked_hashes:
+          signature_hash: 125dfc991619f0a9d0ec3aa67be876d51b475c94020d693027b8ca49647d5312
+          decorator_hash: e6fdf6cefcdd386541a2b5f727d667fe7f1c5f9da27ddc7871917e20c78bc2e2
+          public_contract_hash: 546bc8eab422b33f797e0c1549b9126accb5da9cb200a3e0b7a6d2c700cf714b
+  - section_id: md:section:docs/usage.md::usage-link-documentation-to-sources
+    doc_path: docs/usage.md
+    heading_path:
+      - Usage
+      - Link documentation to sources
+    heading_slug: usage-link-documentation-to-sources
+    line_span:
+      - 49
+      - 79
+    section_hash: 44c32ed8f2ea0448a5eb5e1bef27c42a88f932f3d66a4e128d7e145fe365e26d
+    summary: Link documentation to sources
+    text:
+      "## Link documentation to sources\n\n```bash\ndocledger links add --doc docs/usage.md\
+      \ --source documentledger/cli.py --reason \"Documents CLI workflow.\"\n```\n\n\
+      Whole-file links remain available as a broad fallback, but precise section links\
+      \ are the default:\n\n```bash\ndocledger links add-section \\\n  --doc docs/usage.md\
+      \ \\\n  --section usage-validate-ledger-state \\\n  --source-unit py:function:documentledger/cli.py::doctor\
+      \ \\\n  --coverage cli-command \\\n  --impact behavior \\\n  --reason \"Documents\
+      \ the doctor command.\"\n```\n\nLinks use repository-relative POSIX paths. Document\
+      \ paths must have configured documentation extensions, source paths and source\
+      \ units must exist, and coverage and impact values are validated. Keep links precise:\
+      \ section-level links let small command changes affect only the doc sections that\
+      \ actually describe them.\n\nList and remove links with:\n\n```bash\ndocledger\
+      \ links list\ndocledger links remove --doc docs/usage.md --source documentledger/cli.py\n\
+      docledger links remove-section --doc docs/usage.md --section usage-validate-ledger-state\
+      \ --source-unit py:function:documentledger/cli.py::doctor\ndocledger links import-map\
+      \ --file /tmp/documentledger-map.yaml --validate\ndocledger links import-map --file\
+      \ /tmp/documentledger-map.yaml --apply\n```\n\n<!-- docledger-section: usage-find-and-update-stale-documentation\
+      \ -->"
+    links:
+      - source_id: py:function:documentledger/cli.py::links_add
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents adding doc links.
+        tracked_hashes:
+          public_contract_hash: 2208201589eefb419e1e339d7483a73360bd606b471ea3f1f2e33e6cf251e6fc
+      - source_id: py:function:documentledger/cli.py::links_list
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents listing doc links.
+        tracked_hashes:
+          public_contract_hash: 81189f79f8dc7a781b5f1f7fbe2e3277167fb4759783e8b3f5870e186cec0c78
+      - source_id: py:function:documentledger/cli.py::links_remove
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents removing doc links.
+        tracked_hashes:
+          public_contract_hash: 7bb325dae1b7ae72cf10a807a0bfb788182ccc56675b67ceb1fde32e5248911b
+  - section_id: md:section:docs/usage.md::usage-find-and-update-stale-documentation
+    doc_path: docs/usage.md
+    heading_path:
+      - Usage
+      - Find and update stale documentation
+    heading_slug: usage-find-and-update-stale-documentation
+    line_span:
+      - 80
+      - 91
+    section_hash: ccc462b9d3cd1851e5d5a62cca86313cc1b81f33511031446044b6a8ba82e69c
+    summary: Find and update stale documentation
+    text: "## Find and update stale documentation
+
+
+      ```bash
+
+      docledger --json docs affected
+
+      docledger docs build-context --affected --print
+
+      ```
+
+
+      `docs affected` reports the live affected sections for the latest scan. After
+      a section is updated and marked fresh, it disappears from `docs affected` immediately;
+      a follow-up scan is optional confirmation, not the only way to clear affectedness.
+
+
+      The rendered context contains only the affected doc sections, their linked changed
+      source units, the current relevant source snippets, unlinked changed sources,
+      and configured validation commands. Inspect the affected sections and linked changed
+      source units first. Expand to whole files only when the changed unit cannot be
+      understood in isolation.
+
+
+      <!-- docledger-section: usage-bootstrapping-a-new-repository -->"
+    links:
+      - source_id: py:function:documentledger/cli.py::docs_affected
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents affected section reporting.
+        tracked_hashes:
+          public_contract_hash: 7f77168ac466940a741662a6e144f0d6d1645ac2d3e9f485555f1d40d8d87fb6
+      - source_id: py:function:documentledger/cli.py::docs_build_context
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents affected section context rendering.
+        tracked_hashes:
+          public_contract_hash: 62eca799ab226250450564199bb5e32953bb85d9a54e634a8414e8cda18c2ae8
+  - section_id: md:section:docs/usage.md::usage-mark-documentation-fresh
+    doc_path: docs/usage.md
+    heading_path:
+      - Usage
+      - Mark documentation fresh
+    heading_slug: usage-mark-documentation-fresh
+    line_span:
+      - 105
+      - 124
+    section_hash: df534b6f026290ee1a403e3a7173b722fa2058968bd919ca2e97448bb56a2500
+    summary: Mark documentation fresh
+    text: '## Mark documentation fresh
+
+
+      After updating and validating an affected section, mark it fresh:
+
+
+      ```bash
+
+      docledger mark-fresh --doc docs/usage.md --section usage-validate-ledger-state
+      --reason "Docs updated after scan version 2."
+
+      ```
+
+
+      `mark-fresh` records the latest scan version, the current document hash, the current
+      section hash, and the tracked source-unit hashes for the selected links. It requires
+      a non-empty reason. Use `--all` to mark every currently affected section from
+      the latest scan, or `--doc` without `--section` to update all affected sections
+      in one doc explicitly.
+
+
+      Unlinked docs are rejected by default:
+
+
+      ```bash
+
+      docledger mark-fresh --doc docs/index.md --reason "Navigation page."        #
+      rejected: unlinked_doc
+
+      docledger mark-fresh --doc docs/index.md --allow-unlinked --reason "Navigation
+      page."
+
+      ```
+
+
+      This prevents silently tracking a doc that can never become stale from source
+      changes. Pass `--allow-unlinked` only for intentionally unlinked docs; the record
+      stores the reason with an `(intentionally unlinked)` marker.
+
+
+      <!-- docledger-section: usage-validate-ledger-state -->'
+    links:
+      - source_id: py:function:documentledger/cli.py::mark_fresh
+        source_path: documentledger/cli.py
+        coverage: workflow
+        impact: behavior
+        reason: Documents section-level mark-fresh.
+        tracked_hashes:
+          public_contract_hash: 6bef49295a8a2445ad53859f1eff5915411e11184a0b29d78f89eac7730a294a
+  - section_id: md:section:docs/usage.md::usage-validate-ledger-state
+    doc_path: docs/usage.md
+    heading_path:
+      - Usage
+      - Validate ledger state
+    heading_slug: usage-validate-ledger-state
+    line_span:
+      - 125
+      - 133
+    section_hash: 319a1b3fc9436844defbed69be9d826479f6f252daa63d047dd16d3f29690cf0
+    summary: Validate ledger state
+    text: "## Validate ledger state
+
+
+      ```bash
+
+      docledger doctor
+
+      ```
+
+
+      Doctor checks storage schema metadata, document record paths, missing documentation
+      files, missing source files, duplicate edges, missing source-unit ids, and missing
+      section ids.
+
+
+      <!-- docledger-section: usage-json-and-human-output -->"
+    links:
+      - source_id: py:function:documentledger/cli.py::doctor
+        source_path: documentledger/cli.py
+        coverage: cli-command
+        impact: behavior
+        reason: Documents the doctor command.
+        tracked_hashes:
+          signature_hash: cce1d588e2d4cbad71436118d860be9deeb602d0f7f7e39fa71b657467e0e493
+          decorator_hash: 44922ebaa1f09a6ecbc85444377961b22fecf6ed05a99f0a457b448f15509206
+          public_contract_hash: db2b52bf503188d0ced3bbf6f5075f792c3cb962918b9b8e72dd1e23c10dce6d
+last_fresh_scan_version: 1
+last_fresh_hash: f37f3c13e8d56625d7ac24646dd9b5a181597594d6c6cf3bb97ac21667298a23
+notes: Docs updated after scan version 1.
+version: 34

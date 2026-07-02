@@ -42,6 +42,31 @@ def dump_yaml(path: Path, payload: dict[str, object]) -> None:
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 
+def write_precision_sample(project: Path) -> None:
+    (project / "docs").mkdir(exist_ok=True)
+    (project / "documentledger" / "cli.py").write_text(
+        "import typer\n"
+        "app = typer.Typer()\n\n"
+        "@app.command()\n"
+        "def doctor(ctx: typer.Context) -> None:\n"
+        '    print("doctor")\n\n'
+        "@app.command()\n"
+        "def scan(ctx: typer.Context) -> None:\n"
+        '    print("scan")\n',
+        encoding="utf-8",
+    )
+    (project / "docs" / "usage.md").write_text(
+        "# Usage\n\n"
+        "<!-- docledger-section: usage-run-scan -->\n"
+        "## Run a scan\n\n"
+        "Run `docledger scan`.\n\n"
+        "<!-- docledger-section: usage-validate-ledger-state -->\n"
+        "## Validate ledger state\n\n"
+        "Run `docledger doctor`.\n",
+        encoding="utf-8",
+    )
+
+
 def assert_no_timestamp_keys(value: object) -> None:
     if isinstance(value, dict):
         assert not (FORBIDDEN_TIMESTAMP_KEYS & set(value)), value

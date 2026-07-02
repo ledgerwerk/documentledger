@@ -1,5 +1,7 @@
 # Usage
 
+<!-- docledger-section: usage-initialize-workspace -->
+
 ## Initialize a workspace
 
 Run initialization from the repository root:
@@ -9,6 +11,8 @@ docledger init
 ```
 
 By default this creates `documentledger.toml` and a `.documentledger/` storage directory. Use `--project-name` to set the project name, `--documentledger-dir` to choose another storage path, or `--hidden-config` to create `.documentledger.toml` instead.
+
+<!-- docledger-section: usage-check-workspace-status -->
 
 ## Check workspace status
 
@@ -22,7 +26,9 @@ Status reports the workspace `state`:
 - `config_only`: a config file exists but `.documentledger/storage.yaml` is missing. Re-run `docledger init` from the project root to create the storage metadata.
 - `initialized`: both config and storage metadata exist.
 
-The `initialized` field is `true` only in the fully initialized state. The result also reports `storage_present`, the config path, the storage directory, the project name, the project UUID, and the latest scan id.
+The `initialized` field is `true` only in the fully initialized state. The result also reports `storage_present`, the config path, the storage directory, the project name, the project UUID, and the latest scan version.
+
+<!-- docledger-section: usage-run-scan -->
 
 ## Scan source and documentation files
 
@@ -30,14 +36,19 @@ The `initialized` field is `true` only in the fully initialized state. The resul
 docledger --json scan
 ```
 
-A scan collects files from the configured source and documentation roots, hashes them, compares source hashes to the previous scan, and stores a new `scan-NNNN` record. The first scan establishes a baseline and does not report changed, deleted, stale, or unlinked sources.
+A scan collects files from the configured source and documentation roots, hashes them, indexes Python source units, and compares the current state to the previous scan. The first scan establishes a baseline and does not report changed, deleted, stale, or unlinked sources.
 
 Later scans report:
 
+- `unchanged`, `true` when the source and documentation hashes match the previous scan exactly. No scan state is rewritten and the previous scan version is reused; the human output prints `No tracked file changes since scan version <version>` instead of `Recorded scan version <version>`.
 - `changed_sources`, source files whose hash changed or that are new since the previous scan.
+- `changed_units`, source units whose tracked semantic hashes changed. For Python this is usually the changed function, method, class, or module contract rather than the whole file.
 - `deleted_sources`, source files that were present in the previous scan and are now gone.
-- `stale_docs`, linked documentation files affected by changed or deleted sources.
+- `affected_sections`, the documentation sections currently impacted by changed or deleted linked source units.
+- `stale_docs`, a compatibility projection of the docs that still contain affected sections.
 - `unlinked_changed_sources`, changed source files that do not have documentation links.
+
+<!-- docledger-section: usage-link-documentation-to-sources -->
 
 ## Link documentation to sources
 
@@ -45,23 +56,44 @@ Later scans report:
 docledger links add --doc docs/usage.md --source documentledger/cli.py --reason "Documents CLI workflow."
 ```
 
-Links use repository-relative POSIX paths. Document paths must have configured documentation extensions, source paths must have configured source extensions, and both paths must exist. Adding the same link more than once is idempotent. Keep links precise: staleness is computed only across these links, so broadly linking every doc to every source makes too many docs stale for small changes.
+Whole-file links remain available as a broad fallback, but precise section links are the default:
+
+```bash
+docledger links add-section \
+  --doc docs/usage.md \
+  --section usage-validate-ledger-state \
+  --source-unit py:function:documentledger/cli.py::doctor \
+  --coverage cli-command \
+  --impact behavior \
+  --reason "Documents the doctor command."
+```
+
+Links use repository-relative POSIX paths. Document paths must have configured documentation extensions, source paths and source units must exist, and coverage and impact values are validated. Keep links precise: section-level links let small command changes affect only the doc sections that actually describe them.
 
 List and remove links with:
 
 ```bash
 docledger links list
 docledger links remove --doc docs/usage.md --source documentledger/cli.py
+docledger links remove-section --doc docs/usage.md --section usage-validate-ledger-state --source-unit py:function:documentledger/cli.py::doctor
+docledger links import-map --file /tmp/documentledger-map.yaml --validate
+docledger links import-map --file /tmp/documentledger-map.yaml --apply
 ```
+
+<!-- docledger-section: usage-find-and-update-stale-documentation -->
 
 ## Find and update stale documentation
 
 ```bash
-docledger --json docs stale
-docledger docs build-context --all --print
+docledger --json docs affected
+docledger docs build-context --affected --print
 ```
 
-The stale report contains each stale document with the linked changed and deleted sources that require inspection. The rendered context also lists unlinked changed sources and configured validation commands, so an agent knows both what to rewrite and how to validate the result.
+`docs affected` reports the live affected sections for the latest scan. After a section is updated and marked fresh, it disappears from `docs affected` immediately; a follow-up scan is optional confirmation, not the only way to clear affectedness.
+
+The rendered context contains only the affected doc sections, their linked changed source units, the current relevant source snippets, unlinked changed sources, and configured validation commands. Inspect the affected sections and linked changed source units first. Expand to whole files only when the changed unit cannot be understood in isolation.
+
+<!-- docledger-section: usage-bootstrapping-a-new-repository -->
 
 ## Bootstrapping a new repository
 
@@ -73,17 +105,19 @@ docledger scan
 docledger docs build-context --all --include-unlinked --print
 ```
 
-The `--include-unlinked` flag adds a bootstrap section that lists every source file with no linked documentation. Create docs for those sources, add links with `docledger links add`, scan again, validate, then mark the docs fresh. See [Bootstrap](bootstrap.md) for the full setup sequence.
+The `--include-unlinked` flag adds a bootstrap section that lists every source file with no linked documentation. Create docs for those sources, add links with `docledger links add` or `docledger links add-section`, scan again, validate, then mark the docs fresh. See [Bootstrap](bootstrap.md) for the full setup sequence.
+
+<!-- docledger-section: usage-mark-documentation-fresh -->
 
 ## Mark documentation fresh
 
-After updating and validating a stale document, mark it fresh:
+After updating and validating an affected section, mark it fresh:
 
 ```bash
-docledger mark-fresh --doc docs/usage.md --reason "Docs updated after scan scan-0002."
+docledger mark-fresh --doc docs/usage.md --section usage-validate-ledger-state --reason "Docs updated after scan version 2."
 ```
 
-`mark-fresh` records the latest scan id and the current document hash in the document record. It requires a non-empty reason. Use `--all` to mark every stale doc from the latest scan.
+`mark-fresh` records the latest scan version, the current document hash, the current section hash, and the tracked source-unit hashes for the selected links. It requires a non-empty reason. Use `--all` to mark every currently affected section from the latest scan, or `--doc` without `--section` to update all affected sections in one doc explicitly.
 
 Unlinked docs are rejected by default:
 
@@ -94,13 +128,17 @@ docledger mark-fresh --doc docs/index.md --allow-unlinked --reason "Navigation p
 
 This prevents silently tracking a doc that can never become stale from source changes. Pass `--allow-unlinked` only for intentionally unlinked docs; the record stores the reason with an `(intentionally unlinked)` marker.
 
+<!-- docledger-section: usage-validate-ledger-state -->
+
 ## Validate ledger state
 
 ```bash
 docledger doctor
 ```
 
-Doctor checks storage schema metadata, document record paths, duplicate links, missing documentation files, and missing source files.
+Doctor checks storage schema metadata, document record paths, missing documentation files, missing source files, duplicate edges, missing source-unit ids, and missing section ids.
+
+<!-- docledger-section: usage-json-and-human-output -->
 
 ## JSON and human output
 
@@ -127,11 +165,13 @@ Errors also use a JSON envelope when `--json` is set, and the envelope preserves
 
 Without `--json`, commands print human-readable output and errors print concise `Error:` messages with remediation hints.
 
+<!-- docledger-section: usage-ledger-state-and-commit-policy -->
+
 ## Ledger state and commit policy
 
 Documentledger stores its own state under the configured `.documentledger/` directory. The recommended commit policy for a documentation freshness ledger is:
 
-- Commit `.documentledger/storage.yaml`, `.documentledger/scans/*.yaml`, and `.documentledger/docs/*.yaml`. These are the source of truth for project identity, scan history, and doc records with their links and freshness markers.
+- Commit `.documentledger/storage.yaml`, `.documentledger/scan.yaml`, and `.documentledger/docs/*.yaml`. These are the source of truth for project identity, the current scan baseline, section-level links, tracked hash state, and freshness markers.
 - Ignore `.documentledger/rendered/`. Rendered context is regenerated on demand by `docs build-context`.
 
 Do not edit `.documentledger/` files directly; use the `docledger` commands so the records stay consistent.

@@ -1,0 +1,66 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/architecture.md
+linked_sources:
+  - documentledger/identity.py
+  - documentledger/links.py
+  - documentledger/models.py
+  - documentledger/render.py
+  - documentledger/scanner.py
+  - documentledger/storage.py
+sections:
+  - section_id: md:section:docs/architecture.md::whole-doc
+    doc_path: docs/architecture.md
+    heading_path: []
+    heading_slug: whole-doc
+    line_span:
+      - 1
+      - 84
+    section_hash: e271822626784b50c9a0514a178bdc7e9d2e5c93b1d8ce7e7f9351ae09ec191f
+    summary: Whole document.
+    links:
+      - source_id: py:file:documentledger/identity.py
+        source_path: documentledger/identity.py
+        coverage: broad-file-fallback
+        impact: unknown
+        reason: Docs updated after scan version 1.
+        tracked_hashes:
+          file_hash: b4ce2de09622f444f98b3e2d6df9d4b4b05823ce09f4d853e40620d53aeffa5f
+      - source_id: py:file:documentledger/links.py
+        source_path: documentledger/links.py
+        coverage: broad-file-fallback
+        impact: unknown
+        reason: Docs updated after scan version 1.
+        tracked_hashes:
+          file_hash: ebf15b5e2c9601e17161d07290e0425f28b546c407048b77171a9aa9c2dd4ccf
+      - source_id: py:file:documentledger/models.py
+        source_path: documentledger/models.py
+        coverage: broad-file-fallback
+        impact: unknown
+        reason: Docs updated after scan version 1.
+        tracked_hashes:
+          file_hash: 808e317024648cf192d8001aa3e26057765562f7f6728583389c436056aa4bd4
+      - source_id: py:file:documentledger/render.py
+        source_path: documentledger/render.py
+        coverage: broad-file-fallback
+        impact: unknown
+        reason: Docs updated after scan version 1.
+        tracked_hashes:
+          file_hash: 90e4ecb31dd5ec74ccffd6dc864cfb43d402d1c3aedef6de4463d850a282ddc9
+      - source_id: py:file:documentledger/scanner.py
+        source_path: documentledger/scanner.py
+        coverage: broad-file-fallback
+        impact: unknown
+        reason: Docs updated after scan version 1.
+        tracked_hashes:
+          file_hash: b8818c43d402a7226fdaa65bcdc912ba4afba465900ec7291eb9c298189c11f7
+      - source_id: py:file:documentledger/storage.py
+        source_path: documentledger/storage.py
+        coverage: broad-file-fallback
+        impact: unknown
+        reason: Docs updated after scan version 1.
+        tracked_hashes:
+          file_hash: 46c82e610b2c2967cf5175698b4f3031a9f739674392827bc964dc281024c113
+last_fresh_scan_version: 2
+last_fresh_hash: fb0d73d08d2b6b5fd3439ad590ff83fffc0ebf15472829751c464fe2a7dccdb3
+notes: Docs updated after scan version 2.
+version: 44

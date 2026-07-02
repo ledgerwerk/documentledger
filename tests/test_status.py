@@ -14,6 +14,14 @@ def test_status_reports_initialized_workspace(project: Path, runner: CliRunner) 
     assert result["initialized"] is True
     assert result["config_path"] == "documentledger.toml"
     assert result["storage_dir"] == ".documentledger"
+    assert result["last_scan_version"] is None
+
+
+def test_status_reports_latest_scan_version_after_scan(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    invoke_json(runner, ["scan"])
+    data = invoke_json(runner, ["status"])
+    assert data["result"]["last_scan_version"] == 1
 
 
 def test_status_reports_missing_workspace(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:

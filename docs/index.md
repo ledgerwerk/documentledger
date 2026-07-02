@@ -12,15 +12,17 @@ bootstrap
 troubleshooting
 ```
 
+<!-- docledger-section: index-documentation-freshness-workflow -->
+
 ## Documentation freshness workflow
 
 The supported workflow is:
 
 1. Run `docledger --json status` to confirm that the workspace is initialized.
-2. Run `docledger --json scan` to record the current source and documentation hashes.
-3. Run `docledger --json docs stale` to find documentation whose linked sources changed.
-4. Run `docledger docs build-context --all --print` to render update context for stale docs and unlinked changed sources.
-5. Inspect the linked source files before editing stale documentation.
-6. Update the stale documentation, run configured validation commands, then mark updated docs fresh with `docledger mark-fresh --doc DOC --reason "Docs updated after scan SCAN_ID."`.
+2. Run `docledger --json scan` to rewrite `.documentledger/scan.yaml` when current source hashes, documentation hashes, source-unit inventory, or changed source units differ from the latest baseline.
+3. Run `docledger --json docs affected` to find the documentation sections whose linked source units changed.
+4. Run `docledger docs build-context --affected --print` to render update context for affected sections and unlinked changed sources.
+5. Inspect the affected sections and linked changed source units before editing documentation.
+6. Update only the affected sections by default, run configured validation commands, then mark the updated section or doc fresh with `docledger mark-fresh --doc DOC --section SECTION --reason "Docs updated after scan version VERSION."`.
 
 Documentledger stores its own state under the configured `.documentledger/` directory. Do not edit that directory directly.

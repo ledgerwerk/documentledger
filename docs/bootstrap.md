@@ -40,7 +40,7 @@ The first `docledger scan` hashes every configured source and documentation file
 6. Validate the documentation with the configured validation commands, then mark the new docs fresh:
 
    ```bash
-   docledger mark-fresh --doc docs/usage.md --reason "Initial docs after scan scan-0002."
+   docledger mark-fresh --doc docs/usage.md --reason "Initial docs after scan version 2."
    ```
 
 From this point on, normal incremental maintenance applies: subsequent scans mark a doc stale only when one of its linked sources changes.

@@ -1,0 +1,26 @@
+[ledger]
+code = "dl"
+name = "documentledger"
+
+[project]
+name = "documentledger"
+uuid = "38ad2037-5b46-464e-8524-183316369e20"
+
+[storage]
+documentledger_dir = ".documentledger"
+
+[scan]
+source_roots = ["documentledger", "tests"]
+doc_roots = ["docs", "README.md"]
+source_extensions = [".py"]
+doc_extensions = [".md"]
+
+[validation]
+commands = [
+  "python -m pytest -q",
+  "python -m compileall -q documentledger tests",
+  "bash docs/build.sh",
+]
+
+[policy]
+require_doc_frontmatter = false

@@ -13,9 +13,14 @@ def test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> No
     assert data["ok"] is True
     assert (project / "documentledger.toml").exists()
     assert (project / ".documentledger" / "storage.yaml").exists()
+    assert (project / ".documentledger" / "docs").is_dir()
+    assert (project / ".documentledger" / "rendered").is_dir()
+    assert not (project / ".documentledger" / "scans").exists()
     storage = load_yaml(project / ".documentledger" / "storage.yaml")
-    assert storage["schema_version"] == 2
+    assert storage["schema_version"] == 4
     assert storage["state_version"] == 1
+    assert "next_scan_number" not in storage
+    assert "last_scan_id" not in storage
     assert_no_timestamp_keys(storage)
 
 

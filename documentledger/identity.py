@@ -2,16 +2,10 @@ from __future__ import annotations
 
 from ledgercore.errors import PathValidationError
 from ledgercore.hashing import sha256_text
-from ledgercore.ids import NumericIdFormat, slugify_ref
+from ledgercore.ids import slugify_ref
 from ledgercore.paths import validate_relative_posix_path
 
 from documentledger.errors import DocumentledgerError
-
-SCAN_ID_FORMAT = NumericIdFormat(prefix="scan", separator="-", width=4)
-
-
-def format_scan_id(number: int) -> str:
-    return SCAN_ID_FORMAT.format(number)
 
 
 def normalize_repo_path(path: str) -> str:
