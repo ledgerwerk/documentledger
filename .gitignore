@@ -230,5 +230,3 @@ run.html
 # Generated local artifacts
 docs/venv/
 docs/_build/
-*:Zone.Identifier
-documentledger_coding_agent_review.md

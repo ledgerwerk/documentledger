@@ -5,12 +5,7 @@ from pathlib import Path
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
 from documentledger.models import Workspace
-from documentledger.storage import (
-    iter_doc_records,
-    load_doc_record,
-    now_iso,
-    save_doc_record,
-)
+from documentledger.storage import iter_doc_records, load_doc_record, save_doc_record
 
 
 def ensure_extension(path: str, extensions: list[str], kind: str) -> None:
@@ -30,20 +25,21 @@ def add_link(workspace: Workspace, doc: str, source: str, reason: str | None = N
     doc_path = validate_existing(workspace, doc, workspace.config.doc_extensions, "doc")
     source_path = validate_existing(workspace, source, workspace.config.source_extensions, "source")
     record = load_doc_record(workspace, doc_path) or {
-        "schema": "documentledger.doc_record.v1",
+        "schema": "documentledger.doc_record.v2",
         "doc_path": doc_path,
+        "version": 0,
         "linked_sources": [],
         "last_fresh_scan_id": "",
         "last_fresh_hash": "",
-        "updated_at": now_iso(),
         "notes": "",
     }
-    linked = sorted({*[str(item) for item in record.get("linked_sources", [])], source_path})
-    record["linked_sources"] = linked
-    record["updated_at"] = now_iso()
+    before = dict(record)
+    record["schema"] = "documentledger.doc_record.v2"
+    record["linked_sources"] = sorted({*[str(item) for item in record.get("linked_sources", [])], source_path})
     if reason:
         record["notes"] = reason
-    save_doc_record(workspace, record)
+    if record != before:
+        save_doc_record(workspace, record)
     return record
 
 
@@ -53,9 +49,11 @@ def remove_link(workspace: Workspace, doc: str, source: str) -> dict[str, object
     record = load_doc_record(workspace, doc_path)
     if record is None:
         raise DocumentledgerError("doc_record_missing", f"No doc record exists for {doc_path}")
+    before = dict(record)
+    record["schema"] = "documentledger.doc_record.v2"
     record["linked_sources"] = sorted(item for item in record.get("linked_sources", []) if item != source_path)
-    record["updated_at"] = now_iso()
-    save_doc_record(workspace, record)
+    if record != before:
+        save_doc_record(workspace, record)
     return record
 
 

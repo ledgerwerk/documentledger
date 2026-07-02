@@ -10,14 +10,16 @@ A workspace combines the loaded configuration with storage metadata from `.docum
 
 The storage layer writes YAML files only through the Documentledger APIs:
 
-- `.documentledger/storage.yaml` stores schema metadata, project UUID, the next scan number, and the latest scan id.
-- `.documentledger/scans/scan-NNNN.yaml` stores source hashes, document hashes, changed sources, deleted sources, stale docs, and unlinked changed sources.
-- `.documentledger/docs/*.yaml` stores document records with linked sources, freshness metadata, update timestamps, and notes.
+- `.documentledger/storage.yaml` stores schema metadata, project UUID, the current `state_version`, the next scan number, and the latest scan id.
+- `.documentledger/scans/scan-NNNN.yaml` stores source hashes, document hashes, changed sources, deleted sources, stale docs, unlinked changed sources, and a scan record `version`.
+- `.documentledger/docs/*.yaml` stores document records with linked sources, freshness metadata, notes, and a doc-record `version`.
 - `.documentledger/rendered/latest-context.md` is a regenerated cache of the latest rendered update context.
 
 Scan ids are formatted as `scan-0001`, `scan-0002`, and so on.
 
 The recommended commit policy is to version `storage.yaml`, `scans/*.yaml`, and `docs/*.yaml` as the source of truth, and to ignore `rendered/` because it is regenerated on demand.
+
+State is hash- and version-based. Timestamps are intentionally absent from persisted storage and rendered context front matter.
 
 ## Path identity
 
@@ -46,7 +48,7 @@ The `--include-unlinked` flag adds a bootstrap section that lists every source f
 
 ## Freshness marking
 
-`mark-fresh` requires a latest scan and a non-empty reason. It can update one selected document or all stale docs. For each document it stores the latest scan id, hashes the current document content, updates the timestamp, and records the reason in the document record.
+`mark-fresh` requires a latest scan and a non-empty reason. It can update one selected document or all stale docs. For each document it stores the latest scan id, hashes the current document content, updates the doc record content when needed, and records the reason in the document record.
 
 By default `mark-fresh` rejects documents that have no linked sources with an `unlinked_doc` error. This prevents tracking a document that can never become stale from source changes. The `--allow-unlinked` option overrides the check for intentionally unlinked documents and records the reason with an `(intentionally unlinked)` marker.
 
@@ -56,6 +58,6 @@ The Typer CLI exposes top-level commands for initialization, status, doctor chec
 
 Error handling is centralized through a per-command error decorator. Each command callback is wrapped so that a `DocumentledgerError` is rendered with the real command name. With `--json`, the CLI emits a stable envelope with `ok`, `command`, `error` (code, message, remediation), and `events`. Without `--json`, it prints a concise human-readable `Error:` message and remediation hints. `DocumentledgerError` is a plain exception rather than a Click exception, which keeps command names accurate and lets the CLI choose the output format.
 
-## Reserved dependency
+## ledgercore integration
 
-`ledgercore>=0.2` is declared as a reserved dependency. It is not imported by the current source tree. Shared identity, configuration, and storage primitives from `ledgercore` are planned for integration in a near-term release; the dependency is kept in the packaging metadata so that integration is a code change rather than a packaging change.
+`ledgercore>=0.2` is an active dependency. Documentledger uses ledgercore for YAML storage, atomic writes, config discovery, path validation, scan-id and doc-record identity helpers, and SHA-256 hashing.

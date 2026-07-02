@@ -107,13 +107,22 @@ Doctor checks storage schema metadata, document record paths, duplicate links, m
 Pass `--json` before the command to emit a stable JSON envelope:
 
 ```json
-{"ok": true, "command": "status", "result": {}, "events": []}
+{ "ok": true, "command": "status", "result": {}, "events": [] }
 ```
 
 Errors also use a JSON envelope when `--json` is set, and the envelope preserves the real command name:
 
 ```json
-{"ok": false, "command": "scan", "error": {"code": "workspace_not_found", "message": "...", "remediation": []}, "events": []}
+{
+  "ok": false,
+  "command": "scan",
+  "error": {
+    "code": "workspace_not_found",
+    "message": "...",
+    "remediation": []
+  },
+  "events": []
+}
 ```
 
 Without `--json`, commands print human-readable output and errors print concise `Error:` messages with remediation hints.

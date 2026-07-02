@@ -4,9 +4,12 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from documentledger.cli import app
+
+FORBIDDEN_TIMESTAMP_KEYS = {f"{prefix}_at" for prefix in ("created", "updated", "generated")}
 
 
 @pytest.fixture
@@ -27,3 +30,23 @@ def invoke_json(runner: CliRunner, args: list[str]) -> dict[str, object]:
     result = runner.invoke(app, ["--json", *args])
     assert result.exit_code == 0, result.output
     return json.loads(result.output)
+
+
+def load_yaml(path: Path) -> dict[str, object]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    assert isinstance(data, dict)
+    return data
+
+
+def dump_yaml(path: Path, payload: dict[str, object]) -> None:
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+
+def assert_no_timestamp_keys(value: object) -> None:
+    if isinstance(value, dict):
+        assert not (FORBIDDEN_TIMESTAMP_KEYS & set(value)), value
+        for child in value.values():
+            assert_no_timestamp_keys(child)
+    elif isinstance(value, list):
+        for child in value:
+            assert_no_timestamp_keys(child)

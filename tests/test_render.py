@@ -42,3 +42,13 @@ def test_print_and_saved_output_match(project: Path, runner: CliRunner) -> None:
     result = runner.invoke(__import__("documentledger.cli").cli.app, ["docs", "build-context", "--all", "--out", str(out), "--print"])
     assert result.exit_code == 0
     assert result.output == out.read_text(encoding="utf-8") + "\n"
+
+
+def test_context_front_matter_uses_state_version_without_legacy_timestamp(project: Path, runner: CliRunner) -> None:
+    make_stale(project, runner)
+    result = runner.invoke(__import__("documentledger.cli").cli.app, ["docs", "build-context", "--all", "--print"])
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert "documentledger_schema: documentledger.context.v1" in lines[:5]
+    assert any(line.startswith("state_version: ") for line in lines[:5])
+    assert f"{'generated'}_at:" not in result.output

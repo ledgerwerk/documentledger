@@ -5,7 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from documentledger.cli import app
-from tests.conftest import invoke_json
+from tests.conftest import assert_no_timestamp_keys, invoke_json, load_yaml
 
 
 def test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> None:
@@ -13,6 +13,10 @@ def test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> No
     assert data["ok"] is True
     assert (project / "documentledger.toml").exists()
     assert (project / ".documentledger" / "storage.yaml").exists()
+    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    assert storage["schema_version"] == 2
+    assert storage["state_version"] == 1
+    assert_no_timestamp_keys(storage)
 
 
 def test_hidden_config(project: Path, runner: CliRunner) -> None:
@@ -30,3 +34,5 @@ def test_reinitialization_fails_cleanly(project: Path, runner: CliRunner) -> Non
 def test_external_storage_paths_resolved_from_config_root(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init", "--documentledger-dir", "../ledger-state"])
     assert (project.parent / "ledger-state" / "storage.yaml").exists()
+    status = invoke_json(runner, ["status"])["result"]
+    assert status["storage_dir"] == "../ledger-state"

@@ -34,3 +34,5 @@ class ScanResult:
     unlinked_changed_sources: list[str] = field(default_factory=list)
     source_hashes: dict[str, str] = field(default_factory=dict)
     doc_hashes: dict[str, str] = field(default_factory=dict)
+    unchanged: bool = False
+    version: int = 0

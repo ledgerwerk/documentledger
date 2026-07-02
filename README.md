@@ -16,7 +16,7 @@ pip install -e .
 
 This exposes the `docledger` console script. Documentledger requires Python 3.10 or newer.
 
-> `ledgercore>=0.2` is declared as a **reserved dependency**. It is not imported yet; shared identity/config/storage primitives from `ledgercore` are planned for integration in a near-term release. It is kept in the dependency list intentionally so the integration is a code change, not a packaging change.
+> `ledgercore>=0.2` is an active dependency. Documentledger uses it for YAML storage, atomic writes, config discovery, path validation, scan/doc identity helpers, and SHA-256 hashing helpers.
 
 ## Quickstart
 
@@ -40,12 +40,23 @@ docledger mark-fresh --doc docs/usage.md --reason "Docs updated after scan scan-
 ## Workflow
 
 1. **Initialize.** `docledger init` creates `documentledger.toml` and a `.documentledger/` storage directory.
-2. **Scan.** `docledger scan` hashes source and documentation files under the configured roots. The first scan establishes a baseline; later scans report changed sources, deleted sources, stale docs, and unlinked changed sources.
+2. **Scan.** `docledger scan` hashes source and documentation files under the configured roots. The first scan establishes a baseline; later scans record a new snapshot only when source or doc hashes change, and otherwise report `unchanged` against the latest scan id.
 3. **Link.** `docledger links add --doc DOC --source SOURCE` connects a documentation file to a source file. Staleness is computed only across these links, so keep them precise.
 4. **Find stale docs.** `docledger docs stale` lists documentation whose linked sources changed or disappeared.
 5. **Build update context.** `docledger docs build-context --all --print` renders the stale docs, their linked changed/deleted sources, unlinked changed sources, and the configured validation commands.
 6. **Update and validate.** Rewrite only the stale docs, then run the validation commands.
-7. **Mark fresh.** `docledger mark-fresh --doc DOC --reason "..."` records the scan id and current doc hash. Unlinked docs are rejected by default; pass `--allow-unlinked` only for intentionally unlinked docs.
+7. **Mark fresh.** `docledger mark-fresh --doc DOC --reason "..."` records the scan id and current doc hash in a versioned doc record. Unlinked docs are rejected by default; pass `--allow-unlinked` only for intentionally unlinked docs.
+
+## State model
+
+Documentledger state is intentionally timestamp-free.
+
+- `.documentledger/storage.yaml` stores `schema_version`, `project_uuid`, `state_version`, `next_scan_number`, and `last_scan_id`.
+- `.documentledger/scans/*.yaml` stores `documentledger.scan.v2` snapshots with source/doc hashes, stale-doc derivation, and integer `version` values.
+- `.documentledger/docs/*.yaml` stores `documentledger.doc_record.v2` records with linked sources, freshness hashes, notes, and integer `version` values.
+- `.documentledger/rendered/latest-context.md` is derived output and should stay ignored.
+
+Freshness is hash-based only. Documentledger does not persist or compare legacy timestamp fields, `mtime`, or other date-based freshness markers.
 
 ## Bootstrapping a new repository
 
@@ -61,15 +72,15 @@ The bootstrap section lists every source file that has no linked documentation. 
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `docledger init` | Create config and storage metadata. |
-| `docledger status` | Report workspace state: `uninitialized`, `config_only`, or `initialized`. |
-| `docledger doctor` | Validate storage schema, doc records, and link integrity. |
-| `docledger scan` | Record a new scan and compute changes. |
-| `docledger links list` / `add` / `remove` | Manage doc-to-source links. |
-| `docledger docs list` / `stale` / `build-context` | Inspect docs and render update context. |
-| `docledger mark-fresh` | Record that a doc matches the latest scan. |
+| Command                                           | Purpose                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------- |
+| `docledger init`                                  | Create config and storage metadata.                                       |
+| `docledger status`                                | Report workspace state: `uninitialized`, `config_only`, or `initialized`. |
+| `docledger doctor`                                | Validate storage schema, doc records, and link integrity.                 |
+| `docledger scan`                                  | Record a new scan and compute changes.                                    |
+| `docledger links list` / `add` / `remove`         | Manage doc-to-source links.                                               |
+| `docledger docs list` / `stale` / `build-context` | Inspect docs and render update context.                                   |
+| `docledger mark-fresh`                            | Record that a doc matches the latest scan.                                |
 
 Pass `--json` before any command to emit a stable JSON envelope. Without `--json`, commands print human-readable output, and errors print concise `Error:` messages (use `--json` for machine-readable error envelopes).
 
@@ -78,7 +89,6 @@ Pass `--json` before any command to emit a stable JSON envelope. Without `--json
 - Staleness is driven entirely by source-file hash changes routed through explicit links. Docs without links never become stale from source changes.
 - `mark-fresh` is rejected for unlinked docs by default to prevent silently tracking a doc that can never go stale. Use `--allow-unlinked` for intentionally unlinked docs.
 - Source and documentation roots are configured statically in `documentledger.toml`; there is no per-path ignore configuration yet.
-- `ledgercore>=0.2` is a reserved dependency (see Install).
 
 ## Development
 

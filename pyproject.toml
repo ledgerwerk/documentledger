@@ -30,7 +30,7 @@ classifiers = [
 ]
 dependencies = [
     "typer",
-    # Reserved dependency: ledgercore integration is planned for a near-term release.
+    # Active dependency: ledgercore provides shared storage, identity, and hashing helpers.
     "ledgercore>=0.2",
     "PyYAML",
     'tomli; python_version < "3.11"',

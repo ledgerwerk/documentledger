@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from documentledger.models import Workspace
-from documentledger.storage import iter_doc_records, latest_scan, now_iso
+from documentledger.storage import iter_doc_records, latest_scan
 
 
 def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
@@ -37,7 +37,7 @@ def render_context(workspace: Workspace, docs: list[str] | None = None, include_
         "---",
         "documentledger_schema: documentledger.context.v1",
         f"scan_id: {scan_id}",
-        f"generated_at: {now_iso()}",
+        f"state_version: {workspace.metadata.get('state_version', 0)}",
         "---",
         "",
         "# Documentation update context",
@@ -83,7 +83,7 @@ def render_context(workspace: Workspace, docs: list[str] | None = None, include_
         lines.extend(
             [
                 "",
-                "These sources have no linked documentation. Create or update the relevant docs, then add links with `docledger links add`.",
+                "These sources have no linked documentation. Create or update relevant docs, then add links with `docledger links add`.",
                 "",
             ]
         )

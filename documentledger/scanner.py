@@ -1,27 +1,18 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Any
 
+from ledgercore.hashing import sha256_bytes
+
 from documentledger.models import ScanResult, Workspace
-from documentledger.storage import (
-    iter_doc_records,
-    latest_scan,
-    next_scan_id,
-    now_iso,
-    save_scan,
-)
+from documentledger.storage import iter_doc_records, latest_scan, next_scan_id, save_scan
 
 EXCLUDED_NAMES = {".git", ".cache", "__pycache__", "build", "dist", ".tox", ".nox", ".venv", "venv", "env"}
 
 
 def file_hash(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return sha256_bytes(path.read_bytes())
 
 
 def collect_files(workspace: Workspace, roots: list[str], extensions: list[str]) -> list[str]:
@@ -66,6 +57,12 @@ def linked_source_map(workspace: Workspace) -> dict[str, list[str]]:
     return {source: sorted(docs) for source, docs in mapping.items()}
 
 
+def scan_state_changed(previous: dict[str, Any] | None, source_hashes: dict[str, str], doc_hashes: dict[str, str]) -> bool:
+    if previous is None:
+        return True
+    return dict(previous.get("source_hashes", {})) != source_hashes or dict(previous.get("doc_hashes", {})) != doc_hashes
+
+
 def run_scan(workspace: Workspace) -> ScanResult:
     source_paths = collect_files(workspace, workspace.config.source_roots, workspace.config.source_extensions)
     doc_paths = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
@@ -81,11 +78,22 @@ def run_scan(workspace: Workspace) -> ScanResult:
         deleted = []
         stale = []
         unlinked = []
+    if not scan_state_changed(previous, source_hashes, doc_hashes):
+        return ScanResult(
+            scan_id=str(previous["scan_id"]),
+            changed_sources=[],
+            deleted_sources=[],
+            stale_docs=[],
+            unlinked_changed_sources=[],
+            source_hashes=source_hashes,
+            doc_hashes=doc_hashes,
+            unchanged=True,
+            version=int(str(previous.get("version", 0))),
+        )
     scan_id = next_scan_id(workspace)
     scan = {
-        "schema": "documentledger.scan.v1",
+        "schema": "documentledger.scan.v2",
         "scan_id": scan_id,
-        "created_at": now_iso(),
         "source_hashes": source_hashes,
         "doc_hashes": doc_hashes,
         "changed_sources": changed,
@@ -102,4 +110,6 @@ def run_scan(workspace: Workspace) -> ScanResult:
         unlinked_changed_sources=unlinked,
         source_hashes=source_hashes,
         doc_hashes=doc_hashes,
+        unchanged=False,
+        version=int(str(scan.get("version", 0))),
     )

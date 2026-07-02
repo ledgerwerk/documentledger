@@ -1,29 +1,27 @@
 from __future__ import annotations
 
-import hashlib
-import re
-from pathlib import PurePosixPath
+from ledgercore.errors import PathValidationError
+from ledgercore.hashing import sha256_text
+from ledgercore.ids import NumericIdFormat, slugify_ref
+from ledgercore.paths import validate_relative_posix_path
 
 from documentledger.errors import DocumentledgerError
 
+SCAN_ID_FORMAT = NumericIdFormat(prefix="scan", separator="-", width=4)
+
 
 def format_scan_id(number: int) -> str:
-    return f"scan-{number:04d}"
+    return SCAN_ID_FORMAT.format(number)
 
 
 def normalize_repo_path(path: str) -> str:
-    if not path or "\\" in path:
-        raise DocumentledgerError("invalid_path", f"Invalid repo-relative POSIX path: {path}")
-    pure = PurePosixPath(path)
-    if pure.is_absolute() or any(part == ".." for part in pure.parts):
-        raise DocumentledgerError("invalid_path", f"Path must be repo-relative: {path}")
-    normalized = pure.as_posix()
-    if normalized in {".", ""}:
-        raise DocumentledgerError("invalid_path", f"Invalid repo-relative POSIX path: {path}")
-    return normalized
+    try:
+        return validate_relative_posix_path(path, field_name="path")
+    except PathValidationError as exc:
+        raise DocumentledgerError("invalid_path", f"Invalid repo-relative POSIX path: {path}") from exc
 
 
 def doc_record_filename(doc_path: str) -> str:
-    slug = re.sub(r"[^A-Za-z0-9]+", "-", doc_path).strip("-").lower() or "doc"
-    digest = hashlib.sha256(doc_path.encode()).hexdigest()[:8]
+    slug = slugify_ref(doc_path, empty="doc")
+    digest = sha256_text(doc_path)[:8]
     return f"{slug}-{digest}.yaml"

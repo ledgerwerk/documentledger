@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from ledgercore.errors import LedgerCoreError
 
-class DocumentledgerError(Exception):
+
+class DocumentledgerError(LedgerCoreError):
     """Structured Documentledger error with a machine-readable code.
 
     This is a plain exception on purpose: the CLI layer owns error rendering so
@@ -17,7 +19,7 @@ class DocumentledgerError(Exception):
         remediation: list[str] | None = None,
         exit_code: int = 1,
     ) -> None:
-        super().__init__(message)
+        super().__init__(message, code=code)
         self.code = code
         self.message = message
         self.remediation = remediation or []

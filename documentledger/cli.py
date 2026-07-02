@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import functools
 import json
+from collections.abc import Callable
+from os.path import relpath
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import typer
+from ledgercore.atomic import atomic_write_text
 
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
@@ -18,7 +21,6 @@ from documentledger.storage import (
     latest_scan,
     load_doc_record,
     load_workspace,
-    now_iso,
     save_doc_record,
 )
 
@@ -67,11 +69,20 @@ def handle_errors(command: str) -> Callable[[Callable[..., Any]], Callable[..., 
                 return func(ctx, *args, **kwargs)
             except DocumentledgerError as exc:
                 render_error(ctx, command, exc)
-                raise typer.Exit(code=exc.exit_code)
+                raise typer.Exit(code=exc.exit_code) from exc
 
         return wrapper
 
     return decorator
+
+
+def display_path(root: Path, path: Path) -> str:
+    root_resolved = root.resolve()
+    path_resolved = path.resolve()
+    try:
+        return path_resolved.relative_to(root_resolved).as_posix()
+    except ValueError:
+        return Path(relpath(path_resolved, root_resolved)).as_posix()
 
 
 @app.callback()
@@ -105,8 +116,8 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
             "last_scan_id": None,
             "remediation": ["Run `docledger init` from the project root."],
         }
-    config_rel = workspace.config.path.relative_to(workspace.config.root).as_posix()
-    storage_rel = workspace.config.storage_dir.relative_to(workspace.config.root).as_posix()
+    config_rel = display_path(workspace.config.root, workspace.config.path)
+    storage_rel = display_path(workspace.config.root, workspace.config.storage_dir)
     storage_present = (workspace.config.storage_dir / "storage.yaml").exists()
     if not storage_present:
         return {
@@ -146,8 +157,8 @@ def status(ctx: typer.Context) -> None:
 def doctor(ctx: typer.Context) -> None:
     workspace = load_workspace()
     issues: list[dict[str, str]] = []
-    if workspace.metadata.get("schema_version") != 1:
-        issues.append({"code": "schema_mismatch", "message": "storage.yaml schema_version is not 1"})
+    if workspace.metadata.get("schema_version") != 2:
+        issues.append({"code": "schema_mismatch", "message": "storage.yaml schema_version is not 2"})
     seen: set[tuple[str, str]] = set()
     for record in iter_doc_records(workspace):
         doc_path = str(record.get("doc_path", ""))
@@ -174,12 +185,14 @@ def scan(ctx: typer.Context) -> None:
     result_obj = run_scan(load_workspace())
     result = {
         "scan_id": result_obj.scan_id,
+        "unchanged": result_obj.unchanged,
         "changed_sources": result_obj.changed_sources,
         "deleted_sources": result_obj.deleted_sources,
         "stale_docs": result_obj.stale_docs,
         "unlinked_changed_sources": result_obj.unlinked_changed_sources,
     }
-    emit(ctx, "scan", result, f"Recorded {result_obj.scan_id}")
+    human = f"No tracked file changes since {result_obj.scan_id}" if result_obj.unchanged else f"Recorded {result_obj.scan_id}"
+    emit(ctx, "scan", result, human)
 
 
 @links_app.command("list")
@@ -247,11 +260,10 @@ def docs_build_context(
     selected = [normalize_repo_path(doc)] if doc else None
     content = render_context(workspace, selected, include_unlinked=include_unlinked)
     if out:
-        Path(out).write_text(content, encoding="utf-8")
+        atomic_write_text(Path(out), content)
     else:
         rendered = workspace.config.storage_dir / "rendered" / "latest-context.md"
-        rendered.parent.mkdir(parents=True, exist_ok=True)
-        rendered.write_text(content, encoding="utf-8")
+        atomic_write_text(rendered, content)
     if print_output or not ctx.obj.get("json"):
         typer.echo(content)
     elif ctx.obj.get("json"):
@@ -281,9 +293,12 @@ def mark_fresh(
     updated = []
     for doc_path in docs:
         record = load_doc_record(workspace, doc_path) or {
-            "schema": "documentledger.doc_record.v1",
+            "schema": "documentledger.doc_record.v2",
             "doc_path": doc_path,
+            "version": 0,
             "linked_sources": [],
+            "last_fresh_scan_id": "",
+            "last_fresh_hash": "",
             "notes": "",
         }
         linked = record.get("linked_sources", []) or []
@@ -296,11 +311,13 @@ def mark_fresh(
                     "Pass --allow-unlinked to record this doc as intentionally unlinked.",
                 ],
             )
+        before = dict(record)
+        record["schema"] = "documentledger.doc_record.v2"
         record["last_fresh_scan_id"] = scan_record["scan_id"]
         record["last_fresh_hash"] = file_hash(workspace.config.root / doc_path)
-        record["updated_at"] = now_iso()
         record["notes"] = reason if linked else f"{reason} (intentionally unlinked)"
-        save_doc_record(workspace, record)
+        if record != before:
+            save_doc_record(workspace, record)
         updated.append(doc_path)
     emit(ctx, "mark-fresh", {"updated_docs": updated, "scan_id": scan_record["scan_id"]}, "Marked docs fresh.")
 
@@ -310,4 +327,4 @@ def run() -> None:
         app()
     except DocumentledgerError as exc:
         typer.echo(f"Error: {exc.message}", err=True)
-        raise typer.Exit(code=exc.exit_code)
+        raise typer.Exit(code=exc.exit_code) from exc

@@ -5,7 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from documentledger.cli import app
-from tests.conftest import invoke_json
+from tests.conftest import assert_no_timestamp_keys, invoke_json, load_yaml
 
 
 def test_docs_list_shows_known_docs(project: Path, runner: CliRunner) -> None:
@@ -32,7 +32,28 @@ def test_mark_fresh_updates_fields(project: Path, runner: CliRunner) -> None:
     (project / "documentledger" / "cli.py").write_text("changed\n", encoding="utf-8")
     scan = invoke_json(runner, ["scan"])["result"]["scan_id"]
     data = invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", f"Docs updated after scan {scan}."])
+    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
+    storage = load_yaml(project / ".documentledger" / "storage.yaml")
     assert data["result"]["updated_docs"] == ["README.md"]
+    assert record["schema"] == "documentledger.doc_record.v2"
+    assert record["last_fresh_scan_id"] == scan
+    assert record["version"] == storage["state_version"]
+    assert_no_timestamp_keys(record)
+
+
+def test_mark_fresh_noop_does_not_bump_version(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    invoke_json(runner, ["scan"])
+    (project / "documentledger" / "cli.py").write_text("changed\n", encoding="utf-8")
+    scan = invoke_json(runner, ["scan"])["result"]["scan_id"]
+    reason = f"Docs updated after scan {scan}."
+    invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", reason])
+    invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", reason])
+    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
+    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    assert record["version"] == 5
+    assert storage["state_version"] == 5
 
 
 def test_mark_fresh_requires_reason(project: Path, runner: CliRunner) -> None:
