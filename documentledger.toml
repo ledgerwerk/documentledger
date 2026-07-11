@@ -4,7 +4,7 @@ name = "documentledger"
 
 [project]
 name = "documentledger"
-uuid = "38ad2037-5b46-464e-8524-183316369e20"
+uuid = "a22f34cd-76fb-4e88-9439-54a232ef48a8"
 
 [storage]
 documentledger_dir = ".documentledger"

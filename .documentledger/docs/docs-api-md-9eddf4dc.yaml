@@ -2,121 +2,38 @@ schema: documentledger.doc_record.v4
 doc_path: docs/api.md
 linked_sources:
   - documentledger/cli.py
-  - documentledger/doc_index.py
-  - documentledger/errors.py
-  - documentledger/identity.py
-  - documentledger/impact.py
-  - documentledger/links.py
-  - documentledger/models.py
-  - documentledger/render.py
-  - documentledger/scanner.py
-  - documentledger/source_index.py
-  - documentledger/storage.py
 sections:
-  - section_id: md:section:docs/api.md::whole-doc
+  - section_id: md:section:docs/api.md::api-reference
     doc_path: docs/api.md
-    heading_path: []
-    heading_slug: whole-doc
+    heading_path:
+      - API reference
+    heading_slug: api-reference
     line_span:
       - 1
-      - 39
-    section_hash: 6a41bc0c11f4943040fddcba3a7f0201a9e77a0d72548f2ad47bc58005ad9fa3
-    summary: Whole document.
+      - 40
+    section_hash: a3cc54855f4d9aca55ce17722a0c41c49b7566c34a2f020cd6e9caf57a4b17bd
+    summary: API reference
+    text:
+      "# API reference\n\nThis reference is generated from the public Documentledger\
+      \ modules, including the CLI, storage and scan layers, section/source indexing,\
+      \ impact resolution, context rendering, and link management.\n\n<!-- docledger-section:\
+      \ api-reference -->\n\n```{eval-rst}\n.. automodule:: documentledger.cli\n   :members:\n\
+      \n.. automodule:: documentledger.storage\n   :members:\n\n.. automodule:: documentledger.scanner\n\
+      \   :members:\n\n.. automodule:: documentledger.links\n   :members:\n\n.. automodule::\
+      \ documentledger.doc_index\n   :members:\n\n.. automodule:: documentledger.source_index\n\
+      \   :members:\n\n.. automodule:: documentledger.impact\n   :members:\n\n.. automodule::\
+      \ documentledger.render\n   :members:\n\n.. automodule:: documentledger.identity\n\
+      \   :members:\n\n.. automodule:: documentledger.models\n   :members:\n\n.. automodule::\
+      \ documentledger.errors\n   :members:\n```"
     links:
-      - source_id: py:file:documentledger/cli.py
+      - source_id: py:function:documentledger/cli.py::scan
         source_path: documentledger/cli.py
-        coverage: broad-file-fallback
+        coverage: implementation-note
         impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
+        reason: Section contains exact qualified symbol `scan`.
         tracked_hashes:
-          file_hash: e8a1ea3e6444460ec4392615eacb7dabc26248f8346ace78eb3dd609167f7367
-      - source_id: py:file:documentledger/doc_index.py
-        source_path: documentledger/doc_index.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason: API reference includes automodule for documentledger.doc_index.
-        tracked_hashes:
-          file_hash: b6157efaa20bb6095b48280b06fdc57d465d5672f23cf484a7de9e09c60f9481
-      - source_id: py:file:documentledger/errors.py
-        source_path: documentledger/errors.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
-        tracked_hashes:
-          file_hash: e9a4fc2d9cec130cc44df65dfd50454a60d7864564bd461864aa89c901d72a6d
-      - source_id: py:file:documentledger/identity.py
-        source_path: documentledger/identity.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
-        tracked_hashes:
-          file_hash: b4ce2de09622f444f98b3e2d6df9d4b4b05823ce09f4d853e40620d53aeffa5f
-      - source_id: py:file:documentledger/impact.py
-        source_path: documentledger/impact.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason: API reference includes automodule for documentledger.impact.
-        tracked_hashes:
-          file_hash: fa7b5972c38cfbc1629bc04fd0170daf8991afae239fc1bab76cbbfaaa3dbbd0
-      - source_id: py:file:documentledger/links.py
-        source_path: documentledger/links.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
-        tracked_hashes:
-          file_hash: ebf15b5e2c9601e17161d07290e0425f28b546c407048b77171a9aa9c2dd4ccf
-      - source_id: py:file:documentledger/models.py
-        source_path: documentledger/models.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
-        tracked_hashes:
-          file_hash: 808e317024648cf192d8001aa3e26057765562f7f6728583389c436056aa4bd4
-      - source_id: py:file:documentledger/render.py
-        source_path: documentledger/render.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
-        tracked_hashes:
-          file_hash: 90e4ecb31dd5ec74ccffd6dc864cfb43d402d1c3aedef6de4463d850a282ddc9
-      - source_id: py:file:documentledger/scanner.py
-        source_path: documentledger/scanner.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
-        tracked_hashes:
-          file_hash: b8818c43d402a7226fdaa65bcdc912ba4afba465900ec7291eb9c298189c11f7
-      - source_id: py:file:documentledger/source_index.py
-        source_path: documentledger/source_index.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason: API reference includes automodule for documentledger.source_index.
-        tracked_hashes:
-          file_hash: cac66d5f883279dfb5f9d5ed52c6287545dcce6a8dc33bf045854d60096f8d4b
-      - source_id: py:file:documentledger/storage.py
-        source_path: documentledger/storage.py
-        coverage: broad-file-fallback
-        impact: unknown
-        reason:
-          Verified accurate against current source after scan version 1; all automodule
-          targets exist.
-        tracked_hashes:
-          file_hash: 46c82e610b2c2967cf5175698b4f3031a9f739674392827bc964dc281024c113
-last_fresh_scan_version: 2
-last_fresh_hash: 35ea003c3a5d941e60a890ec8ad59b2e2c05f8d65c87ee93a6c1283e34210988
-notes: Docs updated after scan version 2.
-version: 43
+          body_hash: 1cea78feb6480852a4c52b4c1ec69712eaae110555576d9fd241adb6c3ccdaac
+last_fresh_scan_version: 1
+last_fresh_hash: b080ffde7ddd3d02f2252aebb91ea3c594e4bb0f0b57482bd49fd1892214b58f
+notes: Bootstrap docs after scan v1
+version: 5

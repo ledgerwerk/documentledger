@@ -3,25 +3,15 @@ doc_path: docs/index.md
 linked_sources:
   - documentledger/cli.py
 sections:
-  - section_id: md:section:docs/index.md::whole-doc
-    doc_path: docs/index.md
-    heading_path: []
-    heading_slug: whole-doc
-    line_span:
-      - 1
-      - 27
-    section_hash: 421e05c8034514d0b9e4b266fdcdacee26e7298bbeb62e2d0ee6c4e811090cbf
-    summary: Whole document.
-    links: []
-  - section_id: md:section:docs/index.md::index-documentation-freshness-workflow
+  - section_id: md:section:docs/index.md::documentation-freshness-workflow
     doc_path: docs/index.md
     heading_path:
       - Documentledger
       - Documentation freshness workflow
-    heading_slug: index-documentation-freshness-workflow
+    heading_slug: documentation-freshness-workflow
     line_span:
-      - 16
-      - 27
+      - 17
+      - 28
     section_hash: 77e2f43292b60bd98b51b352fdd602a936955a52bc9ce8646ac73e4a9b0e85d3
     summary: Documentation freshness workflow
     text: '## Documentation freshness workflow
@@ -53,37 +43,81 @@ sections:
       Documentledger stores its own state under the configured `.documentledger/` directory.
       Do not edit that directory directly.'
     links:
-      - source_id: py:function:documentledger/cli.py::docs_affected
+      - source_id: py:function:documentledger/cli.py::init
         source_path: documentledger/cli.py
-        coverage: workflow
-        impact: behavior
-        reason: Documents the affected-sections step.
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact qualified symbol `init`.
         tracked_hashes:
-          public_contract_hash: 7f77168ac466940a741662a6e144f0d6d1645ac2d3e9f485555f1d40d8d87fb6
-      - source_id: py:function:documentledger/cli.py::docs_build_context
+          body_hash: dfa04316ade313dd2dee7f8c710a2cb69997a0e0bb69aa781f6d676cf9f6cade
+      - source_id: py:function:documentledger/cli.py::run
         source_path: documentledger/cli.py
-        coverage: workflow
-        impact: behavior
-        reason: Documents the context-building step.
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact qualified symbol `run`.
         tracked_hashes:
-          public_contract_hash: 62eca799ab226250450564199bb5e32953bb85d9a54e634a8414e8cda18c2ae8
+          body_hash: 235db4d4910d7bc142cece58f05413c5b6bb0084c7cdde34a67b6ae1622c9fa8
       - source_id: py:function:documentledger/cli.py::scan
         source_path: documentledger/cli.py
-        coverage: workflow
-        impact: behavior
-        reason: Documents the scan step.
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact qualified symbol `scan`.
         tracked_hashes:
-          public_contract_hash: 546bc8eab422b33f797e0c1549b9126accb5da9cb200a3e0b7a6d2c700cf714b
+          body_hash: 1cea78feb6480852a4c52b4c1ec69712eaae110555576d9fd241adb6c3ccdaac
       - source_id: py:function:documentledger/cli.py::status
         source_path: documentledger/cli.py
-        coverage: workflow
-        impact: behavior
-        reason: Documents the status step.
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact qualified symbol `status`.
         tracked_hashes:
-          public_contract_hash: 2e72fb46a38a3eed482c9ee82d61786b7d76f5193a1df96462e319e54343c5b7
+          body_hash: 759bd6dbe847a736e3117c049e48fcebf17fb45237381361335a921b8968cef7
+  - section_id: md:section:docs/index.md::documentledger
+    doc_path: docs/index.md
+    heading_path:
+      - Documentledger
+    heading_slug: documentledger
+    line_span:
+      - 1
+      - 16
+    section_hash: a45723e7a4dc694bf5f6baed66367694220f1947f13ead906b43721c1ea7cf42
+    summary: Documentledger
+    text: "# Documentledger
+
+
+      Documentledger is a documentation freshness ledger for coding-agent workflows.
+      It records repository scans, maps documentation files to source files, reports
+      stale documentation when linked source files change or disappear, and renders
+      update context for agents.
+
+
+      ```{toctree}
+
+      :maxdepth: 2
+
+
+      usage
+
+      architecture
+
+      api
+
+      bootstrap
+
+      troubleshooting
+
+      ```
+
+
+      <!-- docledger-section: index-documentation-freshness-workflow -->"
+    links:
+      - source_id: py:function:documentledger/cli.py::scan
+        source_path: documentledger/cli.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact qualified symbol `scan`.
+        tracked_hashes:
+          body_hash: 1cea78feb6480852a4c52b4c1ec69712eaae110555576d9fd241adb6c3ccdaac
 last_fresh_scan_version: 1
-last_fresh_hash: c6d6b9d12749d8416eb888ce19dcfe690d06c96fb07f8275bbc99d72a1afd77a
-notes:
-  Verified accurate against current source after scan version 1; no content change
-  required.
-version: 35
+last_fresh_hash: 9ffa638d257a8b02d19655c520eaa11e11bb30b0d0c4e6fd413e9888fa7e8542
+notes: Bootstrap docs after scan v1
+version: 8
