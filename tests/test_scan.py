@@ -4,7 +4,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from tests.conftest import assert_no_timestamp_keys, invoke_json, load_yaml, write_precision_sample
+from tests.conftest import assert_no_timestamp_keys, invoke_json, load_json, load_yaml, write_precision_sample
 
 
 def init_and_link(project: Path, runner: CliRunner) -> None:
@@ -22,9 +22,12 @@ def test_first_scan_records_baseline(project: Path, runner: CliRunner) -> None:
     assert data["changed_sources"] == []
     assert data["stale_docs"] == []
     assert storage["state_version"] == 2
-    assert scan_record["schema"] == "documentledger.scan.v4"
+    assert scan_record["schema"] == "documentledger.scan.v5"
     assert scan_record["version"] == 1
-    assert "source_units" in scan_record
+    assert "source_units" not in scan_record
+    source_index = load_json(project / ".documentledger" / "source-index.json")
+    assert source_index["schema"] == "documentledger.source_index.v1"
+    assert source_index["source_units"]
     assert not (project / ".documentledger" / "scans").exists()
     assert_no_timestamp_keys(scan_record)
 
@@ -43,6 +46,7 @@ def test_unchanged_scan_reuses_latest_scan_version(project: Path, runner: CliRun
     assert second["unlinked_changed_sources"] == []
     assert storage["state_version"] == 2
     assert (project / ".documentledger" / "scan.yaml").exists()
+    assert (project / ".documentledger" / "source-index.json").exists()
     assert not (project / ".documentledger" / "scans").exists()
 
 

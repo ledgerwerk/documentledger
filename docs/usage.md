@@ -23,10 +23,12 @@ docledger --json status
 Status reports the workspace `state`:
 
 - `uninitialized`: no `documentledger.toml` was found.
-- `config_only`: a config file exists but `.documentledger/storage.yaml` is missing. Re-run `docledger init` from the project root to create the storage metadata.
-- `initialized`: both config and storage metadata exist.
+- `bootstrap_required`: there is no baseline scan yet, or there is a baseline but no usable doc links.
+- `incremental_clean`: the latest scan has no affected linked sections.
+- `incremental_affected`: the latest scan has affected linked sections that should be reviewed.
+- `mapping_incomplete`: changed source files are not yet fully linked to documentation.
 
-The `initialized` field is `true` only in the fully initialized state. The result also reports `storage_present`, the config path, the storage directory, the project name, the project UUID, and the latest scan version.
+The result also reports `recommended_command`, `recommended_reason`, compact latest-scan counts, and any root-layout diagnostics that should be fixed before trusting a baseline.
 
 <!-- docledger-section: usage-run-scan -->
 
@@ -40,7 +42,7 @@ A scan collects files from the configured source and documentation roots, hashes
 
 Later scans report:
 
-- `unchanged`, `true` when the source and documentation hashes match the previous scan exactly. No scan state is rewritten and the previous scan version is reused; the human output prints `No tracked file changes since scan version <version>` instead of `Recorded scan version <version>`.
+- `unchanged`, `true` when the source and documentation hashes match the previous scan exactly. No scan state is rewritten, no source files are re-indexed, and the previous scan version is reused; the human output prints `No tracked file changes since scan version <version>` instead of `Recorded scan version <version>`.
 - `changed_sources`, source files whose hash changed or that are new since the previous scan.
 - `changed_units`, source units whose tracked semantic hashes changed. For Python this is usually the changed function, method, class, or module contract rather than the whole file.
 - `deleted_sources`, source files that were present in the previous scan and are now gone.
@@ -77,7 +79,7 @@ docledger links list
 docledger links remove --doc docs/usage.md --source documentledger/cli.py
 docledger links remove-section --doc docs/usage.md --section usage-validate-ledger-state --source-unit py:function:documentledger/cli.py::doctor
 docledger links import-map --file /tmp/documentledger-map.yaml --validate
-docledger links import-map --file /tmp/documentledger-map.yaml --apply
+docledger links import-map --directory /tmp/documentledger-maps --check-and-apply
 ```
 
 <!-- docledger-section: usage-find-and-update-stale-documentation -->
@@ -86,7 +88,7 @@ docledger links import-map --file /tmp/documentledger-map.yaml --apply
 
 ```bash
 docledger --json docs affected
-docledger docs build-context --affected --print
+docledger docs build-context --affected --out /tmp/docledger-context.md
 ```
 
 `docs affected` reports the live affected sections for the latest scan. After a section is updated and marked fresh, it disappears from `docs affected` immediately; a follow-up scan is optional confirmation, not the only way to clear affectedness.
@@ -97,15 +99,17 @@ The rendered context contains only the affected doc sections, their linked chang
 
 ## Bootstrapping a new repository
 
-A fresh repository has no links yet, so the first scan reports no stale docs. To drive an initial documentation pass, include sources that have no documentation link:
+A fresh repository has no links yet, so the first scan reports no stale docs. To drive an initial documentation pass, use the explicit bootstrap flow:
 
 ```bash
 docledger init
 docledger scan
-docledger docs build-context --all --include-unlinked --print
+docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
+docledger links propose --all-docs --out-dir /tmp/docledger-maps
+docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply
 ```
 
-The `--include-unlinked` flag adds a bootstrap section that lists every source file with no linked documentation. Create docs for those sources, add links with `docledger links add` or `docledger links add-section`, scan again, validate, then mark the docs fresh. See [Bootstrap](bootstrap.md) for the full setup sequence.
+The bootstrap context and proposal flow give agents a deterministic first-pass link graph without applying anything until the full batch validates. See [Bootstrap](bootstrap.md) for the full setup sequence.
 
 <!-- docledger-section: usage-mark-documentation-fresh -->
 
@@ -136,7 +140,7 @@ This prevents silently tracking a doc that can never become stale from source ch
 docledger doctor
 ```
 
-Doctor checks storage schema metadata, document record paths, missing documentation files, missing source files, duplicate edges, missing source-unit ids, and missing section ids.
+Doctor checks storage schema metadata, document record paths, suspicious root configuration, missing documentation files, missing source files, duplicate edges, missing source-unit ids, and missing section ids.
 
 <!-- docledger-section: usage-json-and-human-output -->
 

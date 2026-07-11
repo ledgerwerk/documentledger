@@ -11,7 +11,8 @@ from documentledger.errors import DocumentledgerError
 from documentledger.models import DocSection
 
 MARKER_RE = re.compile(r"<!--\s*docledger-section:\s*([a-zA-Z0-9][a-zA-Z0-9_-]*)\s*-->")
-HEADING_RE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+FENCE_RE = re.compile(r"^\s*([`~]{3,})(.*)$")
 
 
 class HeadingRecord(TypedDict):
@@ -51,11 +52,34 @@ def summarize_section(heading: str, content: str) -> str:
     return "Whole document."
 
 
+def normalize_heading_title(value: str) -> str:
+    return re.sub(r"\s+#+\s*$", "", value).strip()
+
+
+def next_fence_state(line: str, current: tuple[str, int] | None) -> tuple[str, int] | None:
+    match = FENCE_RE.match(line)
+    if not match:
+        return current
+    fence = match.group(1)
+    marker = fence[0]
+    width = len(fence)
+    if current is None:
+        return (marker, width)
+    if marker == current[0] and width >= current[1]:
+        return None
+    return current
+
+
 def markdown_sections(doc_path: str, text: str) -> list[DocSection]:
     lines = text.splitlines()
     marker_lines: dict[int, str] = {}
     seen_markers: set[str] = set()
+    fence_state: tuple[str, int] | None = None
     for number, line in enumerate(lines, start=1):
+        previous_fence = fence_state
+        fence_state = next_fence_state(line, fence_state)
+        if previous_fence is not None or fence_state is not None:
+            continue
         match = MARKER_RE.fullmatch(line.strip())
         if not match:
             continue
@@ -68,12 +92,19 @@ def markdown_sections(doc_path: str, text: str) -> list[DocSection]:
     headings: list[HeadingRecord] = []
     slug_counts: dict[str, int] = {}
     path_stack: list[tuple[int, str]] = []
+    fence_state = None
     for number, line in enumerate(lines, start=1):
+        previous_fence = fence_state
+        fence_state = next_fence_state(line, fence_state)
+        if previous_fence is not None or fence_state is not None:
+            continue
         match = HEADING_RE.match(line)
         if not match:
             continue
         level = len(match.group(1))
-        title = match.group(2).strip()
+        title = normalize_heading_title(match.group(2))
+        if not title:
+            continue
         while path_stack and path_stack[-1][0] >= level:
             path_stack.pop()
         path_stack.append((level, title))

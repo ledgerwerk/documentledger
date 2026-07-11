@@ -248,3 +248,7 @@ def source_inventory(root: Path, source_paths: list[str]) -> dict[str, dict[str,
         for unit in source_units_for_file(root / repo_path, repo_path):
             inventory[unit.source_id] = unit.to_record()
     return inventory
+
+
+def source_inventory_for_paths(root: Path, source_paths: Sequence[str]) -> dict[str, dict[str, Any]]:
+    return source_inventory(root, list(source_paths))

@@ -7,8 +7,8 @@ from ledgercore.hashing import sha256_bytes
 
 from documentledger.impact import linked_source_map, resolve_affected_sections, unmapped_changed_units
 from documentledger.models import ScanResult, Workspace
-from documentledger.source_index import source_inventory
-from documentledger.storage import latest_scan, save_scan
+from documentledger.source_index import source_inventory, source_inventory_for_paths
+from documentledger.storage import latest_scan, latest_scan_summary, save_scan
 
 EXCLUDED_NAMES = {".git", ".cache", "__pycache__", "build", "dist", ".tox", ".nox", ".venv", "venv", "env"}
 
@@ -41,13 +41,14 @@ def hash_paths(workspace: Workspace, paths: list[str]) -> dict[str, str]:
     return {path: file_hash(workspace.config.root / path) for path in paths}
 
 
-def changed_source_paths(previous: dict[str, Any] | None, current_hashes: dict[str, str]) -> tuple[list[str], list[str]]:
+def changed_source_paths(previous: dict[str, Any] | None, current_hashes: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
     if previous is None:
-        return [], []
+        return [], [], []
     old_hashes = dict(previous.get("source_hashes", {}))
-    changed = sorted(path for path, value in current_hashes.items() if old_hashes.get(path) != value)
+    changed = sorted(path for path, value in current_hashes.items() if path in old_hashes and old_hashes.get(path) != value)
+    added = sorted(path for path in current_hashes if path not in old_hashes)
     deleted = sorted(path for path in old_hashes if path not in current_hashes)
-    return changed, deleted
+    return changed, added, deleted
 
 
 def scan_state_changed(previous: dict[str, Any] | None, source_hashes: dict[str, str], doc_hashes: dict[str, str]) -> bool:
@@ -139,23 +140,11 @@ def run_scan(workspace: Workspace) -> ScanResult:
     doc_paths = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
     source_hashes = hash_paths(workspace, source_paths)
     doc_hashes = hash_paths(workspace, doc_paths)
-    source_units = source_inventory(workspace.config.root, source_paths)
-    previous = latest_scan(workspace)
-    changed, deleted = changed_source_paths(previous, source_hashes)
-    changed_unit_records, added_unit_records, deleted_unit_records = changed_units(previous, source_units)
-    mapping = linked_source_map(workspace)
-    unlinked = sorted(source for source in changed if source not in mapping)
-    if previous is None:
-        changed = []
-        deleted = []
-        unlinked = []
-        changed_unit_records = []
-        added_unit_records = []
-        deleted_unit_records = []
-    if not scan_state_changed(previous, source_hashes, doc_hashes):
-        assert previous is not None
+    previous_summary = latest_scan_summary(workspace)
+    if not scan_state_changed(previous_summary, source_hashes, doc_hashes):
+        assert previous_summary is not None
         return ScanResult(
-            version=int(str(previous.get("version", 0))),
+            version=int(str(previous_summary.get("version", 0))),
             changed_sources=[],
             deleted_sources=[],
             stale_docs=[],
@@ -165,17 +154,49 @@ def run_scan(workspace: Workspace) -> ScanResult:
             deleted_units=[],
             affected_sections=[],
             unmapped_changed_units=[],
-            source_units=source_units,
+            source_units={},
             source_hashes=source_hashes,
             doc_hashes=doc_hashes,
             unchanged=True,
         )
+
+    previous = latest_scan(workspace) if previous_summary is not None else None
+    changed, added, deleted = changed_source_paths(previous_summary, source_hashes)
+    source_units: dict[str, dict[str, Any]]
+    if previous is None:
+        source_units = source_inventory(workspace.config.root, source_paths)
+    elif changed or added or deleted:
+        previous_units = dict(previous.get("source_units", {}))
+        replaced_paths = set(changed) | set(added)
+        source_units = {
+            source_id: dict(unit)
+            for source_id, unit in previous_units.items()
+            if str(unit.get("path", "")) not in set(deleted) | replaced_paths
+        }
+        indexed_paths = sorted(replaced_paths)
+        if indexed_paths:
+            for unit in source_inventory_for_paths(workspace.config.root, indexed_paths).values():
+                source_units[str(unit["source_id"])] = unit
+    else:
+        source_units = dict(previous.get("source_units", {})) if previous is not None else {}
+
+    changed_unit_records, added_unit_records, deleted_unit_records = changed_units(previous, source_units)
+    mapping = linked_source_map(workspace)
+    unlinked = sorted(source for source in [*changed, *added] if source not in mapping)
+    if previous is None:
+        changed = []
+        added = []
+        deleted = []
+        unlinked = []
+        changed_unit_records = []
+        added_unit_records = []
+        deleted_unit_records = []
     scan = {
-        "schema": "documentledger.scan.v4",
+        "schema": "documentledger.scan.v5",
         "source_hashes": source_hashes,
         "doc_hashes": doc_hashes,
         "source_units": source_units,
-        "changed_sources": changed,
+        "changed_sources": sorted([*changed, *added]),
         "deleted_sources": deleted,
         "changed_units": changed_unit_records,
         "added_units": added_unit_records,
@@ -192,7 +213,7 @@ def run_scan(workspace: Workspace) -> ScanResult:
     saved = save_scan(workspace, scan)
     return ScanResult(
         version=int(str(saved.get("version", 0))),
-        changed_sources=changed,
+        changed_sources=sorted([*changed, *added]),
         deleted_sources=deleted,
         stale_docs=list(saved["stale_docs"]),
         unlinked_changed_sources=unlinked,

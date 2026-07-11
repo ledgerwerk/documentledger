@@ -18,7 +18,7 @@ def test_status_config_only_when_storage_missing(project: Path, runner: CliRunne
     (project / ".documentledger" / "storage.yaml").unlink()
     data = invoke_json(runner, ["status"])
     result = data["result"]
-    assert result["state"] == "config_only"
+    assert result["state"] == "uninitialized"
     assert result["initialized"] is False
     assert result["storage_present"] is False
     assert result["config_path"] == "documentledger.toml"
@@ -28,7 +28,7 @@ def test_status_states_distinguish_initialized(project: Path, runner: CliRunner)
     invoke_json(runner, ["init"])
     data = invoke_json(runner, ["status"])
     result = data["result"]
-    assert result["state"] == "initialized"
+    assert result["state"] == "bootstrap_required"
     assert result["initialized"] is True
     assert result["storage_present"] is True
 
@@ -57,7 +57,7 @@ def test_build_context_useful_with_unlinked_changed_no_stale(project: Path, runn
     invoke_json(runner, ["scan"])
     result = runner.invoke(app, ["docs", "build-context", "--all", "--print"])
     assert result.exit_code == 0
-    assert "No affected sections." in result.output
+    assert "No sections matched the selector." in result.output
     assert "documentledger/new.py" in result.output
 
 

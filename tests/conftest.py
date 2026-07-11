@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -34,6 +35,12 @@ def invoke_json(runner: CliRunner, args: list[str]) -> dict[str, object]:
 
 def load_yaml(path: Path) -> dict[str, object]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    assert isinstance(data, dict)
+    return data
+
+
+def load_json(path: Path) -> dict[str, object]:
+    data = json.loads(path.read_text(encoding="utf-8") or "{}")
     assert isinstance(data, dict)
     return data
 
@@ -75,3 +82,13 @@ def assert_no_timestamp_keys(value: object) -> None:
     elif isinstance(value, list):
         for child in value:
             assert_no_timestamp_keys(child)
+
+
+def snapshot_hashes(root: Path) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    if not root.exists():
+        return hashes
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        rel = path.relative_to(root).as_posix()
+        hashes[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes

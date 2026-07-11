@@ -49,7 +49,7 @@ def test_context_front_matter_uses_state_version_without_legacy_timestamp(projec
     result = runner.invoke(__import__("documentledger.cli").cli.app, ["docs", "build-context", "--all", "--print"])
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert "documentledger_schema: documentledger.context.v3" in lines[:5]
+    assert "documentledger_schema: documentledger.context.v4" in lines[:6]
     assert any(line.startswith("scan_version: ") for line in lines[:5])
     assert any(line.startswith("state_version: ") for line in lines[:5])
     assert f"{'generated'}_at:" not in result.output

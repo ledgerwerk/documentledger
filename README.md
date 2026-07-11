@@ -30,9 +30,11 @@ From the root of a repository:
 docledger init
 docledger --json status
 docledger --json scan
-docledger links add-section --doc docs/usage.md --section usage-cli --source-unit py:function:src/cli.py::main --coverage cli-command --impact behavior --reason "Documents the CLI workflow."
-docledger --json docs affected
-docledger docs build-context --affected --print
+docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
+docledger links propose --all-docs --out-dir /tmp/docledger-maps
+docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply
+docledger --json links audit
+docledger --json coverage
 ```
 
 After updating and validating an affected section, mark it fresh:
@@ -44,19 +46,21 @@ docledger mark-fresh --doc docs/usage.md --section usage-cli --reason "Docs upda
 ## Workflow
 
 1. **Initialize.** `docledger init` creates `documentledger.toml` and a `.documentledger/` storage directory.
-2. **Scan.** `docledger scan` hashes source and documentation files under the configured roots, indexes Python source units, and rewrites `.documentledger/scan.yaml` only when source or doc hashes change. Unchanged scans reuse the latest scan version and report `unchanged`.
+2. **Scan.** `docledger scan` hashes source and documentation files under the configured roots, indexes only changed Python source files, persists a compact `.documentledger/scan.yaml` summary plus `.documentledger/source-index.json`, and rewrites state only when source or doc hashes change. Unchanged scans reuse the latest scan version and report `unchanged`.
 3. **Link.** `docledger links add-section --doc DOC --section SECTION --source-unit SOURCE_UNIT` connects a documentation section to a source unit with coverage, impact, reason, and tracked hashes. `links add --doc DOC --source SOURCE` remains available as a broad-file fallback.
-4. **Find affected sections.** `docledger docs affected` lists documentation sections whose linked source units changed or disappeared.
-5. **Build update context.** `docledger docs build-context --affected --print` renders the affected sections, linked changed source units, source snippets, unlinked changed sources, and configured validation commands.
-6. **Update and validate.** Rewrite only the affected sections by default, then run the validation commands.
-7. **Mark fresh.** `docledger mark-fresh --doc DOC --section SECTION --reason "..."` refreshes tracked source-unit hashes and section hashes in a versioned doc record. Unlinked docs are rejected by default; pass `--allow-unlinked` only for intentionally unlinked docs.
+4. **Bootstrap and batch-link.** `docledger docs build-context --bootstrap --out FILE`, `docledger links propose --all-docs --out-dir DIR`, and `docledger --json links import-map --directory DIR --check-and-apply` provide a deterministic bootstrap path for the first link graph.
+5. **Find affected sections.** `docledger docs affected` lists documentation sections whose linked source units changed or disappeared.
+6. **Build update context.** `docledger docs build-context --affected --out FILE` renders the affected sections, linked changed source units, source snippets, unlinked changed sources, and configured validation commands.
+7. **Update and validate.** Rewrite only the affected sections by default, then run the validation commands.
+8. **Mark fresh.** `docledger mark-fresh --doc DOC --section SECTION --reason "..."` refreshes tracked source-unit hashes and section hashes in a versioned doc record. Unlinked docs are rejected by default; pass `--allow-unlinked` only for intentionally unlinked docs.
 
 ## State model
 
 Documentledger state is intentionally timestamp-free.
 
-- `.documentledger/storage.yaml` stores `schema_version`, `project_uuid`, and `state_version`.
-- `.documentledger/scan.yaml` stores the current `documentledger.scan.v4` baseline with source/doc hashes, source-unit inventory, unit deltas, affected-section projections, stale-doc compatibility output, unmapped changed units, and monotonic scan `version`.
+- `.documentledger/storage.yaml` stores `schema_version`, `project_uuid`, `state_version`, and the latest compact scan summary counts used by `status`.
+- `.documentledger/scan.yaml` stores the current `documentledger.scan.v5` summary with source/doc hashes, source-index metadata, unit deltas, affected-section projections, stale-doc compatibility output, unmapped changed units, and monotonic scan `version`.
+- `.documentledger/source-index.json` stores the current deterministic source-unit inventory.
 - `.documentledger/docs/*.yaml` stores `documentledger.doc_record.v4` records with section links, tracked source-unit hashes, derived linked sources, freshness hashes, `last_fresh_scan_version`, notes, and integer `version` values.
 - `.documentledger/rendered/latest-context.md` is derived output and should stay ignored.
 
@@ -64,28 +68,32 @@ Freshness is hash-based only. Documentledger does not persist or compare legacy 
 
 ## Bootstrapping a new repository
 
-A fresh repository has no links yet, so the first scan reports no stale docs. To drive an initial documentation pass, include sources that have no documentation link:
+A fresh repository has no links yet, so the first scan reports no stale docs. To drive an initial documentation pass, use the explicit bootstrap flow:
 
 ```bash
 docledger init
-docledger scan
-docledger docs build-context --all --include-unlinked --print
+docledger --json scan
+docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
+docledger links propose --all-docs --out-dir /tmp/docledger-maps
+docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply
 ```
 
-The bootstrap section lists every source file that has no linked documentation. Create docs for them, add links with `docledger links add-section` or the broad-file `docledger links add` fallback, scan again, validate, then mark the docs fresh.
+The bootstrap context lists every source file that has no linked documentation and the current doc inventory. Review or correct the generated proposal files, apply them as one validated batch, run `docledger --json links audit`, then validate and mark the docs fresh.
 
 ## Commands
 
 | Command                                                                     | Purpose                                                                              |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `docledger init`                                                            | Create config and storage metadata.                                                  |
-| `docledger status`                                                          | Report workspace state: `uninitialized`, `config_only`, or `initialized`.            |
+| `docledger status`                                                          | Report workspace state, diagnostics, and the recommended next command.               |
 | `docledger doctor`                                                          | Validate storage schema, doc records, and link integrity.                            |
 | `docledger scan`                                                            | Record a new scan and compute changes.                                               |
-| `docledger sources list` / `show`                                           | Inspect source-unit ids for precise section links.                                   |
-| `docledger links list` / `add-section` / `remove-section` / `import-map`    | Manage section-to-source-unit links.                                                 |
+| `docledger sources list` / `show`                                           | Inspect source-unit ids for precise section links with compact filters and cursors.  |
+| `docledger links list` / `add-section` / `remove-section` / `import-map`    | Manage section-to-source-unit links and apply mapping batches atomically.            |
+| `docledger links propose`                                                   | Generate deterministic bootstrap mapping proposals without applying them.            |
 | `docledger links audit`                                                     | Check section links for missing sections, missing source units, and duplicate edges. |
-| `docledger docs list` / `sections` / `affected` / `stale` / `build-context` | Inspect docs and render update context.                                              |
+| `docledger docs list` / `sections` / `affected` / `stale` / `build-context` | Inspect docs and render bounded update context to a file.                            |
+| `docledger coverage`                                                        | Report doc/section/source coverage and obvious inventory gaps.                       |
 | `docledger mark-fresh`                                                      | Record that a section or doc matches the latest scan.                                |
 
 Pass `--json` before any command to emit a stable JSON envelope. Without `--json`, commands print human-readable output, and errors print concise `Error:` messages (use `--json` for machine-readable error envelopes).

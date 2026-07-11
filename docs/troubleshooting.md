@@ -1,8 +1,8 @@
 # Troubleshooting
 
-## `status` reports `config_only`
+## `status` reports `uninitialized`
 
-A `config_only` state means `documentledger.toml` (or `.documentledger.toml`) exists but `.documentledger/storage.yaml` is missing. This happens when the storage directory was removed or never created. Re-run initialization from the project root:
+An `uninitialized` result can mean there is no config yet, or that `documentledger.toml` exists but `.documentledger/storage.yaml` is missing. This happens when the storage directory was removed or never created. Re-run initialization from the project root:
 
 ```bash
 docledger init
@@ -12,7 +12,7 @@ docledger init
 
 ## `scan` fails with `storage_missing`
 
-A command that requires an initialized workspace raises `storage_missing` when the config exists but storage metadata is absent. Resolve it the same way as `config_only`: run `docledger init`.
+A command that requires an initialized workspace raises `storage_missing` when the config exists but storage metadata is absent. Resolve it the same way as the missing-storage `uninitialized` case: run `docledger init`.
 
 ## `mark-fresh` fails with `unlinked_doc`
 
@@ -43,7 +43,7 @@ Broad links (for example linking every doc to every module) defeat the selective
 `unlinked_changed_sources` lists source files that changed since the last scan but have no doc record link. Decide for each one whether it needs documentation, then either add a link or leave it untracked. Use the bootstrap flag to surface all unlinked sources, not just changed ones:
 
 ```bash
-docledger docs build-context --all --include-unlinked --print
+docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
 ```
 
 ## The Sphinx build warns about files inside the virtual environment

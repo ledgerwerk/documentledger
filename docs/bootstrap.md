@@ -12,35 +12,37 @@ The first `docledger scan` hashes every configured source and documentation file
 
    ```bash
    docledger init
-   docledger scan
+   docledger --json scan
    ```
 
-2. Render a bootstrap context that includes sources with no linked documentation:
+2. Render a bootstrap context that includes the unlinked source inventory and current doc inventory:
 
    ```bash
-   docledger docs build-context --all --include-unlinked --print
+   docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
    ```
 
-   The bootstrap section lists every source file that has no doc record link. These are the sources that need documentation.
+   The bootstrap context file lists every source file that has no doc record link. These are the sources that need documentation or explicit omission.
 
 3. Create documentation files for those sources under a configured documentation root (for example `docs/`).
 
-4. Link each new document to the source files it describes, keeping the links precise:
+4. Generate deterministic proposal files and review them before applying:
 
    ```bash
-   docledger links add --doc docs/usage.md --source documentledger/cli.py --reason "Documents the CLI workflow."
+   docledger links propose --all-docs --out-dir /tmp/docledger-maps
+   docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply
    ```
 
-5. Scan again so the link graph takes effect:
+5. Run a link audit and coverage review:
 
    ```bash
-   docledger scan
+   docledger --json links audit
+   docledger --json coverage
    ```
 
 6. Validate the documentation with the configured validation commands, then mark the new docs fresh:
 
    ```bash
-   docledger mark-fresh --doc docs/usage.md --reason "Initial docs after scan version 2."
+   docledger mark-fresh --all --reason "Initial docs after bootstrap link application."
    ```
 
 From this point on, normal incremental maintenance applies: subsequent scans mark a doc stale only when one of its linked sources changes.

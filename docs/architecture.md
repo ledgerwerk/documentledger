@@ -6,9 +6,9 @@
 
 Documentledger discovers `documentledger.toml` or `.documentledger.toml` by walking upward from the current directory. The loaded configuration defines the project metadata, storage directory, scan roots, allowed file extensions, validation commands, and policy flags.
 
-A workspace combines the loaded configuration with storage metadata from `.documentledger/storage.yaml`. Commands that require an initialized workspace fail with a structured `workspace_not_found` error when no config is found, or a `storage_missing` error when the config exists but storage metadata is absent. `status` distinguishes three states explicitly: `uninitialized` (no config), `config_only` (config without storage metadata), and `initialized` (both present).
+A workspace combines the loaded configuration with storage metadata from `.documentledger/storage.yaml`. Commands that require an initialized workspace fail with a structured `workspace_not_found` error when no config is found, or a `storage_missing` error when the config exists but storage metadata is absent. `status` classifies the workspace operationally (`uninitialized`, `bootstrap_required`, `incremental_clean`, `incremental_affected`, or `mapping_incomplete`) and reports a recommended next command.
 
-When storage metadata exists, loading the workspace normalizes the persisted state to the current storage schema version. Timestamp keys are stripped from metadata and records, the single current scan record is normalized to the current v4 schema when present, doc records are rewritten to the current v4 schema, and missing `version` or `state_version` fields are filled in.
+Workspace loading is read-only. It validates the current storage schema and metadata, but it does not rewrite scan or doc records as a side effect of read-only commands.
 
 <!-- docledger-section: architecture-storage-model -->
 
@@ -16,12 +16,13 @@ When storage metadata exists, loading the workspace normalizes the persisted sta
 
 The storage layer writes YAML files only through the Documentledger APIs:
 
-- `.documentledger/storage.yaml` stores schema metadata, project UUID, and the current `state_version`.
-- `.documentledger/scan.yaml` stores the current source hashes, document hashes, source-unit inventory, unit deltas, affected-section snapshots, stale-doc projections, unlinked changed sources, unmapped changed units, and the monotonic current scan `version`.
+- `.documentledger/storage.yaml` stores schema metadata, project UUID, the current `state_version`, and compact latest-scan counts used by `status`.
+- `.documentledger/scan.yaml` stores the current source hashes, document hashes, source-index metadata, unit deltas, affected-section snapshots, stale-doc projections, unlinked changed sources, unmapped changed units, and the monotonic current scan `version`.
+- `.documentledger/source-index.json` stores the current source-unit inventory as deterministic compact JSON.
 - `.documentledger/docs/*.yaml` stores document records with `sections[].links[]`, derived `linked_sources`, section hashes, tracked source-unit hashes, freshness metadata including `last_fresh_scan_version`, notes, and a doc-record `version`.
 - `.documentledger/rendered/latest-context.md` is a regenerated cache of the latest rendered update context.
 
-Git history is the record of older scan baselines. `.documentledger/scans/` does not exist in the v4 storage model.
+Git history is the record of older scan baselines. `.documentledger/scans/` does not exist in the v5 storage model.
 
 The recommended commit policy is to version `storage.yaml`, `scan.yaml`, and `docs/*.yaml` as the source of truth, and to ignore `rendered/` because it is regenerated on demand.
 
@@ -51,13 +52,13 @@ On the first scan, Documentledger records a clean baseline. On later scans it co
 - `stale_docs` remains available as a compatibility projection of the docs that still contain affected sections.
 - Changed sources with no link record are reported as unlinked changed sources.
 - Changed units with no matching section link are reported as unmapped changed units.
-- If every source and documentation hash matches the previous scan, `.documentledger/scan.yaml` is not rewritten, the previous scan version is reused, and the result reports `unchanged` as true.
+- If every source and documentation hash matches the previous scan, `.documentledger/scan.yaml` and `.documentledger/source-index.json` are not rewritten, no source ASTs are reparsed, the previous scan version is reused, and the result reports `unchanged` as true.
 
 <!-- docledger-section: architecture-link-management -->
 
 ## Link management
 
-A document link is usually a section edge: one documentation section linked to one source unit plus a coverage type, impact type, reason, and tracked hash set. `links add-section` validates the doc, section, and source unit, then records tracked hashes based on the coverage defaults. `links import-map` lets an agent apply a validated mapping proposal without editing `.documentledger/` directly.
+A document link is usually a section edge: one documentation section linked to one source unit plus a coverage type, impact type, reason, and tracked hash set. `links add-section` validates the doc, section, and source unit, then records tracked hashes based on the coverage defaults. `links import-map` validates full multi-file batches before writing and applies them as one logical operation so section replacement and versioning stay coherent.
 
 `links audit` checks stored section links for missing sections, missing source units, and duplicate edges. `links add` and `links remove` remain as broad-file fallback commands. They store whole-doc fallback links that track the file fallback unit, which is still useful for unparseable sources or intentionally coarse docs.
 
@@ -67,9 +68,9 @@ A document link is usually a section edge: one documentation section linked to o
 
 `docs affected` computes a live affected-section projection from the latest scan and the current doc records. This means section-level `mark-fresh` can clear affectedness without requiring a follow-up scan.
 
-`docs build-context` renders a Markdown context document with only the affected sections, their linked changed source units, current relevant source snippets, unlinked changed sources, configured validation commands, and agent rules. The context can be written to `.documentledger/rendered/latest-context.md`, written to a chosen output path, printed, or both.
+`docs build-context` renders a Markdown context document for distinct selector modes: `--affected`, `--all`, `--doc DOC [--section SECTION]`, or `--bootstrap`. The context is always written to a file; printing is explicit. Bounded output options limit source lines, section lines, and total bytes while surfacing a truncation manifest instead of silently dropping content.
 
-The `--include-unlinked` flag adds a bootstrap section that lists every source file with no linked documentation. This is intended for first-time documentation passes in repositories that do not yet have a link graph. The bootstrap section is computed as the set of source files recorded in the latest scan minus the set of sources referenced by any doc record.
+The `--include-unlinked` flag adds the full unlinked source inventory to non-bootstrap context modes. The bootstrap mode is intended for first-time documentation passes in repositories that do not yet have a link graph.
 
 <!-- docledger-section: architecture-freshness-marking -->
 
