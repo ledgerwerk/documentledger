@@ -11,12 +11,12 @@ from tests.conftest import assert_no_timestamp_keys, invoke_json, load_yaml
 def test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> None:
     data = invoke_json(runner, ["init", "--project-name", "demo"])
     assert data["ok"] is True
-    assert (project / "documentledger.toml").exists()
-    assert (project / ".documentledger" / "storage.yaml").exists()
-    assert (project / ".documentledger" / "docs").is_dir()
-    assert (project / ".documentledger" / "rendered").is_dir()
-    assert not (project / ".documentledger" / "scans").exists()
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    assert (project / ".ledger" / "ledger.toml").exists()
+    assert (project / ".ledger" / "documentledger" / "config.toml").exists()
+    assert (project / ".ledger" / "documentledger" / "data" / "storage.yaml").exists()
+    assert (project / ".ledger" / "documentledger" / "data" / "docs").is_dir() is False
+    assert not (project / ".documentledger").exists()
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert storage["schema_version"] == 5
     assert storage["state_version"] == 1
     assert "next_scan_number" not in storage
@@ -24,9 +24,10 @@ def test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> No
     assert_no_timestamp_keys(storage)
 
 
-def test_hidden_config(project: Path, runner: CliRunner) -> None:
-    invoke_json(runner, ["init", "--hidden-config"])
-    assert (project / ".documentledger.toml").exists()
+def test_legacy_init_options_are_rejected(project: Path, runner: CliRunner) -> None:
+    result = runner.invoke(app, ["--json", "init", "--hidden-config"])
+    assert result.exit_code != 0
+    assert "legacy_init_options_unsupported" in result.output
 
 
 def test_reinitialization_fails_cleanly(project: Path, runner: CliRunner) -> None:
@@ -36,8 +37,7 @@ def test_reinitialization_fails_cleanly(project: Path, runner: CliRunner) -> Non
     assert "already_initialized" in result.output
 
 
-def test_external_storage_paths_resolved_from_config_root(project: Path, runner: CliRunner) -> None:
-    invoke_json(runner, ["init", "--documentledger-dir", "../ledger-state"])
-    assert (project.parent / "ledger-state" / "storage.yaml").exists()
-    status = invoke_json(runner, ["status"])["result"]
-    assert status["storage_dir"] == "../ledger-state"
+def test_external_storage_option_is_rejected(project: Path, runner: CliRunner) -> None:
+    result = runner.invoke(app, ["--json", "init", "--documentledger-dir", "../ledger-state"])
+    assert result.exit_code != 0
+    assert "legacy_init_options_unsupported" in result.output

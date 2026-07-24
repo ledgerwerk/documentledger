@@ -34,7 +34,7 @@ def test_import_map_directory_applies_batch_once(project: Path, runner) -> None:
     )
     validate = invoke_json(runner, ["links", "import-map", "--directory", str(maps), "--validate"])["result"]
     apply = invoke_json(runner, ["links", "import-map", "--directory", str(maps), "--check-and-apply"])["result"]
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     assert validate["planned_edges"] == 2
     assert apply["planned_edges"] == 2
     assert apply["added_edges"] == 2
@@ -94,7 +94,7 @@ def test_replace_section_preserves_all_supplied_edges(project: Path, runner) -> 
         encoding="utf-8",
     )
     invoke_json(runner, ["links", "import-map", "--file", str(mapping), "--check-and-apply", "--replace-section"])
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     section = next(section for section in record["sections"] if section["heading_slug"] == "usage-run-scan")
     assert [link["source_id"] for link in section["links"]] == [
         "py:function:documentledger/cli.py::doctor",

@@ -33,8 +33,8 @@ def test_mark_fresh_updates_fields(project: Path, runner: CliRunner) -> None:
     (project / "documentledger" / "cli.py").write_text("changed\n", encoding="utf-8")
     scan_version = invoke_json(runner, ["scan"])["result"]["version"]
     data = invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", f"Docs updated after scan version {scan_version}."])
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["result"]["updated_docs"] == ["README.md"]
     assert record["schema"] == "documentledger.doc_record.v4"
     assert record["last_fresh_scan_version"] == scan_version
@@ -51,8 +51,8 @@ def test_mark_fresh_noop_does_not_bump_version(project: Path, runner: CliRunner)
     reason = f"Docs updated after scan version {scan_version}."
     invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", reason])
     invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", reason])
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert record["version"] == 5
     assert storage["state_version"] == 5
 

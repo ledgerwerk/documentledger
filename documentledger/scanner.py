@@ -8,9 +8,21 @@ from ledgercore.hashing import sha256_bytes
 from documentledger.impact import linked_source_map, resolve_affected_sections, unmapped_changed_units
 from documentledger.models import ScanResult, Workspace
 from documentledger.source_index import source_inventory, source_inventory_for_paths
-from documentledger.storage import latest_scan, latest_scan_summary, save_scan
+from documentledger.storage import latest_scan, latest_scan_summary, save_scan, workspace_data_dir, workspace_root
 
-EXCLUDED_NAMES = {".git", ".cache", "__pycache__", "build", "dist", ".tox", ".nox", ".venv", "venv", "env"}
+EXCLUDED_NAMES = {
+    ".git",
+    ".cache",
+    ".ledger",
+    "__pycache__",
+    "build",
+    "dist",
+    ".tox",
+    ".nox",
+    ".venv",
+    "venv",
+    "env",
+}
 
 
 def file_hash(path: Path) -> str:
@@ -19,26 +31,33 @@ def file_hash(path: Path) -> str:
 
 def collect_files(workspace: Workspace, roots: list[str], extensions: list[str]) -> list[str]:
     result: list[str] = []
-    storage_dir = workspace.config.storage_dir.resolve()
+    root_dir = workspace_root(workspace)
+    storage_dir = workspace_data_dir(workspace).resolve()
+    artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
+    artifacts_dir = artifacts_dir.resolve() if artifacts_dir is not None else None
     for root_text in roots:
-        root = workspace.config.root / root_text
+        root = root_dir / root_text
         if not root.exists():
             continue
         candidates = [root] if root.is_file() else [p for p in root.rglob("*") if p.is_file()]
         for path in candidates:
             resolved = path.resolve()
-            if storage_dir == resolved or storage_dir in resolved.parents:
+            if (
+                storage_dir == resolved
+                or storage_dir in resolved.parents
+                or (artifacts_dir and (artifacts_dir == resolved or artifacts_dir in resolved.parents))
+            ):
                 continue
-            if any(part in EXCLUDED_NAMES for part in path.relative_to(workspace.config.root).parts):
+            if any(part in EXCLUDED_NAMES for part in path.relative_to(root_dir).parts):
                 continue
             if path.suffix not in extensions:
                 continue
-            result.append(path.relative_to(workspace.config.root).as_posix())
+            result.append(path.relative_to(root_dir).as_posix())
     return sorted(set(result))
 
 
 def hash_paths(workspace: Workspace, paths: list[str]) -> dict[str, str]:
-    return {path: file_hash(workspace.config.root / path) for path in paths}
+    return {path: file_hash(workspace_root(workspace) / path) for path in paths}
 
 
 def changed_source_paths(previous: dict[str, Any] | None, current_hashes: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
@@ -164,7 +183,7 @@ def run_scan(workspace: Workspace) -> ScanResult:
     changed, added, deleted = changed_source_paths(previous_summary, source_hashes)
     source_units: dict[str, dict[str, Any]]
     if previous is None:
-        source_units = source_inventory(workspace.config.root, source_paths)
+        source_units = source_inventory(workspace_root(workspace), source_paths)
     elif changed or added or deleted:
         previous_units = dict(previous.get("source_units", {}))
         replaced_paths = set(changed) | set(added)
@@ -175,7 +194,7 @@ def run_scan(workspace: Workspace) -> ScanResult:
         }
         indexed_paths = sorted(replaced_paths)
         if indexed_paths:
-            for unit in source_inventory_for_paths(workspace.config.root, indexed_paths).values():
+            for unit in source_inventory_for_paths(workspace_root(workspace), indexed_paths).values():
                 source_units[str(unit["source_id"])] = unit
     else:
         source_units = dict(previous.get("source_units", {})) if previous is not None else {}

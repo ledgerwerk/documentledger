@@ -44,9 +44,11 @@ app = typer.Typer(no_args_is_help=True)
 links_app = typer.Typer(no_args_is_help=True)
 docs_app = typer.Typer(no_args_is_help=True)
 sources_app = typer.Typer(no_args_is_help=True)
+storage_app = typer.Typer(no_args_is_help=True)
 app.add_typer(links_app, name="links")
 app.add_typer(docs_app, name="docs")
 app.add_typer(sources_app, name="sources")
+app.add_typer(storage_app, name="storage")
 
 
 def envelope(command: str, result: Any = None, events: list[Any] | None = None) -> dict[str, Any]:
@@ -288,9 +290,15 @@ def init(
     documentledger_dir: str = typer.Option(".documentledger", "--documentledger-dir"),
     hidden_config: bool = typer.Option(False, "--hidden-config"),
 ) -> None:
-    from documentledger.storage import init_workspace
+    if documentledger_dir != ".documentledger" or hidden_config:
+        raise DocumentledgerError(
+            "legacy_init_options_unsupported",
+            "Fresh initialization uses the canonical schema-3 .ledger layout; legacy storage options are migration-only.",
+            ["Run `docledger init --project-name NAME` or migrate the existing workspace explicitly."],
+        )
+    from documentledger.project import init_canonical_project
 
-    workspace = init_workspace(project_name, documentledger_dir, hidden_config)
+    workspace = init_canonical_project(project_name)
     result = status_result(workspace)
     emit(ctx, "init", result, f"Initialized Documentledger for {workspace.config.project_name}")
 
@@ -313,6 +321,8 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
     config_rel = display_path(workspace.config.root, workspace.config.path)
     storage_rel = display_path(workspace.config.root, workspace.config.storage_dir)
     storage_present = (workspace.config.storage_dir / "storage.yaml").exists()
+    paths = getattr(workspace, "paths", None)
+    layout_source = "canonical" if paths is not None and paths.layout_source == "canonical" else "legacy"
     if not storage_present:
         return {
             "initialized": False,
@@ -320,6 +330,8 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
             "storage_present": False,
             "config_path": config_rel,
             "storage_dir": storage_rel,
+            "data_dir": storage_rel,
+            "layout_source": layout_source,
             "project_name": workspace.config.project_name,
             "project_uuid": workspace.config.project_uuid,
             "last_scan_version": None,
@@ -329,12 +341,14 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
         }
     issues = scan_diagnostics(workspace)
     state, reason, command = status_classification(workspace)
-    return {
+    result = {
         "initialized": True,
         "state": state,
         "storage_present": True,
         "config_path": config_rel,
         "storage_dir": storage_rel,
+        "data_dir": storage_rel,
+        "layout_source": layout_source,
         "project_name": workspace.config.project_name,
         "project_uuid": workspace.metadata.get("project_uuid") or workspace.config.project_uuid,
         "last_scan_version": coerce_int(workspace.metadata.get("last_scan_version"), 0) or None,
@@ -347,6 +361,16 @@ def status_result(workspace: Any | None) -> dict[str, Any]:
         "recommended_reason": reason,
         "issues": issues,
     }
+    if paths is not None:
+        result.update(
+            {
+                "manifest_path": display_path(paths.project_root, paths.manifest_path) if paths.manifest_path else None,
+                "artifacts_dir": str(paths.artifacts_dir) if paths.artifacts_dir else None,
+                "storage_bindings_valid": True,
+                "legacy_cleanup_available": False,
+            }
+        )
+    return result
 
 
 @app.command()
@@ -357,6 +381,134 @@ def status(ctx: typer.Context) -> None:
     result = status_result(workspace)
     human = "Documentledger initialized." if result["initialized"] else "Documentledger is not initialized."
     emit(ctx, "status", result, human, profile_events(ctx, "status", started_at))
+
+
+@storage_app.command("where")
+@handle_errors("storage where")
+def storage_where(ctx: typer.Context) -> None:
+    from documentledger.legacy import find_legacy_config, load_legacy_project
+    from documentledger.project import resolve_canonical_project
+
+    manifest_exists = any(
+        (parent / ".ledger" / "ledger.toml").is_file() for parent in [Path.cwd().resolve(), *Path.cwd().resolve().parents]
+    )
+    try:
+        canonical = resolve_canonical_project(Path.cwd(), require_data=False)
+    except DocumentledgerError:
+        if manifest_exists:
+            raise
+        canonical = None
+    if canonical is not None:
+        paths = canonical.paths
+        legacy_path = find_legacy_config(paths.project_root)
+        result = {
+            "layout": "canonical",
+            "project_root": str(paths.project_root),
+            "manifest_path": str(paths.manifest_path),
+            "config_path": str(paths.config_path),
+            "data_dir": str(paths.data_dir),
+            "artifacts_dir": str(paths.artifacts_dir) if paths.artifacts_dir else None,
+            "project_uuid": canonical.project_uuid,
+            "storage_bindings_valid": True,
+            "legacy_config": str(legacy_path) if legacy_path else None,
+        }
+        emit(ctx, "storage where", result, f"Canonical Documentledger storage: {paths.data_dir}")
+        return
+    legacy_path = find_legacy_config()
+    if legacy_path is None:
+        emit(ctx, "storage where", {"layout": "uninitialized"}, "Documentledger storage is uninitialized.")
+        return
+    legacy = load_legacy_project(legacy_path)
+    result = {
+        "layout": "legacy",
+        "project_root": str(legacy.root),
+        "config_path": str(legacy.config_path),
+        "data_dir": str(legacy.data_dir),
+        "artifacts_dir": None,
+        "project_uuid": legacy.config.project_uuid,
+    }
+    emit(ctx, "storage where", result, f"Legacy Documentledger storage: {legacy.data_dir}")
+
+
+@storage_app.command("migrate")
+@handle_errors("storage migrate")
+def storage_migrate(
+    ctx: typer.Context,
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    plan_file: str | None = typer.Option(None, "--plan-file"),
+    adopt_project_uuid: bool = typer.Option(False, "--adopt-project-uuid"),
+    repair_missing_source_index: bool = typer.Option(False, "--repair-missing-source-index"),
+) -> None:
+    from documentledger.migration import apply_migration, plan_migration, write_plan
+
+    plan = plan_migration(Path.cwd(), adopt_project_uuid=adopt_project_uuid)
+    if plan_file:
+        target = Path(plan_file)
+        if dry_run:
+            write_plan(target, plan)
+        elif target.is_file():
+            stored = json.loads(target.read_text(encoding="utf-8"))
+            if stored.get("plan_sha256") != plan.plan_sha256:
+                raise DocumentledgerError(
+                    "storage_migration_conflict", "The migration plan file is stale; rerun dry-run and review it again."
+                )
+    if dry_run:
+        result = plan.to_dict() | {"dry_run": True, "activation": "manifest update last", "legacy_cleanup": "not included"}
+        emit(ctx, "storage migrate", result, f"Migration plan {plan.migration_id} is ready; no state was changed.")
+        return
+    result = apply_migration(plan, adopt_project_uuid=adopt_project_uuid, repair_missing_source_index=repair_missing_source_index)
+    emit(ctx, "storage migrate", result, "Canonical Documentledger storage is active; legacy files were retained.")
+
+
+@storage_app.command("verify")
+@handle_errors("storage verify")
+def storage_verify(ctx: typer.Context, strict: bool = typer.Option(False, "--strict")) -> None:
+    from documentledger.migration import verify_canonical
+
+    result = verify_canonical(Path.cwd(), strict=strict)
+    emit(ctx, "storage verify", result, "Canonical storage verification passed.")
+
+
+@storage_app.command("recover")
+@handle_errors("storage recover")
+def storage_recover(ctx: typer.Context, journal: str = typer.Option(..., "--journal")) -> None:
+    from dataclasses import replace
+
+    from documentledger.migration import apply_migration, plan_migration
+
+    path = Path(journal)
+    if not path.is_file():
+        raise DocumentledgerError("storage_migration_incomplete", f"Migration journal does not exist: {path}")
+    if not path.stem.startswith("documentledger-"):
+        raise DocumentledgerError("storage_migration_conflict", "The supplied journal is not a Documentledger migration journal.")
+    plan = plan_migration(Path.cwd(), adopt_project_uuid=True)
+    # The manifest hash changes at activation, so a resumed journal retains its
+    # original deterministic migration id while current inputs are re-planned.
+    plan = replace(plan, migration_id=path.stem)
+    result = apply_migration(plan, adopt_project_uuid=True, repair_missing_source_index=True, recovery=True) | {"recovered": True}
+    emit(ctx, "storage recover", result, "Migration recovery completed.")
+
+
+@storage_app.command("cleanup-legacy")
+@handle_errors("storage cleanup-legacy")
+def storage_cleanup_legacy(
+    ctx: typer.Context,
+    yes: bool = typer.Option(False, "--yes"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    remove_external_source: bool = typer.Option(False, "--remove-external-source"),
+    discard_derived: bool = typer.Option(False, "--discard-derived"),
+) -> None:
+    from documentledger.migration import cleanup_legacy
+
+    result = cleanup_legacy(
+        Path.cwd(), yes=yes, dry_run=dry_run, remove_external_source=remove_external_source, discard_derived=discard_derived
+    )
+    emit(
+        ctx,
+        "storage cleanup-legacy",
+        result,
+        "Legacy cleanup completed." if not dry_run else "Legacy cleanup is safe to perform after review.",
+    )
 
 
 @app.command()
@@ -596,7 +748,7 @@ def links_audit(ctx: typer.Context) -> None:
 def links_propose(
     ctx: typer.Context,
     all_docs: bool = typer.Option(False, "--all-docs"),
-    out_dir: str = typer.Option(..., "--out-dir"),
+    out_dir: str | None = typer.Option(None, "--out-dir"),
 ) -> None:
     started_at = perf_counter()
     if not all_docs:
@@ -604,7 +756,22 @@ def links_propose(
     workspace = load_workspace()
     inventory = current_source_inventory(workspace)
     docs = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
-    output_dir = Path(out_dir)
+    artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
+    output_dir = (
+        Path(out_dir) if out_dir else ((artifacts_dir / "proposals") if artifacts_dir else workspace.config.storage_dir / "proposals")
+    )
+    if (
+        out_dir is None
+        and artifacts_dir is not None
+        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
+        and not artifacts_dir.exists()
+    ):
+        import ledgercore
+
+        from documentledger.project import resolve_canonical_project
+
+        canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
+        ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     written_files: list[str] = []
     proposed_sections = 0
@@ -774,7 +941,29 @@ def docs_build_context(
         max_section_lines=max_section_lines,
         max_bytes=max_bytes,
     )
-    output_path = Path(out) if out else workspace.config.storage_dir / "rendered" / "latest-context.md"
+    artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
+    if (
+        out is None
+        and artifacts_dir is not None
+        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
+        and not artifacts_dir.exists()
+    ):
+        import ledgercore
+
+        from documentledger.project import resolve_canonical_project
+
+        canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
+        ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
+    output_path = (
+        Path(out)
+        if out
+        else (
+            artifacts_dir / "rendered" / "latest-context.md"
+            if artifacts_dir
+            else workspace.config.storage_dir / "rendered" / "latest-context.md"
+        )
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(output_path, str(rendered["content"]))
     if print_output and ctx.obj.get("json"):
         typer.echo(rendered["content"])

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -20,10 +20,55 @@ class Config:
     require_doc_frontmatter: bool = False
 
 
+LayoutSource = Literal["canonical", "legacy"]
+
+
+@dataclass(frozen=True, slots=True)
+class ToolConfig:
+    """Documentledger's tool-owned schema-2 configuration.
+
+    Project identity and storage routing deliberately do not live here. They
+    are supplied by the shared ledgercore manifest and resolved layout.
+    """
+
+    config_version: int
+    ledger_code: str
+    source_roots: tuple[str, ...]
+    doc_roots: tuple[str, ...]
+    source_extensions: tuple[str, ...]
+    doc_extensions: tuple[str, ...]
+    validation_commands: tuple[str, ...]
+    require_doc_frontmatter: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspacePaths:
+    """Resolved canonical or legacy paths, kept separate from tool config."""
+
+    project_root: Path
+    manifest_path: Path | None
+    local_config_path: Path | None
+    config_path: Path
+    data_dir: Path
+    artifacts_dir: Path | None
+    config_binding_path: Path | None
+    data_binding_path: Path | None
+    artifacts_binding_path: Path | None
+    layout_source: LayoutSource
+
+    @property
+    def storage_dir(self) -> Path:
+        """Compatibility alias for storage call sites during the migration."""
+        return self.data_dir
+
+
 @dataclass
 class Workspace:
     config: Config
     metadata: dict[str, object]
+    paths: WorkspacePaths | None = None
+    project_name: str | None = None
+    project_uuid: str | None = None
 
 
 @dataclass(frozen=True)

@@ -19,8 +19,8 @@ def test_add_link_idempotent(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
     data = invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["result"]["linked_sources"] == ["documentledger/cli.py"]
     assert record["schema"] == "documentledger.doc_record.v4"
     assert record["last_fresh_scan_version"] == 0
@@ -33,8 +33,8 @@ def test_remove_link(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
     data = invoke_json(runner, ["links", "remove", "--doc", "README.md", "--source", "documentledger/cli.py"])
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["result"]["linked_sources"] == []
     assert record["version"] == 3
     assert storage["state_version"] == 3
@@ -44,8 +44,8 @@ def test_remove_absent_link_is_noop(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
     invoke_json(runner, ["links", "remove", "--doc", "README.md", "--source", "documentledger/missing.py"])
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert record["version"] == 2
     assert storage["state_version"] == 2
 
@@ -131,7 +131,7 @@ def test_import_map_validate_and_apply(project: Path, runner: CliRunner) -> None
     )
     validate = invoke_json(runner, ["links", "import-map", "--file", str(mapping), "--validate"])["result"]
     apply = invoke_json(runner, ["links", "import-map", "--file", str(mapping), "--apply"])["result"]
-    record = load_yaml(next((project / ".documentledger" / "docs").glob("*.yaml")))
+    record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     assert validate["applied"] is False
     assert apply["applied"] is True
     assert record["linked_sources"] == ["documentledger/cli.py"]

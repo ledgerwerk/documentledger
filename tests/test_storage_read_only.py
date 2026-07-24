@@ -29,7 +29,7 @@ def test_read_only_cli_commands_do_not_mutate_storage(project: Path, runner) -> 
         ],
     )
     invoke_json(runner, ["scan"])
-    storage_dir = project / ".documentledger"
+    storage_dir = project / ".ledger" / "documentledger" / "data"
     before = snapshot_hashes(storage_dir)
     for args in (
         ["status"],
@@ -48,7 +48,7 @@ def test_read_only_cli_commands_do_not_mutate_storage(project: Path, runner) -> 
 
 def test_load_workspace_is_read_only(project: Path, runner) -> None:
     invoke_json(runner, ["init"])
-    storage_dir = project / ".documentledger"
+    storage_dir = project / ".ledger" / "documentledger" / "data"
     before = snapshot_hashes(storage_dir)
     load_workspace()
     assert snapshot_hashes(storage_dir) == before

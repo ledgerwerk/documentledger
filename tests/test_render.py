@@ -9,7 +9,7 @@ from tests.conftest import invoke_json, write_precision_sample
 
 def make_stale(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    config = project / "documentledger.toml"
+    config = project / ".ledger" / "documentledger" / "config.toml"
     config.write_text(
         config.read_text().replace("commands = []", 'commands = ["python -m pytest -q"]'),
         encoding="utf-8",

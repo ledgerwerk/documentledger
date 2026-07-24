@@ -66,5 +66,5 @@ def test_changed_source_scan_reindexes_only_changed_path(monkeypatch, project: P
     data = invoke_json(runner, ["scan"])["result"]
     assert data["changed_sources"] == ["documentledger/cli.py"]
     assert calls == [["documentledger/cli.py"]]
-    assert "source_units" not in load_yaml(project / ".documentledger" / "scan.yaml")
-    assert load_json(project / ".documentledger" / "source-index.json")["source_units"]
+    assert "source_units" not in load_yaml(project / ".ledger" / "documentledger" / "data" / "scan.yaml")
+    assert load_json(project / ".ledger" / "documentledger" / "data" / "source-index.json")["source_units"]

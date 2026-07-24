@@ -58,3 +58,11 @@ bash docs/build.sh
 ## `sphinx-build` is not found
 
 `docs/build.sh` creates and activates `docs/venv/` and installs `docs/requirements.txt`, which provides `sphinx-build`. If the build cannot find `sphinx-build`, ensure the script reaches the `source "$VENV_DIR/bin/activate"` step and that `docs/requirements.txt` installs successfully (it requires network access on first run).
+
+## Storage migration errors
+
+- `storage_migration_required`: run `docledger storage migrate --dry-run` and review the plan.
+- `project_uuid_mismatch`: compare the legacy and shared manifest identities; pass `--adopt-project-uuid` only after review.
+- `source_index_missing` or `source_index_repair_failed`: restore the committed `source-index.json`, or use explicit repair only when the reconstructed SHA-256 exactly matches `scan.yaml`.
+- `storage_binding_invalid`: repair the canonical binding through an explicit initialization/recovery command; status and verification never repair it silently.
+- `legacy_cleanup_unsafe`: verify the completed migration journal, unchanged legacy inventory, and provisional proposal disposition before using `--yes`.

@@ -9,6 +9,6 @@ def test_skill_mentions_required_workflow() -> None:
     assert "docledger --json scan" in text
     assert "docledger --json docs affected" in text
     assert "docledger docs build-context" in text
-    assert "Do not edit `.documentledger/` directly" in text
+    assert "Do not edit `.ledger/`" in text
     assert "validation before `mark-fresh`" in text
     assert "Inspect affected sections and linked changed source units first" in text

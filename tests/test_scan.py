@@ -15,8 +15,8 @@ def init_and_link(project: Path, runner: CliRunner) -> None:
 def test_first_scan_records_baseline(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     data = invoke_json(runner, ["scan"])["result"]
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
-    scan_record = load_yaml(project / ".documentledger" / "scan.yaml")
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
+    scan_record = load_yaml(project / ".ledger" / "documentledger" / "data" / "scan.yaml")
     assert data["version"] == 1
     assert data["unchanged"] is False
     assert data["changed_sources"] == []
@@ -25,10 +25,10 @@ def test_first_scan_records_baseline(project: Path, runner: CliRunner) -> None:
     assert scan_record["schema"] == "documentledger.scan.v5"
     assert scan_record["version"] == 1
     assert "source_units" not in scan_record
-    source_index = load_json(project / ".documentledger" / "source-index.json")
+    source_index = load_json(project / ".ledger" / "documentledger" / "data" / "source-index.json")
     assert source_index["schema"] == "documentledger.source_index.v1"
     assert source_index["source_units"]
-    assert not (project / ".documentledger" / "scans").exists()
+    assert not (project / ".ledger" / "documentledger" / "data" / "scans").exists()
     assert_no_timestamp_keys(scan_record)
 
 
@@ -36,7 +36,7 @@ def test_unchanged_scan_reuses_latest_scan_version(project: Path, runner: CliRun
     invoke_json(runner, ["init"])
     first = invoke_json(runner, ["scan"])["result"]
     second = invoke_json(runner, ["scan"])["result"]
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert first["version"] == 1
     assert second["version"] == 1
     assert second["unchanged"] is True
@@ -45,9 +45,9 @@ def test_unchanged_scan_reuses_latest_scan_version(project: Path, runner: CliRun
     assert second["stale_docs"] == []
     assert second["unlinked_changed_sources"] == []
     assert storage["state_version"] == 2
-    assert (project / ".documentledger" / "scan.yaml").exists()
-    assert (project / ".documentledger" / "source-index.json").exists()
-    assert not (project / ".documentledger" / "scans").exists()
+    assert (project / ".ledger" / "documentledger" / "data" / "scan.yaml").exists()
+    assert (project / ".ledger" / "documentledger" / "data" / "source-index.json").exists()
+    assert not (project / ".ledger" / "documentledger" / "data" / "scans").exists()
 
 
 def test_second_scan_detects_changed_source(project: Path, runner: CliRunner) -> None:
@@ -55,12 +55,12 @@ def test_second_scan_detects_changed_source(project: Path, runner: CliRunner) ->
     invoke_json(runner, ["scan"])
     (project / "documentledger" / "cli.py").write_text("print('changed')\n", encoding="utf-8")
     data = invoke_json(runner, ["scan"])["result"]
-    storage = load_yaml(project / ".documentledger" / "storage.yaml")
+    storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["changed_sources"] == ["documentledger/cli.py"]
     assert data["version"] == 2
     assert data["unchanged"] is False
     assert storage["state_version"] == 3
-    assert load_yaml(project / ".documentledger" / "scan.yaml")["version"] == 2
+    assert load_yaml(project / ".ledger" / "documentledger" / "data" / "scan.yaml")["version"] == 2
 
 
 def test_changed_linked_source_marks_doc_stale(project: Path, runner: CliRunner) -> None:

@@ -12,8 +12,8 @@ def test_status_reports_initialized_workspace(project: Path, runner: CliRunner) 
     data = invoke_json(runner, ["status"])
     result = data["result"]
     assert result["initialized"] is True
-    assert result["config_path"] == "documentledger.toml"
-    assert result["storage_dir"] == ".documentledger"
+    assert result["config_path"] == ".ledger/documentledger/config.toml"
+    assert result["storage_dir"] == ".ledger/documentledger/data"
     assert result["last_scan_version"] is None
 
 

@@ -15,13 +15,13 @@ def timestamp_key(prefix: str) -> str:
 
 def test_status_config_only_when_storage_missing(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    (project / ".documentledger" / "storage.yaml").unlink()
+    (project / ".ledger" / "documentledger" / "data" / "storage.yaml").unlink()
     data = invoke_json(runner, ["status"])
     result = data["result"]
     assert result["state"] == "uninitialized"
     assert result["initialized"] is False
     assert result["storage_present"] is False
-    assert result["config_path"] == "documentledger.toml"
+    assert result["config_path"] == ".ledger/documentledger/config.toml"
 
 
 def test_status_states_distinguish_initialized(project: Path, runner: CliRunner) -> None:
@@ -101,7 +101,7 @@ def test_timestamp_keys_absent_from_persisted_state_and_rendered_context(project
     (project / "documentledger" / "cli.py").write_text("changed\n", encoding="utf-8")
     invoke_json(runner, ["scan"])
     invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", "Docs updated after scan version 2."])
-    storage_dir = project / ".documentledger"
+    storage_dir = project / ".ledger" / "documentledger" / "data"
     assert_no_timestamp_keys(load_yaml(storage_dir / "storage.yaml"))
     assert_no_timestamp_keys(load_yaml(storage_dir / "scan.yaml"))
     assert_no_timestamp_keys(load_yaml(next((storage_dir / "docs").glob("*.yaml"))))
@@ -112,9 +112,9 @@ def test_timestamp_keys_absent_from_persisted_state_and_rendered_context(project
 def test_workspace_state_uses_single_scan_file(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["scan"])
-    storage_path = project / ".documentledger" / "storage.yaml"
+    storage_path = project / ".ledger" / "documentledger" / "data" / "storage.yaml"
     storage = load_yaml(storage_path)
-    assert (project / ".documentledger" / "scan.yaml").exists()
-    assert not (project / ".documentledger" / "scans").exists()
+    assert (project / ".ledger" / "documentledger" / "data" / "scan.yaml").exists()
+    assert not (project / ".ledger" / "documentledger" / "data" / "scans").exists()
     assert "next_scan_number" not in storage
     assert "last_scan_id" not in storage

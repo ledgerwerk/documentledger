@@ -18,7 +18,7 @@ The first `docledger scan` hashes every configured source and documentation file
 2. Render a bootstrap context that includes the unlinked source inventory and current doc inventory:
 
    ```bash
-   docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
+   docledger docs build-context --bootstrap
    ```
 
    The bootstrap context file lists every source file that has no doc record link. These are the sources that need documentation or explicit omission.
@@ -28,8 +28,8 @@ The first `docledger scan` hashes every configured source and documentation file
 4. Generate deterministic proposal files and review them before applying:
 
    ```bash
-   docledger links propose --all-docs --out-dir /tmp/docledger-maps
-   docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply
+   docledger links propose --all-docs
+   docledger --json links import-map --directory <reviewed-proposals> --check-and-apply
    ```
 
 5. Run a link audit and coverage review:

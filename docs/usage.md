@@ -179,3 +179,16 @@ Documentledger stores its own state under the configured `.documentledger/` dire
 - Ignore `.documentledger/rendered/`. Rendered context is regenerated on demand by `docs build-context`.
 
 Do not edit `.documentledger/` files directly; use the `docledger` commands so the records stay consistent.
+
+## Storage commands
+
+Use `docledger storage where` to inspect the active layout. Migrate a legacy workspace with a reviewed dry-run plan, then verify before any cleanup:
+
+```bash
+docledger storage migrate --dry-run --plan-file migration.json
+docledger storage migrate --plan-file migration.json --adopt-project-uuid
+docledger storage verify --strict
+docledger storage cleanup-legacy --dry-run
+```
+
+Routine commands never migrate automatically and read-only commands do not initialize cache directories or repair bindings.

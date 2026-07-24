@@ -91,3 +91,9 @@ Error handling is centralized through a per-command error decorator. Each comman
 ## ledgercore integration
 
 `ledgercore>=0.2` is an active dependency. Documentledger uses ledgercore for YAML storage, atomic writes, config discovery, path validation, doc-record identity helpers, and SHA-256 hashing.
+
+## Canonical storage
+
+Documentledger uses ledgercore 0.5 schema 3 as the shared project authority. The committed manifest is `.ledger/ledger.toml`; the tool config is derived at `.ledger/documentledger/config.toml`; durable scan, source-index, and document-record state is in the `data` project mount; and rendered/proposal output is in the resolved cache `artifacts` mount. Ledgercore owns manifest TOML writing and schema-3 `.ledger-project.toml` binding markers.
+
+Legacy `.documentledger` layouts remain compatibility input only. Migration is explicit, copy-first, SHA-256 verified, and activates the shared manifest last. `source-index.json` is part of the committed baseline and may only be repaired when exact reconstruction matches the recorded hash.

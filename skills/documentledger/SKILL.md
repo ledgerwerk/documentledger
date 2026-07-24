@@ -10,18 +10,19 @@ Use this skill when updating documentation in a repository that uses Documentled
 ## Entry protocol
 
 1. Run `docledger --json status`.
-2. Inspect `state`, `recommended_command`, and any reported `issues`.
-3. Run `docledger --json doctor`.
-4. Stop on invalid roots, missing storage, schema errors, or link corruption.
+2. Run `docledger storage where` when storage layout is unclear.
+3. Inspect `state`, `layout_source`, `recommended_command`, and any reported `issues`.
+4. Run `docledger --json doctor`.
+5. Stop on invalid roots, missing storage, schema errors, invalid bindings, or link corruption.
 
 ## Bootstrap branch
 
 Use this when the workspace has no baseline scan or no usable documentation links yet.
 
 1. Run `docledger --json scan`.
-2. Run `docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md`.
+2. Run `docledger docs build-context --bootstrap`.
 3. Inspect the saved context file.
-4. Run `docledger links propose --all-docs --out-dir /tmp/docledger-maps`.
+4. Run `docledger links propose --all-docs` (or provide an explicit output directory).
 5. Review and correct the proposal files.
 6. Run `docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply`.
 7. Run `docledger --json links audit`.
@@ -57,7 +58,9 @@ Do not report completion unless all applicable checks pass:
 
 ## Rules
 
-- Do not edit `.documentledger/` directly.
+- Do not edit `.ledger/` or legacy `.documentledger/` storage directly; use `docledger storage` commands.
+- Treat `.ledger/documentledger/data/source-index.json` as committed baseline state.
+- Migration is explicit and copy-first; never migrate from `status`, `doctor`, `scan`, or another routine command.
 - Do not mark docs fresh before updating and validating docs.
 - Do not rewrite all docs by default.
 - Do not invent links between docs and code.

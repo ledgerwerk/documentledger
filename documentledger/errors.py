@@ -2,6 +2,24 @@ from __future__ import annotations
 
 from ledgercore.errors import LedgerCoreError
 
+STORAGE_ERROR_CODES = frozenset(
+    {
+        "storage_migration_required",
+        "storage_layout_ambiguous",
+        "storage_registration_conflict",
+        "storage_binding_invalid",
+        "storage_migration_conflict",
+        "storage_migration_incomplete",
+        "storage_migration_failed",
+        "project_uuid_mismatch",
+        "source_index_missing",
+        "source_index_hash_mismatch",
+        "source_index_repair_failed",
+        "legacy_cleanup_unsafe",
+        "unsupported_canonical_layout",
+    }
+)
+
 
 class DocumentledgerError(LedgerCoreError):
     """Structured Documentledger error with a machine-readable code.

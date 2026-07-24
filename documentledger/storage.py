@@ -32,6 +32,20 @@ SCAN_FILENAME = "scan.yaml"
 SOURCE_INDEX_FILENAME = "source-index.json"
 TIMESTAMP_KEYS = {f"{prefix}_at" for prefix in ("created", "updated", "generated")}
 _UNSET: object = object()
+
+
+def workspace_root(workspace: Workspace) -> Path:
+    """Return the repository root for both legacy and canonical workspaces."""
+    paths = getattr(workspace, "paths", None)
+    return paths.project_root if paths is not None else workspace.config.root
+
+
+def workspace_data_dir(workspace: Workspace) -> Path:
+    """Return durable data storage without reintroducing routing into config."""
+    paths = getattr(workspace, "paths", None)
+    return paths.data_dir if paths is not None else workspace.config.storage_dir
+
+
 DEFAULT_CONFIG = {
     "ledger": {"code": "dl", "name": "documentledger"},
     "scan": {
@@ -175,6 +189,25 @@ def load_workspace(required: Literal[False]) -> Workspace | None: ...
 
 
 def load_workspace(required: bool = True) -> Workspace | None:
+    # Canonical schema-3 discovery is authoritative once a shared manifest is
+    # present. Imports stay local to avoid a module cycle with project.py.
+    canonical_manifest = next(
+        (
+            parent / ".ledger" / "ledger.toml"
+            for parent in [Path.cwd().resolve(), *Path.cwd().resolve().parents]
+            if (parent / ".ledger" / "ledger.toml").is_file()
+        ),
+        None,
+    )
+    if canonical_manifest is not None:
+        from documentledger.project import canonical_workspace
+
+        try:
+            return canonical_workspace(canonical_manifest.parent.parent, require_data=required)
+        except DocumentledgerError:
+            if required:
+                raise
+            return None
     config_path = discover_config()
     if config_path is None:
         if required:
@@ -236,7 +269,7 @@ def set_state_version(workspace: Workspace, version: int) -> None:
 
 
 def save_metadata(workspace: Workspace) -> None:
-    write_yaml(workspace.config.storage_dir / "storage.yaml", workspace.metadata)
+    write_yaml(workspace_data_dir(workspace) / "storage.yaml", workspace.metadata)
 
 
 def normalize_line_span(value: Any, default: tuple[int, int] = (1, 1)) -> list[int]:
@@ -275,7 +308,7 @@ def normalize_changed_unit(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def doc_sections_map(workspace: Workspace, doc_path: str) -> dict[str, dict[str, Any]]:
-    target = workspace.config.root / doc_path
+    target = workspace_root(workspace) / doc_path
     if not target.exists():
         return {}
     return {section.section_id: section.to_record() | {"text": section.text} for section in doc_sections_for_file(target, doc_path)}
@@ -306,7 +339,7 @@ def normalize_doc_record(
     if not stored_sections:
         fallback = whole_doc_section(
             doc_path,
-            (workspace.config.root / doc_path).read_text(encoding="utf-8") if (workspace.config.root / doc_path).exists() else "",
+            (workspace_root(workspace) / doc_path).read_text(encoding="utf-8") if (workspace_root(workspace) / doc_path).exists() else "",
         ).to_record()
         fallback["links"] = []
         stored_sections = [fallback]
@@ -425,11 +458,11 @@ def build_scan_summary(scan: dict[str, Any], *, version: int, source_index_hash:
 
 
 def scan_record_path(workspace: Workspace) -> Path:
-    return workspace.config.storage_dir / SCAN_FILENAME
+    return workspace_data_dir(workspace) / SCAN_FILENAME
 
 
 def source_index_path(workspace: Workspace, file_name: str | None = None) -> Path:
-    return workspace.config.storage_dir / (file_name or SOURCE_INDEX_FILENAME)
+    return workspace_data_dir(workspace) / (file_name or SOURCE_INDEX_FILENAME)
 
 
 def update_scan_metadata(workspace: Workspace, summary: dict[str, Any]) -> None:
@@ -491,7 +524,10 @@ def save_scan(workspace: Workspace, scan: dict[str, Any]) -> dict[str, Any]:
     staged = [
         (stage_json(source_index_path(workspace), index_payload, compact=True), source_index_path(workspace)),
         (stage_yaml(scan_record_path(workspace), summary), scan_record_path(workspace)),
-        (stage_yaml(workspace.config.storage_dir / "storage.yaml", temp_workspace.metadata), workspace.config.storage_dir / "storage.yaml"),
+        (
+            stage_yaml(workspace_data_dir(workspace) / "storage.yaml", temp_workspace.metadata),
+            workspace_data_dir(workspace) / "storage.yaml",
+        ),
     ]
     commit_staged_files(staged[:-1])
     commit_staged_files([staged[-1]])
@@ -534,7 +570,7 @@ def latest_scan(workspace: Workspace) -> dict[str, Any] | None:
 
 
 def doc_record_path(workspace: Workspace, doc_path: str) -> Path:
-    return workspace.config.storage_dir / "docs" / doc_record_filename(doc_path)
+    return workspace_data_dir(workspace) / "docs" / doc_record_filename(doc_path)
 
 
 def load_doc_record(
@@ -559,7 +595,7 @@ def save_doc_record(workspace: Workspace, record: dict[str, Any]) -> None:
             stage_yaml(doc_record_path(workspace, str(normalized["doc_path"])), normalized),
             doc_record_path(workspace, str(normalized["doc_path"])),
         ),
-        (stage_yaml(workspace.config.storage_dir / "storage.yaml", metadata), workspace.config.storage_dir / "storage.yaml"),
+        (stage_yaml(workspace_data_dir(workspace) / "storage.yaml", metadata), workspace_data_dir(workspace) / "storage.yaml"),
     ]
     commit_staged_files(staged[:-1])
     commit_staged_files([staged[-1]])
@@ -581,7 +617,7 @@ def save_doc_records_batch(workspace: Workspace, records: list[dict[str, Any]]) 
             (stage_yaml(doc_record_path(workspace, str(record["doc_path"])), record), doc_record_path(workspace, str(record["doc_path"])))
             for record in normalized_records
         ),
-        (stage_yaml(workspace.config.storage_dir / "storage.yaml", metadata), workspace.config.storage_dir / "storage.yaml"),
+        (stage_yaml(workspace_data_dir(workspace) / "storage.yaml", metadata), workspace_data_dir(workspace) / "storage.yaml"),
     ]
     commit_staged_files(staged[:-1])
     commit_staged_files([staged[-1]])
@@ -590,7 +626,7 @@ def save_doc_records_batch(workspace: Workspace, records: list[dict[str, Any]]) 
 
 
 def iter_doc_records(workspace: Workspace) -> list[dict[str, Any]]:
-    docs_dir = workspace.config.storage_dir / "docs"
+    docs_dir = workspace_data_dir(workspace) / "docs"
     if not docs_dir.exists():
         return []
     records = []
@@ -642,7 +678,7 @@ class CommandState:
 
     def list_doc_records(self) -> list[dict[str, Any]]:
         if not self._doc_records_loaded:
-            docs_dir = self.workspace.config.storage_dir / "docs"
+            docs_dir = workspace_data_dir(self.workspace) / "docs"
             for path in sorted(docs_dir.glob("*.yaml")) if docs_dir.exists() else []:
                 payload = read_yaml(path)
                 record = normalize_doc_record(

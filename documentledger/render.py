@@ -6,7 +6,7 @@ from typing import Any
 from documentledger.doc_index import doc_sections_for_file
 from documentledger.impact import resolve_affected_sections, stale_doc_details
 from documentledger.models import Workspace
-from documentledger.storage import iter_doc_records, latest_scan
+from documentledger.storage import iter_doc_records, latest_scan, workspace_root
 
 
 def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
@@ -14,7 +14,7 @@ def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
 
 
 def section_text_map(workspace: Workspace, doc_path: str) -> dict[str, dict[str, Any]]:
-    target = workspace.config.root / doc_path
+    target = workspace_root(workspace) / doc_path
     if not target.exists():
         return {}
     return {section.section_id: section.to_record() | {"text": section.text} for section in doc_sections_for_file(target, doc_path)}
@@ -87,7 +87,7 @@ def selected_doc_sections(workspace: Workspace, docs: list[str], section_id: str
         record_sections = {
             str(section.get("section_id", "")): dict(section) for section in (record_map.get(doc_path, {}).get("sections", []) or [])
         }
-        for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
+        for section in doc_sections_for_file(workspace_root(workspace) / doc_path, doc_path):
             if section_id is not None and section.heading_slug != section_id and section.section_id != section_id:
                 continue
             record_section = record_sections.get(section.section_id, {})
@@ -231,7 +231,7 @@ def render_context(
                     ]
                 )
                 snippet = source_snippet(
-                    workspace.config.root,
+                    workspace_root(workspace),
                     str(unit["source_path"]),
                     list(unit.get("line_span", [0, 0])),
                     max_lines=max_source_lines,
