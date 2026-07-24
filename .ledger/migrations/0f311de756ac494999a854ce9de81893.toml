@@ -1,0 +1,12 @@
+schema_version = 1
+migration_id = "0f311de756ac494999a854ce9de81893"
+project_uuid = "a2d23037-56c6-40af-bf68-803d29f23054"
+phase = "complete"
+
+[items.0]
+component = "mount"
+tool = "taskledger"
+mount = "data"
+source = "/data/data/com.termux/files/home/src/ledger/task/documentledger"
+destination = "/data/data/com.termux/files/home/src/ledger/taskledger/a2d23037-56c6-40af-bf68-803d29f23054/data"
+strategy = "copy"

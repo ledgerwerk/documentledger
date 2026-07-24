@@ -2,9 +2,17 @@ schema_version = 3
 
 [project]
 uuid = "a2d23037-56c6-40af-bf68-803d29f23054"
+name = "documentledger"
 
 [ledgers.releaseledger.mounts.data]
 storage = "project"
 
 [ledgers.releaseledger.mounts.indexes]
+storage = "cache"
+
+[ledgers.taskledger.mounts.data]
+storage = "external"
+root = "../ledger"
+
+[ledgers.taskledger.mounts.indexes]
 storage = "cache"
