@@ -1,0 +1,28 @@
+schema_version = 1
+migration_id = "40cd2241-7d2e-4610-97dd-b9242c404470"
+project_uuid = "a2d23037-56c6-40af-bf68-803d29f23054"
+phase = "complete"
+
+[items.0]
+component = "config"
+tool = "releaseledger"
+mount = "config"
+source = "/data/data/com.termux/files/home/src/documentledger/.ledger/releaseledger/.migration/9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe/config.toml"
+destination = "/data/data/com.termux/files/home/src/documentledger/.ledger/releaseledger/config.toml"
+strategy = "copy"
+
+[items.1]
+component = "mount"
+tool = "releaseledger"
+mount = "data"
+source = "/data/data/com.termux/files/home/src/documentledger/.ledger/releaseledger/.migration/9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe/data"
+destination = "/data/data/com.termux/files/home/src/documentledger/.ledger/releaseledger/data"
+strategy = "copy"
+
+[items.2]
+component = "mount"
+tool = "releaseledger"
+mount = "indexes"
+source = "/data/data/com.termux/files/home/src/documentledger/.ledger/releaseledger/.migration/9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe/data"
+destination = "/data/data/com.termux/files/home/.cache/ledgerwerk/releaseledger/a2d23037-56c6-40af-bf68-803d29f23054/documentledger-989ecd0f83d9/indexes"
+strategy = "rebuild"

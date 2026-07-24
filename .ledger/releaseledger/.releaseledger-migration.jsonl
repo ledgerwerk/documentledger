@@ -1,0 +1,6 @@
+{"phase": "staging", "migration_id": "9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe", "legacy_data_root": "/data/data/com.termux/files/home/src/documentledger/.releaseledger", "target_data_root": "/data/data/com.termux/files/home/src/documentledger/.ledger/releaseledger/data"}
+{"phase": "ledgercore-executing", "migration_id": "9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe"}
+{"phase": "canonical-activated", "migration_id": "9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe"}
+{"phase": "indexes-rebuilt", "migration_id": "9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe"}
+{"phase": "domain-verified", "migration_id": "9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe"}
+{"phase": "complete", "migration_id": "9cc63d9c-50c7-4e05-8ae4-2bb3921f41fe"}
