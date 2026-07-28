@@ -12,7 +12,7 @@ def test_read_only_cli_commands_do_not_mutate_storage(project: Path, runner) -> 
     invoke_json(
         runner,
         [
-            "links",
+            "link",
             "add-section",
             "--doc",
             "docs/usage.md",
@@ -34,13 +34,13 @@ def test_read_only_cli_commands_do_not_mutate_storage(project: Path, runner) -> 
     for args in (
         ["status"],
         ["doctor"],
-        ["docs", "list"],
-        ["docs", "sections", "--all"],
-        ["docs", "affected"],
-        ["docs", "stale"],
-        ["links", "list"],
-        ["links", "audit"],
-        ["sources", "list"],
+        ["document", "list"],
+        ["document", "sections", "--all"],
+        ["document", "affected"],
+        ["document", "stale"],
+        ["link", "list"],
+        ["link", "audit"],
+        ["source", "list"],
     ):
         invoke_json(runner, list(args))
     assert snapshot_hashes(storage_dir) == before

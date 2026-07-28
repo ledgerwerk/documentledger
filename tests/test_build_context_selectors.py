@@ -12,7 +12,7 @@ def prepare_stale_section(project: Path, runner) -> None:
     invoke_json(
         runner,
         [
-            "links",
+            "link",
             "add-section",
             "--doc",
             "docs/usage.md",
@@ -42,7 +42,7 @@ def prepare_stale_section(project: Path, runner) -> None:
 
 def test_build_context_affected_mode(project: Path, runner) -> None:
     prepare_stale_section(project, runner)
-    data = invoke_json(runner, ["docs", "build-context", "--affected"])
+    data = invoke_json(runner, ["document", "build-context", "--affected"])
     assert data["result"]["mode"] == "affected"
     assert data["result"]["sections"] == 1
 
@@ -50,7 +50,7 @@ def test_build_context_affected_mode(project: Path, runner) -> None:
 def test_build_context_doc_mode_and_section_selector(project: Path, runner) -> None:
     invoke_json(runner, ["init"])
     write_precision_sample(project)
-    data = invoke_json(runner, ["docs", "build-context", "--doc", "docs/usage.md", "--section", "usage-run-scan"])
+    data = invoke_json(runner, ["document", "build-context", "--doc", "docs/usage.md", "--section", "usage-run-scan"])
     assert data["result"]["mode"] == "doc"
     assert data["result"]["sections"] == 1
 
@@ -58,19 +58,19 @@ def test_build_context_doc_mode_and_section_selector(project: Path, runner) -> N
 def test_build_context_bootstrap_mode(project: Path, runner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["scan"])
-    data = invoke_json(runner, ["docs", "build-context", "--bootstrap"])
+    data = invoke_json(runner, ["document", "build-context", "--bootstrap"])
     assert data["result"]["mode"] == "bootstrap"
     assert data["result"]["path"]
 
 
 def test_build_context_requires_doc_for_section(project: Path, runner) -> None:
     invoke_json(runner, ["init"])
-    result = runner.invoke(app, ["--json", "docs", "build-context", "--section", "usage-run-scan"])
+    result = runner.invoke(app, ["--json", "document", "build-context", "--section", "usage-run-scan"])
     assert result.exit_code != 0
-    assert "doc_required" in result.output
+    assert "doc-required" in result.output
 
 
 def test_build_context_reports_truncation(project: Path, runner) -> None:
     prepare_stale_section(project, runner)
-    data = invoke_json(runner, ["docs", "build-context", "--affected", "--max-bytes", "500"])
+    data = invoke_json(runner, ["document", "build-context", "--affected", "--max-bytes", "500"])
     assert data["result"]["truncated"] is True

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Ledgercore 0.5 schema-3 canonical initialization and shared project bindings.
+- Explicit copy-first legacy migration, deterministic plans/journals, source-index integrity checks, verification, recovery, and guarded cleanup commands.
+
+### Changed
+
+- Durable state now lives in the `data` project mount; rendered contexts and proposals use the cache `artifacts` mount.
+- `source-index.json` is documented and enforced as committed source-of-truth state.
+
 ## [v0.1.1] - 2026-07-11
 
 ### Added

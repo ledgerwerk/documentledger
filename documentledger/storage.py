@@ -181,20 +181,21 @@ def validate_storage_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 @overload
-def load_workspace(required: Literal[True] = True) -> Workspace: ...
+def load_workspace(start: Path | None = None, *, required: Literal[True] = True) -> Workspace: ...
 
 
 @overload
-def load_workspace(required: Literal[False]) -> Workspace | None: ...
+def load_workspace(start: Path | None = None, *, required: Literal[False]) -> Workspace | None: ...
 
 
-def load_workspace(required: bool = True) -> Workspace | None:
+def load_workspace(start: Path | None = None, *, required: bool = True) -> Workspace | None:
     # Canonical schema-3 discovery is authoritative once a shared manifest is
     # present. Imports stay local to avoid a module cycle with project.py.
+    search_root = (start or Path.cwd()).resolve()
     canonical_manifest = next(
         (
             parent / ".ledger" / "ledger.toml"
-            for parent in [Path.cwd().resolve(), *Path.cwd().resolve().parents]
+            for parent in [search_root, *search_root.parents]
             if (parent / ".ledger" / "ledger.toml").is_file()
         ),
         None,
@@ -208,13 +209,13 @@ def load_workspace(required: bool = True) -> Workspace | None:
             if required:
                 raise
             return None
-    config_path = discover_config()
+    config_path = discover_config(search_root)
     if config_path is None:
         if required:
             raise DocumentledgerError(
                 "workspace_not_found",
                 "No documentledger.toml or .documentledger.toml found.",
-                ["Run `docledger init` from the project root."],
+                ["Run `documentledger init` from the project root."],
             )
         return None
     config = load_config(config_path)

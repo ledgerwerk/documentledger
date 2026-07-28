@@ -82,9 +82,9 @@ def resolve_canonical_project(start: Path | None = None, *, require_data: bool =
             ["Remove extra mounts and ensure data=project and artifacts=cache."],
         )
     if mounts[DATA_MOUNT].storage != "project":
-        raise DocumentledgerError("unsupported_documentledger_layout", "The data mount must use storage = \"project\".")
+        raise DocumentledgerError("unsupported_documentledger_layout", 'The data mount must use storage = "project".')
     if mounts[ARTIFACTS_MOUNT].storage != "cache":
-        raise DocumentledgerError("unsupported_documentledger_layout", "The artifacts mount must use storage = \"cache\".")
+        raise DocumentledgerError("unsupported_documentledger_layout", 'The artifacts mount must use storage = "cache".')
 
     report = ledgercore.validate_ledger_layout_storage(layout)
     if not report.valid:
@@ -166,9 +166,9 @@ def initialize_canonical_bindings(layout: object) -> None:
     ledgercore.initialize_storage_binding(layout.mounts[ARTIFACTS_MOUNT], require_empty=True)  # type: ignore[attr-defined]
 
 
-def init_canonical_project(project_name: str | None = None) -> Workspace:
+def init_canonical_project(root: Path | None = None, project_name: str | None = None) -> Workspace:
     """Create a fresh canonical project and its empty schema-3 stores."""
-    root = Path.cwd().resolve()
+    root = (root or Path.cwd()).resolve()
     manifest_path = root / ".ledger" / "ledger.toml"
     if manifest_path.exists():
         try:
@@ -179,6 +179,7 @@ def init_canonical_project(project_name: str | None = None) -> Workspace:
             raise DocumentledgerError("already_initialized", "Documentledger is already registered in the canonical ledger project.")
         manifest = loaded.manifest
         from dataclasses import replace
+
         from ledgercore.manifest import LedgerRegistration, MountDefinition
 
         ledgers = dict(manifest.ledgers)

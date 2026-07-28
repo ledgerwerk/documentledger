@@ -36,17 +36,17 @@ def test_status_states_distinguish_initialized(project: Path, runner: CliRunner)
 def test_mark_fresh_rejects_unlinked_doc(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["scan"])
-    result = runner.invoke(app, ["--json", "mark-fresh", "--doc", "README.md", "--reason", "r"])
+    result = runner.invoke(app, ["--json", "document", "mark-fresh", "--doc", "README.md", "--reason", "r"])
     assert result.exit_code != 0
     data = json.loads(result.output)
     assert data["ok"] is False
-    assert data["error"]["code"] == "unlinked_doc"
+    assert data["error"]["code"] == "unlinked-doc"
 
 
 def test_mark_fresh_allow_unlinked_opt_in(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["scan"])
-    data = invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--allow-unlinked", "--reason", "nav page"])
+    data = invoke_json(runner, ["document", "mark-fresh", "--doc", "README.md", "--allow-unlinked", "--reason", "nav page"])
     assert data["result"]["updated_docs"] == ["README.md"]
 
 
@@ -55,7 +55,7 @@ def test_build_context_useful_with_unlinked_changed_no_stale(project: Path, runn
     invoke_json(runner, ["scan"])
     (project / "documentledger" / "new.py").write_text("x = 1\n", encoding="utf-8")
     invoke_json(runner, ["scan"])
-    result = runner.invoke(app, ["docs", "build-context", "--all", "--print"])
+    result = runner.invoke(app, ["document", "build-context", "--all", "--print"])
     assert result.exit_code == 0
     assert "No sections matched the selector." in result.output
     assert "documentledger/new.py" in result.output
@@ -64,7 +64,7 @@ def test_build_context_useful_with_unlinked_changed_no_stale(project: Path, runn
 def test_build_context_include_unlinked_bootstrap(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     invoke_json(runner, ["scan"])
-    result = runner.invoke(app, ["docs", "build-context", "--all", "--include-unlinked", "--print"])
+    result = runner.invoke(app, ["document", "build-context", "--all", "--include-unlinked", "--print"])
     assert result.exit_code == 0
     assert "Unlinked sources (bootstrap)" in result.output
     assert "documentledger/cli.py" in result.output
@@ -77,7 +77,7 @@ def test_error_envelope_preserves_command_name(tmp_path: Path, monkeypatch, runn
     data = json.loads(result.output)
     assert data["command"] == "scan"
     assert data["ok"] is False
-    assert data["error"]["code"] == "workspace_not_found"
+    assert data["error"]["code"] == "workspace-not-found"
 
 
 def test_human_error_output_is_not_json(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:
@@ -91,21 +91,21 @@ def test_human_error_output_is_not_json(tmp_path: Path, monkeypatch, runner: Cli
 def test_human_error_includes_remediation_hint(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["scan"])
-    assert "Run `docledger init`" in result.output
+    assert "documentledger init" in result.output
 
 
 def test_timestamp_keys_absent_from_persisted_state_and_rendered_context(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    invoke_json(runner, ["link", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
     invoke_json(runner, ["scan"])
     (project / "documentledger" / "cli.py").write_text("changed\n", encoding="utf-8")
     invoke_json(runner, ["scan"])
-    invoke_json(runner, ["mark-fresh", "--doc", "README.md", "--reason", "Docs updated after scan version 2."])
+    invoke_json(runner, ["document", "mark-fresh", "--doc", "README.md", "--reason", "Docs updated after scan version 2."])
     storage_dir = project / ".ledger" / "documentledger" / "data"
     assert_no_timestamp_keys(load_yaml(storage_dir / "storage.yaml"))
     assert_no_timestamp_keys(load_yaml(storage_dir / "scan.yaml"))
     assert_no_timestamp_keys(load_yaml(next((storage_dir / "docs").glob("*.yaml"))))
-    result = runner.invoke(app, ["docs", "build-context", "--all", "--print"])
+    result = runner.invoke(app, ["document", "build-context", "--all", "--print"])
     assert f"{timestamp_key('generated')}:" not in result.output
 
 

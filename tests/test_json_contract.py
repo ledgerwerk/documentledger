@@ -1,29 +1,34 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from typer.testing import CliRunner
 
-from documentledger.cli import app
-from tests.conftest import invoke_json
+from tests.conftest import invoke_json, invoke_json_may_fail
 
 
 def test_success_envelopes_parse(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    for args in (["status"], ["doctor"], ["scan"], ["docs", "stale"]):
+    for args in (["status"], ["doctor"], ["scan"], ["document", "stale"]):
         data = invoke_json(runner, list(args))
         assert data["ok"] is True
         assert "result" in data
+        # Verify ledgerwerk.cli.v1 envelope
+        assert data["schema"] == "ledgerwerk.cli.v1"
+        assert data["tool"] == "documentledger"
+        assert "command" in data
+        assert "events" in data
+        assert "warnings" in data
 
 
 def test_error_envelope_parse(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    result = runner.invoke(app, ["--json", "links", "add", "--doc", "/x", "--source", "documentledger/cli.py"])
-    assert result.exit_code != 0
-    data = json.loads(result.output)
+    exit_code, data = invoke_json_may_fail(runner, ["link", "add", "--doc", "/x", "--source", "documentledger/cli.py"])
+    assert exit_code != 0
     assert data["ok"] is False
-    assert data["error"]["code"] == "invalid_path"
+    assert data["schema"] == "ledgerwerk.cli.v1"
+    assert data["tool"] == "documentledger"
+    assert data["error"]["code"] == "invalid-path"
 
 
 def test_global_json_before_command(project: Path, runner: CliRunner) -> None:

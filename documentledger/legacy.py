@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-import hashlib
-import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import UUID
 from typing import Any
+from uuid import UUID
 
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore[no-redef]
 
-from ledgercore.jsonio import canonical_json, load_json_object
 from ledgercore.hashing import sha256_bytes, sha256_text
+from ledgercore.jsonio import canonical_json
 
-from documentledger.config import parse_tool_config
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import doc_record_filename, normalize_repo_path
 from documentledger.models import Config
@@ -28,7 +25,6 @@ from documentledger.storage import (
     SCAN_SCHEMA,
     SOURCE_INDEX_FILENAME,
     SOURCE_INDEX_SCHEMA,
-    STORAGE_SCHEMA_VERSION,
     normalize_source_index_payload,
     read_json,
     read_yaml,
@@ -106,7 +102,14 @@ def load_legacy_project(path: Path) -> LegacyProject:
     scan = raw.get("scan", {})
     validation = raw.get("validation", {})
     policy = raw.get("policy", {})
-    for name, value in (("ledger", ledger), ("project", project), ("storage", storage), ("scan", scan), ("validation", validation), ("policy", policy)):
+    for name, value in (
+        ("ledger", ledger),
+        ("project", project),
+        ("storage", storage),
+        ("scan", scan),
+        ("validation", validation),
+        ("policy", policy),
+    ):
         if not isinstance(value, dict):
             raise DocumentledgerError("invalid_legacy_config", f"{name} must be a TOML table.")
     if not isinstance(ledger.get("code", "dl"), str) or not ledger.get("code", "dl"):
@@ -176,7 +179,11 @@ def inventory_legacy_data(project: LegacyProject) -> LegacyInventory:
         else:
             category = "unknown"
         records.append(InventoryFile(rel, category, path.stat().st_size, sha256_bytes(path.read_bytes())))
-    digest = sha256_text(canonical_json([{"relative_path": item.relative_path, "category": item.category, "size": item.size, "sha256": item.sha256} for item in records]))
+    digest = sha256_text(
+        canonical_json(
+            [{"relative_path": item.relative_path, "category": item.category, "size": item.size, "sha256": item.sha256} for item in records]
+        )
+    )
     return LegacyInventory(
         files=tuple(records),
         authoritative=tuple(item for item in records if item.category == "authoritative"),
@@ -191,7 +198,9 @@ def _check_no_timestamps(value: Any, path: str) -> None:
     if isinstance(value, dict):
         forbidden = FORBIDDEN_TIMESTAMP_KEYS & set(value)
         if forbidden:
-            raise DocumentledgerError("legacy_timestamp_field", f"{path} contains forbidden timestamp field(s): {', '.join(sorted(forbidden))}.")
+            raise DocumentledgerError(
+                "legacy_timestamp_field", f"{path} contains forbidden timestamp field(s): {', '.join(sorted(forbidden))}."
+            )
         for key, child in value.items():
             _check_no_timestamps(child, f"{path}.{key}")
     elif isinstance(value, list):
@@ -227,7 +236,9 @@ def validate_legacy_state(project: LegacyProject, inventory: LegacyInventory) ->
             expected = str(scan.get("source_index_hash") or metadata.get("last_scan_source_index_hash") or "")
             actual = sha256_text(canonical_json(index))
             if expected and expected != actual:
-                raise DocumentledgerError("source_index_hash_mismatch", f"source-index.json hash mismatch: expected {expected}, got {actual}.")
+                raise DocumentledgerError(
+                    "source_index_hash_mismatch", f"source-index.json hash mismatch: expected {expected}, got {actual}."
+                )
     needs_index = int(metadata.get("last_scan_version", 0)) > 0
     if needs_index and scan is None:
         raise DocumentledgerError("invalid_scan_state", "storage metadata references a scan but scan.yaml is missing.")

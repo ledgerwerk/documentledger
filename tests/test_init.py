@@ -27,17 +27,17 @@ def test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> No
 def test_legacy_init_options_are_rejected(project: Path, runner: CliRunner) -> None:
     result = runner.invoke(app, ["--json", "init", "--hidden-config"])
     assert result.exit_code != 0
-    assert "legacy_init_options_unsupported" in result.output
+    assert "legacy-init-options-unsupported" in result.output
 
 
 def test_reinitialization_fails_cleanly(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     result = runner.invoke(app, ["--json", "init"])
     assert result.exit_code != 0
-    assert "already_initialized" in result.output
+    assert "already-initialized" in result.output
 
 
 def test_external_storage_option_is_rejected(project: Path, runner: CliRunner) -> None:
     result = runner.invoke(app, ["--json", "init", "--documentledger-dir", "../ledger-state"])
     assert result.exit_code != 0
-    assert "legacy_init_options_unsupported" in result.output
+    assert "legacy-init-options-unsupported" in result.output

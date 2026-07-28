@@ -11,14 +11,14 @@ from tests.conftest import invoke_json, load_yaml, write_precision_sample
 
 def test_add_link_creates_doc_record(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    data = invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    data = invoke_json(runner, ["link", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
     assert data["result"]["linked_sources"] == ["documentledger/cli.py"]
 
 
 def test_add_link_idempotent(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
-    data = invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    invoke_json(runner, ["link", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    data = invoke_json(runner, ["link", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["result"]["linked_sources"] == ["documentledger/cli.py"]
@@ -31,8 +31,8 @@ def test_add_link_idempotent(project: Path, runner: CliRunner) -> None:
 
 def test_remove_link(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
-    data = invoke_json(runner, ["links", "remove", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    invoke_json(runner, ["link", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    data = invoke_json(runner, ["link", "remove", "--doc", "README.md", "--source", "documentledger/cli.py"])
     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["result"]["linked_sources"] == []
@@ -42,8 +42,8 @@ def test_remove_link(project: Path, runner: CliRunner) -> None:
 
 def test_remove_absent_link_is_noop(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    invoke_json(runner, ["links", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
-    invoke_json(runner, ["links", "remove", "--doc", "README.md", "--source", "documentledger/missing.py"])
+    invoke_json(runner, ["link", "add", "--doc", "README.md", "--source", "documentledger/cli.py"])
+    invoke_json(runner, ["link", "remove", "--doc", "README.md", "--source", "documentledger/missing.py"])
     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert record["version"] == 2
@@ -52,36 +52,36 @@ def test_remove_absent_link_is_noop(project: Path, runner: CliRunner) -> None:
 
 def test_absolute_paths_rejected(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    result = runner.invoke(app, ["--json", "links", "add", "--doc", str(project / "README.md"), "--source", "documentledger/cli.py"])
+    result = runner.invoke(app, ["--json", "link", "add", "--doc", str(project / "README.md"), "--source", "documentledger/cli.py"])
     assert result.exit_code != 0
-    assert "invalid_path" in result.output
+    assert "invalid-path" in result.output
 
 
 def test_path_traversal_rejected(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    result = runner.invoke(app, ["--json", "links", "add", "--doc", "../README.md", "--source", "documentledger/cli.py"])
+    result = runner.invoke(app, ["--json", "link", "add", "--doc", "../README.md", "--source", "documentledger/cli.py"])
     assert result.exit_code != 0
-    assert "invalid_path" in result.output
+    assert "invalid-path" in result.output
 
 
 @pytest.mark.parametrize("doc_path", [".", "./README.md", "docs//usage.md", "docs/", r"docs\\usage.md"])
 def test_add_link_rejects_invalid_path_shapes(project: Path, runner: CliRunner, doc_path: str) -> None:
     invoke_json(runner, ["init"])
-    result = runner.invoke(app, ["--json", "links", "add", "--doc", doc_path, "--source", "documentledger/cli.py"])
+    result = runner.invoke(app, ["--json", "link", "add", "--doc", doc_path, "--source", "documentledger/cli.py"])
     assert result.exit_code != 0
-    assert "invalid_path" in result.output
+    assert "invalid-path" in result.output
 
 
 def test_missing_doc_rejected(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    result = runner.invoke(app, ["--json", "links", "add", "--doc", "missing.md", "--source", "documentledger/cli.py"])
-    assert "missing_doc" in result.output
+    result = runner.invoke(app, ["--json", "link", "add", "--doc", "missing.md", "--source", "documentledger/cli.py"])
+    assert "missing-doc" in result.output
 
 
 def test_missing_source_rejected(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
-    result = runner.invoke(app, ["--json", "links", "add", "--doc", "README.md", "--source", "missing.py"])
-    assert "missing_source" in result.output
+    result = runner.invoke(app, ["--json", "link", "add", "--doc", "README.md", "--source", "missing.py"])
+    assert "missing-source" in result.output
 
 
 def test_add_section_link_creates_precise_section_edge(project: Path, runner: CliRunner) -> None:
@@ -90,7 +90,7 @@ def test_add_section_link_creates_precise_section_edge(project: Path, runner: Cl
     data = invoke_json(
         runner,
         [
-            "links",
+            "link",
             "add-section",
             "--doc",
             "docs/usage.md",
@@ -129,8 +129,8 @@ def test_import_map_validate_and_apply(project: Path, runner: CliRunner) -> None
         "        reason: Documents the scan command.\n",
         encoding="utf-8",
     )
-    validate = invoke_json(runner, ["links", "import-map", "--file", str(mapping), "--validate"])["result"]
-    apply = invoke_json(runner, ["links", "import-map", "--file", str(mapping), "--apply"])["result"]
+    validate = invoke_json(runner, ["link", "import-map", "--file", str(mapping), "--validate"])["result"]
+    apply = invoke_json(runner, ["link", "import-map", "--file", str(mapping), "--apply"])["result"]
     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     assert validate["applied"] is False
     assert apply["applied"] is True

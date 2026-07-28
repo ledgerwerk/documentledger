@@ -27,10 +27,28 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def invoke_json(runner: CliRunner, args: list[str]) -> dict[str, object]:
-    result = runner.invoke(app, ["--json", *args])
-    assert result.exit_code == 0, result.output
+def invoke_json(runner: CliRunner, args: list[str], root: Path | None = None) -> dict[str, object]:
+    cmd = ["--json"]
+    if root is not None:
+        cmd.extend(["--root", str(root)])
+    cmd.extend(args)
+    result = runner.invoke(app, cmd)
+    assert result.exit_code == 0, f"Command failed: {result.output}"
     return json.loads(result.output)
+
+
+def invoke_json_may_fail(runner: CliRunner, args: list[str], root: Path | None = None) -> tuple[int, dict[str, object]]:
+    """Invoke a command that may fail, returning exit code and parsed output."""
+    cmd = ["--json"]
+    if root is not None:
+        cmd.extend(["--root", str(root)])
+    cmd.extend(args)
+    result = runner.invoke(app, cmd)
+    try:
+        data = json.loads(result.output)
+    except json.JSONDecodeError:
+        data = {"raw_output": result.output}
+    return result.exit_code, data
 
 
 def load_yaml(path: Path) -> dict[str, object]:

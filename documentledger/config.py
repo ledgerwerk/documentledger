@@ -114,7 +114,7 @@ def tool_config_document(config: ToolConfig) -> str:
     )
     # TOML accepts Python's single-quoted repr poorly; use a tiny JSON-like
     # string encoder for the array values.
-    for key in ("source_roots", "doc_roots", "source_extensions", "doc_extensions", "commands"):
+    for _key in ("source_roots", "doc_roots", "source_extensions", "doc_extensions", "commands"):
         pass
     import json
 

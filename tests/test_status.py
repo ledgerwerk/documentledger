@@ -35,5 +35,9 @@ def test_status_reports_missing_workspace(tmp_path: Path, monkeypatch, runner: C
 def test_json_status_envelope_stable(project: Path, runner: CliRunner) -> None:
     invoke_json(runner, ["init"])
     data = invoke_json(runner, ["status"])
-    assert set(data) == {"ok", "command", "result", "events"}
+    # ledgerwerk.cli.v1 envelope
+    assert set(data) == {"schema", "ok", "tool", "command", "result", "events", "warnings"}
+    assert data["schema"] == "ledgerwerk.cli.v1"
+    assert data["tool"] == "documentledger"
     assert data["command"] == "status"
+    assert data["ok"] is True

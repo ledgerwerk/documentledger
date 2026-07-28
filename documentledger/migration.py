@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -15,12 +15,19 @@ from ledgercore.atomic import atomic_write_text
 from ledgercore.hashing import sha256_bytes, sha256_text
 from ledgercore.jsonio import canonical_json
 from ledgercore.manifest import LedgerProjectManifest, LedgerRegistration, MountDefinition
-from ledgercore.config import LedgerProjectLocator
 
 from documentledger.config import ToolConfig, tool_config_document
 from documentledger.errors import DocumentledgerError
-from documentledger.legacy import LegacyInventory, LegacyProject, find_legacy_config, inventory_legacy_data, load_legacy_project, validate_legacy_state
+from documentledger.legacy import (
+    LegacyInventory,
+    LegacyProject,
+    find_legacy_config,
+    inventory_legacy_data,
+    load_legacy_project,
+    validate_legacy_state,
+)
 from documentledger.project import ARTIFACTS_MOUNT, DATA_MOUNT, TOOL_NAME, canonical_workspace
+from documentledger.source_index import source_inventory
 from documentledger.storage import source_index_payload, write_json, write_yaml
 
 
@@ -55,9 +62,23 @@ class MigrationPlan:
                 "data_path": str(self.project_root / ".ledger" / TOOL_NAME / DATA_MOUNT),
                 "manifest_before_sha256": self.manifest_before_sha256,
             },
-            "identity": {"legacy_uuid": self.legacy_uuid, "canonical_uuid": self.canonical_uuid, "requires_adoption": self.requires_adoption},
-            "inventory": {"authoritative_files": len(self.inventory.authoritative), "derived_files": len(self.inventory.derived), "provisional_files": len(self.inventory.provisional), "unknown_files": len(self.inventory.unknown), "bytes": self.inventory.bytes},
-            "source_index": {"present": self.state["source_index_present"], "repairable": self.state["source_index_repairable"], "expected_hash": self.state["source_index_expected_hash"]},
+            "identity": {
+                "legacy_uuid": self.legacy_uuid,
+                "canonical_uuid": self.canonical_uuid,
+                "requires_adoption": self.requires_adoption,
+            },
+            "inventory": {
+                "authoritative_files": len(self.inventory.authoritative),
+                "derived_files": len(self.inventory.derived),
+                "provisional_files": len(self.inventory.provisional),
+                "unknown_files": len(self.inventory.unknown),
+                "bytes": self.inventory.bytes,
+            },
+            "source_index": {
+                "present": self.state["source_index_present"],
+                "repairable": self.state["source_index_repairable"],
+                "expected_hash": self.state["source_index_expected_hash"],
+            },
             "plan_sha256": self.plan_sha256,
         }
 
@@ -85,17 +106,38 @@ def _manifest_for(root: Path, legacy: LegacyProject) -> tuple[LedgerProjectManif
         project_name = legacy.config.project_name or root.name
         ledgers = {}
     existing = ledgers.get(TOOL_NAME)
-    wanted = LedgerRegistration(name=TOOL_NAME, mounts={DATA_MOUNT: MountDefinition(name=DATA_MOUNT, storage="project"), ARTIFACTS_MOUNT: MountDefinition(name=ARTIFACTS_MOUNT, storage="cache")})
-    if existing is not None and (set(existing.mounts) != {DATA_MOUNT, ARTIFACTS_MOUNT} or existing.mounts[DATA_MOUNT].storage != "project" or existing.mounts[ARTIFACTS_MOUNT].storage != "cache"):
-        raise DocumentledgerError("storage_registration_conflict", "Existing documentledger registration does not match the required data/project and artifacts/cache mounts.")
+    wanted = LedgerRegistration(
+        name=TOOL_NAME,
+        mounts={
+            DATA_MOUNT: MountDefinition(name=DATA_MOUNT, storage="project"),
+            ARTIFACTS_MOUNT: MountDefinition(name=ARTIFACTS_MOUNT, storage="cache"),
+        },
+    )
+    if existing is not None and (
+        set(existing.mounts) != {DATA_MOUNT, ARTIFACTS_MOUNT}
+        or existing.mounts[DATA_MOUNT].storage != "project"
+        or existing.mounts[ARTIFACTS_MOUNT].storage != "cache"
+    ):
+        raise DocumentledgerError(
+            "storage_registration_conflict",
+            "Existing documentledger registration does not match the required data/project and artifacts/cache mounts.",
+        )
     ledgers[TOOL_NAME] = wanted
-    return LedgerProjectManifest(schema_version=3, project_uuid=canonical_uuid, project_name=project_name, ledgers=ledgers), legacy.config.project_uuid, before
+    return (
+        LedgerProjectManifest(schema_version=3, project_uuid=canonical_uuid, project_name=project_name, ledgers=ledgers),
+        legacy.config.project_uuid,
+        before,
+    )
 
 
 def plan_migration(start: Path | None = None, *, adopt_project_uuid: bool = False) -> MigrationPlan:
     legacy_path = find_legacy_config(start)
     if legacy_path is None:
-        raise DocumentledgerError("legacy_workspace_not_found", "No legacy Documentledger configuration was found.", ["Run `docledger init` for a new canonical project."])
+        raise DocumentledgerError(
+            "legacy_workspace_not_found",
+            "No legacy Documentledger configuration was found.",
+            ["Run `docledger init` for a new canonical project."],
+        )
     legacy = load_legacy_project(legacy_path)
     inventory = inventory_legacy_data(legacy)
     state = validate_legacy_state(legacy, inventory)
@@ -124,10 +166,18 @@ def plan_migration(start: Path | None = None, *, adopt_project_uuid: bool = Fals
     }
     plan_sha = sha256_text(canonical_json(seed))
     return MigrationPlan(
-        migration_id=f"documentledger-{plan_sha[:16]}", project_root=legacy.root, legacy=legacy,
-        inventory=inventory, state=state, manifest=manifest, legacy_uuid=legacy_uuid,
-        canonical_uuid=canonical_uuid, requires_adoption=requires_adoption,
-        target_config=target_config, manifest_before_sha256=before, plan_sha256=plan_sha,
+        migration_id=f"documentledger-{plan_sha[:16]}",
+        project_root=legacy.root,
+        legacy=legacy,
+        inventory=inventory,
+        state=state,
+        manifest=manifest,
+        legacy_uuid=legacy_uuid,
+        canonical_uuid=canonical_uuid,
+        requires_adoption=requires_adoption,
+        target_config=target_config,
+        manifest_before_sha256=before,
+        plan_sha256=plan_sha,
     )
 
 
@@ -148,9 +198,14 @@ def _write_journal(plan: MigrationPlan, phase: str, **extra: Any) -> Path:
     path = _journal_path(plan)
     path.parent.mkdir(parents=True, exist_ok=True)
     values = {
-        "schema_version": 1, "migration": "documentledger-legacy-to-schema3", "migration_id": plan.migration_id,
-        "phase": phase, "project_uuid": plan.canonical_uuid, "plan_sha256": plan.plan_sha256,
-        "legacy_config": str(plan.legacy.config_path), "legacy_data": str(plan.legacy.data_dir),
+        "schema_version": 1,
+        "migration": "documentledger-legacy-to-schema3",
+        "migration_id": plan.migration_id,
+        "phase": phase,
+        "project_uuid": plan.canonical_uuid,
+        "plan_sha256": plan.plan_sha256,
+        "legacy_config": str(plan.legacy.config_path),
+        "legacy_data": str(plan.legacy.data_dir),
         "target_config": str(plan.project_root / ".ledger" / TOOL_NAME / "config.toml"),
         "target_data": str(plan.project_root / ".ledger" / TOOL_NAME / DATA_MOUNT),
         **extra,
@@ -181,6 +236,37 @@ def _repair_source_index(plan: MigrationPlan, stage_data: Path) -> None:
     write_json(stage_data / "source-index.json", payload, compact=True)
 
 
+def _validate_migration_preconditions(
+    plan: MigrationPlan,
+    *,
+    adopt_project_uuid: bool,
+    repair_missing_source_index: bool,
+    recovery: bool,
+) -> None:
+    """Raise on unsatisfied preconditions before apply_migration starts."""
+    if plan.requires_adoption and not adopt_project_uuid:
+        raise DocumentledgerError(
+            "project_uuid_mismatch",
+            "Canonical and legacy UUIDs differ; apply requires --adopt-project-uuid acknowledgement.",
+        )
+    if (
+        not plan.state["source_index_present"]
+        and int(plan.state["metadata"].get("last_scan_version", 0)) > 0
+        and not repair_missing_source_index
+    ):
+        raise DocumentledgerError(
+            "source_index_missing",
+            "source-index.json is required for an existing scan; pass",
+            " --repair-missing-source-index only after reviewing the exact-hash repair analysis.",
+        )
+    if (
+        not recovery
+        and _manifest_path(plan.project_root).is_file()
+        and plan.manifest_before_sha256 != sha256_bytes(_manifest_path(plan.project_root).read_bytes())
+    ):
+        raise DocumentledgerError("storage_migration_conflict", "Shared manifest changed since the migration plan was created.")
+
+
 def apply_migration(
     plan: MigrationPlan,
     *,
@@ -188,12 +274,12 @@ def apply_migration(
     repair_missing_source_index: bool = False,
     recovery: bool = False,
 ) -> dict[str, Any]:
-    if plan.requires_adoption and not adopt_project_uuid:
-        raise DocumentledgerError("project_uuid_mismatch", "Canonical and legacy UUIDs differ; apply requires --adopt-project-uuid acknowledgement.")
-    if not plan.state["source_index_present"] and int(plan.state["metadata"].get("last_scan_version", 0)) > 0 and not repair_missing_source_index:
-        raise DocumentledgerError("source_index_missing", "source-index.json is required for an existing scan; pass --repair-missing-source-index only after reviewing the exact-hash repair analysis.")
-    if not recovery and _manifest_path(plan.project_root).is_file() and plan.manifest_before_sha256 != sha256_bytes(_manifest_path(plan.project_root).read_bytes()):
-        raise DocumentledgerError("storage_migration_conflict", "Shared manifest changed since the migration plan was created.")
+    _validate_migration_preconditions(
+        plan,
+        adopt_project_uuid=adopt_project_uuid,
+        repair_missing_source_index=repair_missing_source_index,
+        recovery=recovery,
+    )
     migration_root = plan.project_root / ".ledger" / "migrations" / plan.migration_id
     stage_data = migration_root / "data"
     if migration_root.exists():
@@ -206,7 +292,14 @@ def apply_migration(
         if not recovery:
             raise DocumentledgerError("storage_migration_incomplete", f"Migration lock already exists: {lock_path}")
         lock_path.unlink()
-    atomic_write_text(lock_path, "schema_version = 1\nmigration = \"documentledger-legacy-to-schema3\"\nmigration_id = " + json.dumps(plan.migration_id) + "\nphase = \"locked\"\nplan_sha256 = " + json.dumps(plan.plan_sha256) + "\n")
+    atomic_write_text(
+        lock_path,
+        'schema_version = 1\nmigration = "documentledger-legacy-to-schema3"\nmigration_id = '
+        + json.dumps(plan.migration_id)
+        + '\nphase = "locked"\nplan_sha256 = '
+        + json.dumps(plan.plan_sha256)
+        + "\n",
+    )
     _write_journal(plan, "locked")
     config_stage = migration_root / "config.toml"
     atomic_write_text(config_stage, tool_config_document(plan.target_config))
@@ -221,7 +314,19 @@ def apply_migration(
     metadata = dict(plan.state["metadata"])
     metadata["project_uuid"] = plan.canonical_uuid
     write_yaml(stage_data / "storage.yaml", metadata)
-    _write_journal(plan, "staged", target_config_sha256=sha256_bytes(config_stage.read_bytes()), target_inventory_sha256=sha256_text(canonical_json([{"relative_path": item.relative_path, "category": item.category, "size": item.size, "sha256": item.sha256} for item in plan.inventory.authoritative + plan.inventory.unknown])))
+    _write_journal(
+        plan,
+        "staged",
+        target_config_sha256=sha256_bytes(config_stage.read_bytes()),
+        target_inventory_sha256=sha256_text(
+            canonical_json(
+                [
+                    {"relative_path": item.relative_path, "category": item.category, "size": item.size, "sha256": item.sha256}
+                    for item in plan.inventory.authoritative + plan.inventory.unknown
+                ]
+            )
+        ),
+    )
     manifest_path = _manifest_path(plan.project_root)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     loaded = ledgercore.load_ledger_project(plan.project_root) if manifest_path.is_file() else None
@@ -230,7 +335,9 @@ def apply_migration(
         loaded = ledgercore.load_ledger_project(plan.project_root)
     layout = ledgercore.resolve_ledger_layout(loaded.locator, plan.manifest, TOOL_NAME, local_overrides=loaded.local_overrides)
     if layout.mounts[DATA_MOUNT].storage != "project" or layout.mounts[ARTIFACTS_MOUNT].storage != "cache":
-        raise DocumentledgerError("unsupported_canonical_layout", "Effective local overrides change Documentledger away from data=project and artifacts=cache.")
+        raise DocumentledgerError(
+            "unsupported_canonical_layout", "Effective local overrides change Documentledger away from data=project and artifacts=cache."
+        )
     final_tool = layout.tool_config_path
     final_data = layout.mounts[DATA_MOUNT].path
     if final_tool is None:
@@ -249,37 +356,74 @@ def apply_migration(
         except Exception:
             data_installed = False
         if not data_installed:
-            raise DocumentledgerError("storage_migration_conflict", f"Target data directory is populated and does not match the resumable migration: {final_data}")
+            raise DocumentledgerError(
+                "storage_migration_conflict", f"Target data directory is populated and does not match the resumable migration: {final_data}"
+            )
     ledgercore.initialize_config_binding(layout)
     final_tool.parent.mkdir(parents=True, exist_ok=True)
     if final_tool.exists():
         if sha256_bytes(final_tool.read_bytes()) != sha256_bytes(config_stage.read_bytes()):
-            raise DocumentledgerError("storage_migration_conflict", f"Target config is populated and does not match the resumable migration: {final_tool}")
+            raise DocumentledgerError(
+                "storage_migration_conflict", f"Target config is populated and does not match the resumable migration: {final_tool}"
+            )
     else:
         os.replace(config_stage, final_tool)
     final_data.parent.mkdir(parents=True, exist_ok=True)
-    marker_binding = ledgercore.StorageBinding(schema_version=1, layout_version=3, project_uuid=plan.canonical_uuid, project_name=None, tool=TOOL_NAME, mount=DATA_MOUNT, storage="project")
+    marker_binding = ledgercore.StorageBinding(
+        schema_version=1,
+        layout_version=3,
+        project_uuid=plan.canonical_uuid,
+        project_name=None,
+        tool=TOOL_NAME,
+        mount=DATA_MOUNT,
+        storage="project",
+    )
     ledgercore.write_storage_binding(stage_data, marker_binding)
     if not data_installed:
         os.replace(stage_data, final_data)
     _write_journal(plan, "installed")
     # Activation is deliberately last and owned by ledgercore.
     ledgercore.write_ledger_manifest(manifest_path, plan.manifest, preserve_comments=True)
-    _write_journal(plan, "complete", manifest_after_sha256=sha256_bytes(manifest_path.read_bytes()), source_index_repaired=str(not plan.state["source_index_present"]).lower())
+    _write_journal(
+        plan,
+        "complete",
+        manifest_after_sha256=sha256_bytes(manifest_path.read_bytes()),
+        source_index_repaired=str(not plan.state["source_index_present"]).lower(),
+    )
     try:
         lock_path.unlink()
     except FileNotFoundError:
         pass
-    return {"migration_id": plan.migration_id, "phase": "complete", "journal": str(_journal_path(plan)), "legacy_retained": True, "manifest": str(manifest_path), "data": str(final_data), "config": str(final_tool)}
+    return {
+        "migration_id": plan.migration_id,
+        "phase": "complete",
+        "journal": str(_journal_path(plan)),
+        "legacy_retained": True,
+        "manifest": str(manifest_path),
+        "data": str(final_data),
+        "config": str(final_tool),
+    }
 
 
 def verify_canonical(start: Path | None = None, *, strict: bool = False) -> dict[str, Any]:
     workspace = canonical_workspace(start, require_data=True)
-    layout = ledgercore.resolve_ledger_layout(ledgercore.load_ledger_project(workspace.config.root).locator, ledgercore.load_ledger_project(workspace.config.root).manifest, TOOL_NAME)
+    layout = ledgercore.resolve_ledger_layout(
+        ledgercore.load_ledger_project(workspace.config.root).locator,
+        ledgercore.load_ledger_project(workspace.config.root).manifest,
+        TOOL_NAME,
+    )
     report = ledgercore.validate_ledger_layout_storage(layout)
     if not report.valid:
         raise DocumentledgerError("storage_binding_invalid", "Canonical storage bindings are invalid.")
-    result = {"valid": True, "layout_source": "canonical", "manifest_path": str(layout.manifest_path), "config_path": str(layout.tool_config_path), "data_dir": str(layout.mounts[DATA_MOUNT].path), "artifacts_dir": str(layout.mounts[ARTIFACTS_MOUNT].path), "storage_bindings_valid": True}
+    result = {
+        "valid": True,
+        "layout_source": "canonical",
+        "manifest_path": str(layout.manifest_path),
+        "config_path": str(layout.tool_config_path),
+        "data_dir": str(layout.mounts[DATA_MOUNT].path),
+        "artifacts_dir": str(layout.mounts[ARTIFACTS_MOUNT].path),
+        "storage_bindings_valid": True,
+    }
     if strict:
         metadata = workspace.metadata
         if int(metadata.get("schema_version", 0)) != 5:
@@ -287,7 +431,14 @@ def verify_canonical(start: Path | None = None, *, strict: bool = False) -> dict
     return result
 
 
-def cleanup_legacy(start: Path | None = None, *, yes: bool = False, dry_run: bool = False, remove_external_source: bool = False, discard_derived: bool = False) -> dict[str, Any]:
+def cleanup_legacy(
+    start: Path | None = None,
+    *,
+    yes: bool = False,
+    dry_run: bool = False,
+    remove_external_source: bool = False,
+    discard_derived: bool = False,
+) -> dict[str, Any]:
     if not yes and not dry_run:
         raise DocumentledgerError("legacy_cleanup_unsafe", "Legacy cleanup requires --yes.")
     plan = plan_migration(start, adopt_project_uuid=True)
@@ -296,7 +447,9 @@ def cleanup_legacy(start: Path | None = None, *, yes: bool = False, dry_run: boo
     if not journal.is_file() or 'phase = "complete"' not in journal.read_text(encoding="utf-8"):
         raise DocumentledgerError("legacy_cleanup_unsafe", "A completed migration journal is required before cleanup.")
     if (plan.inventory.provisional or plan.inventory.derived) and not discard_derived:
-        raise DocumentledgerError("legacy_cleanup_unsafe", "Legacy derived or provisional files remain; pass --discard-derived only after review.")
+        raise DocumentledgerError(
+            "legacy_cleanup_unsafe", "Legacy derived or provisional files remain; pass --discard-derived only after review."
+        )
     paths = [str(plan.legacy.config_path), str(plan.legacy.data_dir)]
     if dry_run:
         return {"dry_run": True, "paths": paths, "legacy_retained": True}
@@ -308,3 +461,29 @@ def cleanup_legacy(start: Path | None = None, *, yes: bool = False, dry_run: boo
         shutil.rmtree(plan.legacy.data_dir)
     plan.legacy.config_path.unlink()
     return {"dry_run": False, "paths": paths, "legacy_retained": False}
+
+
+def recover_migration(
+    start: Path | None = None,
+    *,
+    journal_path: Path | None = None,
+    policy: str = "auto",
+) -> dict[str, Any]:
+    """Recover from an interrupted migration.
+
+    This wraps the existing apply_migration with recovery=True.
+    """
+    if journal_path is None:
+        raise DocumentledgerError("storage_migration_incomplete", "Recovery requires --journal.")
+    journal = journal_path
+    if not journal.is_file():
+        raise DocumentledgerError("storage_migration_incomplete", f"Migration journal does not exist: {journal}")
+    if not journal.stem.startswith("documentledger-"):
+        raise DocumentledgerError("storage_migration_conflict", "The supplied journal is not a Documentledger migration journal.")
+    plan = plan_migration(start or Path.cwd(), adopt_project_uuid=True)
+    from dataclasses import replace
+
+    plan = replace(plan, migration_id=journal.stem)
+    result = apply_migration(plan, adopt_project_uuid=True, repair_missing_source_index=True, recovery=True)
+    result["recovered"] = True
+    return result

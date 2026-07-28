@@ -48,11 +48,11 @@ def test_legacy_migration_is_copy_first_and_manifest_last(tmp_path: Path, monkey
     (tmp_path / "documentledger").mkdir()
     (tmp_path / "documentledger" / "module.py").write_text("value = 1\n", encoding="utf-8")
     (tmp_path / "documentledger.toml").write_text(
-        "[ledger]\ncode = \"dl\"\nname = \"documentledger\"\n\n"
-        f"[project]\nname = \"demo\"\nuuid = \"{uuid}\"\n\n"
-        "[storage]\ndocumentledger_dir = \".documentledger\"\n\n"
-        "[scan]\nsource_roots = [\"documentledger\"]\ndoc_roots = [\"README.md\"]\n"
-        "source_extensions = [\".py\"]\ndoc_extensions = [\".md\"]\n\n"
+        '[ledger]\ncode = "dl"\nname = "documentledger"\n\n'
+        f'[project]\nname = "demo"\nuuid = "{uuid}"\n\n'
+        '[storage]\ndocumentledger_dir = ".documentledger"\n\n'
+        '[scan]\nsource_roots = ["documentledger"]\ndoc_roots = ["README.md"]\n'
+        'source_extensions = [".py"]\ndoc_extensions = [".md"]\n\n'
         "[validation]\ncommands = []\n\n[policy]\nrequire_doc_frontmatter = false\n",
         encoding="utf-8",
     )
@@ -72,9 +72,9 @@ def test_legacy_migration_is_copy_first_and_manifest_last(tmp_path: Path, monkey
     plan_id = json.loads(dry.output)["result"]["migration_id"]
     lock = tmp_path / ".ledger" / "migrations" / f"{plan_id}.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
-    lock.write_text("schema_version = 1\nphase = \"locked\"\n", encoding="utf-8")
+    lock.write_text('schema_version = 1\nphase = "locked"\n', encoding="utf-8")
     journal = lock.with_suffix(".toml")
-    journal.write_text("schema_version = 1\nphase = \"locked\"\n", encoding="utf-8")
+    journal.write_text('schema_version = 1\nphase = "locked"\n', encoding="utf-8")
     recovered = runner.invoke(app, ["--json", "storage", "recover", "--journal", str(journal)])
     assert recovered.exit_code == 0, recovered.output
     assert json.loads(recovered.output)["result"]["recovered"] is True
@@ -86,28 +86,35 @@ def test_missing_scanned_source_index_requires_explicit_repair(tmp_path: Path, m
     (tmp_path / "documentledger").mkdir()
     (tmp_path / "documentledger" / "module.py").write_text("value = 1\n", encoding="utf-8")
     (tmp_path / "documentledger.toml").write_text(
-        f"[project]\nuuid = \"{uuid}\"\n[storage]\ndocumentledger_dir = \".documentledger\"\n"
-        "[scan]\nsource_roots = [\"documentledger\"]\ndoc_roots = []\nsource_extensions = [\".py\"]\ndoc_extensions = []\n",
+        f'[project]\nuuid = "{uuid}"\n[storage]\ndocumentledger_dir = ".documentledger"\n'
+        '[scan]\nsource_roots = ["documentledger"]\ndoc_roots = []\nsource_extensions = [".py"]\ndoc_extensions = []\n',
         encoding="utf-8",
     )
     data = tmp_path / ".documentledger"
     data.mkdir()
-    (data / "storage.yaml").write_text(yaml.safe_dump(_storage(uuid, scan_version=1, index_hash="0" * 64), sort_keys=False), encoding="utf-8")
-    (data / "scan.yaml").write_text(yaml.safe_dump({"schema": "documentledger.scan.v5", "version": 1, "source_hashes": {}, "source_index_hash": "0" * 64}, sort_keys=False), encoding="utf-8")
+    (data / "storage.yaml").write_text(
+        yaml.safe_dump(_storage(uuid, scan_version=1, index_hash="0" * 64), sort_keys=False), encoding="utf-8"
+    )
+    (data / "scan.yaml").write_text(
+        yaml.safe_dump(
+            {"schema": "documentledger.scan.v5", "version": 1, "source_hashes": {}, "source_index_hash": "0" * 64}, sort_keys=False
+        ),
+        encoding="utf-8",
+    )
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "storage", "migrate", "--dry-run"])
     assert result.exit_code == 0
     assert "source_index" in result.output
     blocked = runner.invoke(app, ["--json", "storage", "migrate", "--repair-missing-source-index"])
     assert blocked.exit_code != 0
-    assert "source_index" in blocked.output
+    assert "source-index" in blocked.output
 
 
 def test_migration_rejects_legacy_symlinks(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     uuid = "11111111-1111-4111-8111-111111111111"
     (tmp_path / "documentledger.toml").write_text(
-        f"[project]\nuuid = \"{uuid}\"\n[storage]\ndocumentledger_dir = \".documentledger\"\n",
+        f'[project]\nuuid = "{uuid}"\n[storage]\ndocumentledger_dir = ".documentledger"\n',
         encoding="utf-8",
     )
     data = tmp_path / ".documentledger"
@@ -116,4 +123,4 @@ def test_migration_rejects_legacy_symlinks(tmp_path: Path, monkeypatch) -> None:
     os.symlink(tmp_path, data / "bad-link")
     result = CliRunner().invoke(app, ["--json", "storage", "migrate", "--dry-run"])
     assert result.exit_code != 0
-    assert "legacy_symlink_unsupported" in result.output
+    assert "legacy-symlink-unsupported" in result.output
