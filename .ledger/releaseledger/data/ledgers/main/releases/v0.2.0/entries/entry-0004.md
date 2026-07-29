@@ -7,14 +7,15 @@ versioning:
 entry_id: entry-0004
 release_version: v0.2.0
 kind: changed
-summary: CLI entry point refactored to use modular command groups with canonical singular
+summary:
+  CLI entry point refactored to use modular command groups with canonical singular
   naming (document, source, link)
 status: accepted
 audience: null
 scopes: []
 source_refs: []
 paths:
-- documentledger/cli.py
+  - documentledger/cli.py
 issues: []
 prs: []
 sources: []

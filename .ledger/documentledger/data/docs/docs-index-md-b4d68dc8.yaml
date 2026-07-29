@@ -2,85 +2,85 @@ schema: documentledger.doc_record.v4
 doc_path: docs/index.md
 linked_sources: []
 sections:
-- section_id: md:section:docs/index.md::documentation-freshness-workflow
-  doc_path: docs/index.md
-  heading_path:
-  - Documentledger
-  - Documentation freshness workflow
-  heading_slug: documentation-freshness-workflow
-  line_span:
-  - 17
-  - 28
-  section_hash: 77e2f43292b60bd98b51b352fdd602a936955a52bc9ce8646ac73e4a9b0e85d3
-  summary: Documentation freshness workflow
-  text: '## Documentation freshness workflow
+  - section_id: md:section:docs/index.md::documentation-freshness-workflow
+    doc_path: docs/index.md
+    heading_path:
+      - Documentledger
+      - Documentation freshness workflow
+    heading_slug: documentation-freshness-workflow
+    line_span:
+      - 17
+      - 28
+    section_hash: 77e2f43292b60bd98b51b352fdd602a936955a52bc9ce8646ac73e4a9b0e85d3
+    summary: Documentation freshness workflow
+    text: '## Documentation freshness workflow
 
 
-    The supported workflow is:
+      The supported workflow is:
 
 
-    1. Run `docledger --json status` to confirm that the workspace is initialized.
+      1. Run `docledger --json status` to confirm that the workspace is initialized.
 
-    2. Run `docledger --json scan` to rewrite `.documentledger/scan.yaml` when current
-    source hashes, documentation hashes, source-unit inventory, or changed source
-    units differ from the latest baseline.
+      2. Run `docledger --json scan` to rewrite `.documentledger/scan.yaml` when current
+      source hashes, documentation hashes, source-unit inventory, or changed source
+      units differ from the latest baseline.
 
-    3. Run `docledger --json docs affected` to find the documentation sections whose
-    linked source units changed.
+      3. Run `docledger --json docs affected` to find the documentation sections whose
+      linked source units changed.
 
-    4. Run `docledger docs build-context --affected --print` to render update context
-    for affected sections and unlinked changed sources.
+      4. Run `docledger docs build-context --affected --print` to render update context
+      for affected sections and unlinked changed sources.
 
-    5. Inspect the affected sections and linked changed source units before editing
-    documentation.
+      5. Inspect the affected sections and linked changed source units before editing
+      documentation.
 
-    6. Update only the affected sections by default, run configured validation commands,
-    then mark the updated section or doc fresh with `docledger mark-fresh --doc DOC
-    --section SECTION --reason "Docs updated after scan version VERSION."`.
-
-
-    Documentledger stores its own state under the configured `.documentledger/` directory.
-    Do not edit that directory directly.'
-  links: []
-- section_id: md:section:docs/index.md::documentledger
-  doc_path: docs/index.md
-  heading_path:
-  - Documentledger
-  heading_slug: documentledger
-  line_span:
-  - 1
-  - 16
-  section_hash: a45723e7a4dc694bf5f6baed66367694220f1947f13ead906b43721c1ea7cf42
-  summary: Documentledger
-  text: '# Documentledger
+      6. Update only the affected sections by default, run configured validation commands,
+      then mark the updated section or doc fresh with `docledger mark-fresh --doc DOC
+      --section SECTION --reason "Docs updated after scan version VERSION."`.
 
 
-    Documentledger is a documentation freshness ledger for coding-agent workflows.
-    It records repository scans, maps documentation files to source files, reports
-    stale documentation when linked source files change or disappear, and renders
-    update context for agents.
+      Documentledger stores its own state under the configured `.documentledger/` directory.
+      Do not edit that directory directly.'
+    links: []
+  - section_id: md:section:docs/index.md::documentledger
+    doc_path: docs/index.md
+    heading_path:
+      - Documentledger
+    heading_slug: documentledger
+    line_span:
+      - 1
+      - 16
+    section_hash: a45723e7a4dc694bf5f6baed66367694220f1947f13ead906b43721c1ea7cf42
+    summary: Documentledger
+    text: "# Documentledger
 
 
-    ```{toctree}
-
-    :maxdepth: 2
-
-
-    usage
-
-    architecture
-
-    api
-
-    bootstrap
-
-    troubleshooting
-
-    ```
+      Documentledger is a documentation freshness ledger for coding-agent workflows.
+      It records repository scans, maps documentation files to source files, reports
+      stale documentation when linked source files change or disappear, and renders
+      update context for agents.
 
 
-    <!-- docledger-section: index-documentation-freshness-workflow -->'
-  links: []
+      ```{toctree}
+
+      :maxdepth: 2
+
+
+      usage
+
+      architecture
+
+      api
+
+      bootstrap
+
+      troubleshooting
+
+      ```
+
+
+      <!-- docledger-section: index-documentation-freshness-workflow -->"
+    links: []
 last_fresh_scan_version: 4
 last_fresh_hash: 9ffa638d257a8b02d19655c520eaa11e11bb30b0d0c4e6fd413e9888fa7e8542
 notes: Docs updated after scan version 4. (intentionally unlinked)

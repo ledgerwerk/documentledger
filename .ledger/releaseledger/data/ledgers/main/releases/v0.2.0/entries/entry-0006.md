@@ -7,14 +7,15 @@ versioning:
 entry_id: entry-0006
 release_version: v0.2.0
 kind: added
-summary: Modular CLI architecture with dedicated command modules for documents, sources,
+summary:
+  Modular CLI architecture with dedicated command modules for documents, sources,
   links, storage, migration, configuration, and schema management
 status: accepted
 audience: null
 scopes: []
 source_refs: []
 paths:
-- documentledger/commands/__init__.py
+  - documentledger/commands/__init__.py
 issues: []
 prs: []
 sources: []

@@ -7,14 +7,15 @@ versioning:
 entry_id: entry-0008
 release_version: v0.2.0
 kind: docs
-summary: Updated README and documentation with new CLI command structure and migration
+summary:
+  Updated README and documentation with new CLI command structure and migration
   guides
 status: accepted
 audience: null
 scopes: []
 source_refs: []
 paths:
-- README.md
+  - README.md
 issues: []
 prs: []
 sources: []

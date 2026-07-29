@@ -1,340 +1,340 @@
 schema: documentledger.doc_record.v4
 doc_path: docs/troubleshooting.md
 linked_sources:
-- documentledger/cli.py
-- documentledger/models.py
-- tests/conftest.py
+  - documentledger/cli.py
+  - documentledger/models.py
+  - tests/conftest.py
 sections:
-- section_id: md:section:docs/troubleshooting.md::a-changed-source-is-reported-as-unlinked
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - A changed source is reported as unlinked
-  heading_slug: a-changed-source-is-reported-as-unlinked
-  line_span:
-  - 41
-  - 48
-  section_hash: ded4fea02b3c5fe3dec522fc954a48c70d9bcb19fe88707c33188fd31a693450
-  summary: A changed source is reported as unlinked
-  text: '## A changed source is reported as unlinked
+  - section_id: md:section:docs/troubleshooting.md::a-changed-source-is-reported-as-unlinked
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - A changed source is reported as unlinked
+    heading_slug: a-changed-source-is-reported-as-unlinked
+    line_span:
+      - 41
+      - 48
+    section_hash: ded4fea02b3c5fe3dec522fc954a48c70d9bcb19fe88707c33188fd31a693450
+    summary: A changed source is reported as unlinked
+    text: "## A changed source is reported as unlinked
 
 
-    `unlinked_changed_sources` lists source files that changed since the last scan
-    but have no doc record link. Decide for each one whether it needs documentation,
-    then either add a link or leave it untracked. Use the bootstrap flag to surface
-    all unlinked sources, not just changed ones:
+      `unlinked_changed_sources` lists source files that changed since the last scan
+      but have no doc record link. Decide for each one whether it needs documentation,
+      then either add a link or leave it untracked. Use the bootstrap flag to surface
+      all unlinked sources, not just changed ones:
 
 
-    ```bash
+      ```bash
 
-    docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
+      docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
 
-    ```'
-  links: []
-- section_id: md:section:docs/troubleshooting.md::every-change-makes-too-many-docs-stale
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - Every change makes too many docs stale
-  heading_slug: every-change-makes-too-many-docs-stale
-  line_span:
-  - 31
-  - 40
-  section_hash: 0222628751890126bc271e6eabf4994049f0ce3873ba9b32cd4072be0eb84e1d
-  summary: Every change makes too many docs stale
-  text: '## Every change makes too many docs stale
-
-
-    If a small source change marks many docs stale, the link graph is too broad. Each
-    document should be linked only to the source files it actually describes. Narrow
-    the links:
+      ```"
+    links: []
+  - section_id: md:section:docs/troubleshooting.md::every-change-makes-too-many-docs-stale
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - Every change makes too many docs stale
+    heading_slug: every-change-makes-too-many-docs-stale
+    line_span:
+      - 31
+      - 40
+    section_hash: 0222628751890126bc271e6eabf4994049f0ce3873ba9b32cd4072be0eb84e1d
+    summary: Every change makes too many docs stale
+    text: "## Every change makes too many docs stale
 
 
-    ```bash
-
-    docledger links remove --doc docs/usage.md --source documentledger/models.py
-
-    ```
+      If a small source change marks many docs stale, the link graph is too broad. Each
+      document should be linked only to the source files it actually describes. Narrow
+      the links:
 
 
-    Broad links (for example linking every doc to every module) defeat the selective-update
-    model. Keep links precise.'
-  links:
-  - source_id: py:class:documentledger/models.py::Config
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: be4cc7c9f83d4202134fd9e41d9500d93e3636e65eab11fe65ed4dcf0380ab9b
-  - source_id: py:class:documentledger/models.py::DocSection
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: fa2819d6acb40111da050262a53a0b12a725b19038ed1d225a8214d9b5d11dc4
-  - source_id: py:class:documentledger/models.py::ScanResult
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: f51b29cec594e35fcf10ab2ba17858eae577855cee393840977ea8fd84c520d8
-  - source_id: py:class:documentledger/models.py::SourceUnit
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: 9dbe9aa29ba6a2cdf64ebe9c59fd65b6195b828c2613312e3729bab1db9bb10b
-  - source_id: py:class:documentledger/models.py::ToolConfig
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: 8255f4312301db2f08edc443605d1f615e6c3e5d6341de1c225c422c6a8a2502
-  - source_id: py:class:documentledger/models.py::Workspace
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: adf826b044b01c951cb767c2e80a00213ed048293becedf9660b784ac9dd4a27
-  - source_id: py:class:documentledger/models.py::WorkspacePaths
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: 6ff817321574eb6afc9b4f5bfc6848a536ea92a62193569bfff6e5d080b01a29
-  - source_id: py:file:documentledger/models.py
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: 68eeec0a477f0a6aecd7de341f175e1a108e7334be1dee45fcfbca3cf9d2ab46
-  - source_id: py:method:documentledger/models.py::DocSection.to_record
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: 731c10b10fa7e32d576e90342c89908a7b948e1be35cc38ee2bd0d32cd573181
-  - source_id: py:method:documentledger/models.py::SourceUnit.to_record
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: 38f81128f43f069cd12561afa197edf2b12a8cd1e4c759a14885e23cab4c75e8
-  - source_id: py:method:documentledger/models.py::WorkspacePaths.storage_dir
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: df2597a13901b1673c27b88f2330010ccf87bd12016321ed3798f2642c3f878a
-  - source_id: py:module:documentledger/models.py
-    source_path: documentledger/models.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/models.py`.
-    tracked_hashes:
-      body_hash: fd1989a074ce2f17d3bde2d8f797162771198daf7d6558428c5b979b5a80c06a
-- section_id: md:section:docs/troubleshooting.md::mark-fresh-fails-with-unlinked-doc
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - '`mark-fresh` fails with `unlinked_doc`'
-  heading_slug: mark-fresh-fails-with-unlinked-doc
-  line_span:
-  - 17
-  - 30
-  section_hash: 3c7a944bc9b8414f11e8e62a439db6a41cb12e1cf9cb6443f29718bd3ed01dfb
-  summary: '`mark-fresh` fails with `unlinked_doc`'
-  text: '## `mark-fresh` fails with `unlinked_doc`
+      ```bash
+
+      docledger links remove --doc docs/usage.md --source documentledger/models.py
+
+      ```
 
 
-    `mark-fresh` rejects documents that have no linked sources by default, because
-    an unlinked document can never become stale from source changes and would silently
-    drift. Either add links first:
+      Broad links (for example linking every doc to every module) defeat the selective-update
+      model. Keep links precise."
+    links:
+      - source_id: py:class:documentledger/models.py::Config
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: be4cc7c9f83d4202134fd9e41d9500d93e3636e65eab11fe65ed4dcf0380ab9b
+      - source_id: py:class:documentledger/models.py::DocSection
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: fa2819d6acb40111da050262a53a0b12a725b19038ed1d225a8214d9b5d11dc4
+      - source_id: py:class:documentledger/models.py::ScanResult
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: f51b29cec594e35fcf10ab2ba17858eae577855cee393840977ea8fd84c520d8
+      - source_id: py:class:documentledger/models.py::SourceUnit
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: 9dbe9aa29ba6a2cdf64ebe9c59fd65b6195b828c2613312e3729bab1db9bb10b
+      - source_id: py:class:documentledger/models.py::ToolConfig
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: 8255f4312301db2f08edc443605d1f615e6c3e5d6341de1c225c422c6a8a2502
+      - source_id: py:class:documentledger/models.py::Workspace
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: adf826b044b01c951cb767c2e80a00213ed048293becedf9660b784ac9dd4a27
+      - source_id: py:class:documentledger/models.py::WorkspacePaths
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: 6ff817321574eb6afc9b4f5bfc6848a536ea92a62193569bfff6e5d080b01a29
+      - source_id: py:file:documentledger/models.py
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: 68eeec0a477f0a6aecd7de341f175e1a108e7334be1dee45fcfbca3cf9d2ab46
+      - source_id: py:method:documentledger/models.py::DocSection.to_record
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: 731c10b10fa7e32d576e90342c89908a7b948e1be35cc38ee2bd0d32cd573181
+      - source_id: py:method:documentledger/models.py::SourceUnit.to_record
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: 38f81128f43f069cd12561afa197edf2b12a8cd1e4c759a14885e23cab4c75e8
+      - source_id: py:method:documentledger/models.py::WorkspacePaths.storage_dir
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: df2597a13901b1673c27b88f2330010ccf87bd12016321ed3798f2642c3f878a
+      - source_id: py:module:documentledger/models.py
+        source_path: documentledger/models.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/models.py`.
+        tracked_hashes:
+          body_hash: fd1989a074ce2f17d3bde2d8f797162771198daf7d6558428c5b979b5a80c06a
+  - section_id: md:section:docs/troubleshooting.md::mark-fresh-fails-with-unlinked-doc
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - "`mark-fresh` fails with `unlinked_doc`"
+    heading_slug: mark-fresh-fails-with-unlinked-doc
+    line_span:
+      - 17
+      - 30
+    section_hash: 3c7a944bc9b8414f11e8e62a439db6a41cb12e1cf9cb6443f29718bd3ed01dfb
+    summary: "`mark-fresh` fails with `unlinked_doc`"
+    text: '## `mark-fresh` fails with `unlinked_doc`
 
 
-    ```bash
-
-    docledger links add --doc docs/index.md --source documentledger/cli.py --reason
-    "Navigation page maps to the CLI."
-
-    ```
+      `mark-fresh` rejects documents that have no linked sources by default, because
+      an unlinked document can never become stale from source changes and would silently
+      drift. Either add links first:
 
 
-    or explicitly record the document as intentionally unlinked:
+      ```bash
+
+      docledger links add --doc docs/index.md --source documentledger/cli.py --reason
+      "Navigation page maps to the CLI."
+
+      ```
 
 
-    ```bash
-
-    docledger mark-fresh --doc docs/index.md --allow-unlinked --reason "Navigation
-    page; intentionally unlinked."
-
-    ```'
-  links:
-  - source_id: py:file:documentledger/cli.py
-    source_path: documentledger/cli.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/cli.py`.
-    tracked_hashes:
-      body_hash: 98daca2591d99ea88db504606584442a36fd8d0f32e2c73b90a533bae81b9cb7
-  - source_id: py:module:documentledger/cli.py
-    source_path: documentledger/cli.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact source path `documentledger/cli.py`.
-    tracked_hashes:
-      body_hash: 54bebd6a5b99d27ffdacdebb6fb6d1fe2cec4666636e3dde7a9872308e1f28b3
-- section_id: md:section:docs/troubleshooting.md::scan-fails-with-storage-missing
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - '`scan` fails with `storage_missing`'
-  heading_slug: scan-fails-with-storage-missing
-  line_span:
-  - 13
-  - 16
-  section_hash: 3776d9bebd9dfc2f184915d953c922be40f44c864a0c98ad01281d18490bab8d
-  summary: '`scan` fails with `storage_missing`'
-  text: '## `scan` fails with `storage_missing`
+      or explicitly record the document as intentionally unlinked:
 
 
-    A command that requires an initialized workspace raises `storage_missing` when
-    the config exists but storage metadata is absent. Resolve it the same way as the
-    missing-storage `uninitialized` case: run `docledger init`.'
-  links: []
-- section_id: md:section:docs/troubleshooting.md::sphinx-build-is-not-found
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - '`sphinx-build` is not found'
-  heading_slug: sphinx-build-is-not-found
-  line_span:
-  - 58
-  - 61
-  section_hash: da3f3d1e42a0a045d1056ec0f68ba600a0b50cc7625a25019986d980a9714f69
-  summary: '`sphinx-build` is not found'
-  text: '## `sphinx-build` is not found
+      ```bash
+
+      docledger mark-fresh --doc docs/index.md --allow-unlinked --reason "Navigation
+      page; intentionally unlinked."
+
+      ```'
+    links:
+      - source_id: py:file:documentledger/cli.py
+        source_path: documentledger/cli.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/cli.py`.
+        tracked_hashes:
+          body_hash: 98daca2591d99ea88db504606584442a36fd8d0f32e2c73b90a533bae81b9cb7
+      - source_id: py:module:documentledger/cli.py
+        source_path: documentledger/cli.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact source path `documentledger/cli.py`.
+        tracked_hashes:
+          body_hash: 54bebd6a5b99d27ffdacdebb6fb6d1fe2cec4666636e3dde7a9872308e1f28b3
+  - section_id: md:section:docs/troubleshooting.md::scan-fails-with-storage-missing
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - "`scan` fails with `storage_missing`"
+    heading_slug: scan-fails-with-storage-missing
+    line_span:
+      - 13
+      - 16
+    section_hash: 3776d9bebd9dfc2f184915d953c922be40f44c864a0c98ad01281d18490bab8d
+    summary: "`scan` fails with `storage_missing`"
+    text: "## `scan` fails with `storage_missing`
 
 
-    `docs/build.sh` creates and activates `docs/venv/` and installs `docs/requirements.txt`,
-    which provides `sphinx-build`. If the build cannot find `sphinx-build`, ensure
-    the script reaches the `source "$VENV_DIR/bin/activate"` step and that `docs/requirements.txt`
-    installs successfully (it requires network access on first run).'
-  links: []
-- section_id: md:section:docs/troubleshooting.md::status-reports-uninitialized
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - '`status` reports `uninitialized`'
-  heading_slug: status-reports-uninitialized
-  line_span:
-  - 3
-  - 12
-  section_hash: d16508e10acd4f537fb229be74abc5a867124d85825202f3346b4ded976afb99
-  summary: '`status` reports `uninitialized`'
-  text: '## `status` reports `uninitialized`
+      A command that requires an initialized workspace raises `storage_missing` when
+      the config exists but storage metadata is absent. Resolve it the same way as the
+      missing-storage `uninitialized` case: run `docledger init`."
+    links: []
+  - section_id: md:section:docs/troubleshooting.md::sphinx-build-is-not-found
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - "`sphinx-build` is not found"
+    heading_slug: sphinx-build-is-not-found
+    line_span:
+      - 58
+      - 61
+    section_hash: da3f3d1e42a0a045d1056ec0f68ba600a0b50cc7625a25019986d980a9714f69
+    summary: "`sphinx-build` is not found"
+    text: '## `sphinx-build` is not found
 
 
-    An `uninitialized` result can mean there is no config yet, or that `documentledger.toml`
-    exists but `.documentledger/storage.yaml` is missing. This happens when the storage
-    directory was removed or never created. Re-run initialization from the project
-    root:
+      `docs/build.sh` creates and activates `docs/venv/` and installs `docs/requirements.txt`,
+      which provides `sphinx-build`. If the build cannot find `sphinx-build`, ensure
+      the script reaches the `source "$VENV_DIR/bin/activate"` step and that `docs/requirements.txt`
+      installs successfully (it requires network access on first run).'
+    links: []
+  - section_id: md:section:docs/troubleshooting.md::status-reports-uninitialized
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - "`status` reports `uninitialized`"
+    heading_slug: status-reports-uninitialized
+    line_span:
+      - 3
+      - 12
+    section_hash: d16508e10acd4f537fb229be74abc5a867124d85825202f3346b4ded976afb99
+    summary: "`status` reports `uninitialized`"
+    text: "## `status` reports `uninitialized`
 
 
-    ```bash
-
-    docledger init
-
-    ```
-
-
-    `init` refuses to run when a config already exists; remove the stale config first
-    only if you intend to start over.'
-  links:
-  - source_id: py:function:tests/conftest.py::project
-    source_path: tests/conftest.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact qualified symbol `project`.
-    tracked_hashes:
-      body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
-- section_id: md:section:docs/troubleshooting.md::the-sphinx-build-warns-about-files-inside-the-virtual-environment
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - The Sphinx build warns about files inside the virtual environment
-  heading_slug: the-sphinx-build-warns-about-files-inside-the-virtual-environment
-  line_span:
-  - 49
-  - 57
-  section_hash: e6a7e5794c1d21f2787a63a47fe3ae39942045dca17a210dcdea8a1863fb9546
-  summary: The Sphinx build warns about files inside the virtual environment
-  text: '## The Sphinx build warns about files inside the virtual environment
+      An `uninitialized` result can mean there is no config yet, or that `documentledger.toml`
+      exists but `.documentledger/storage.yaml` is missing. This happens when the storage
+      directory was removed or never created. Re-run initialization from the project
+      root:
 
 
-    The documentation build creates a virtual environment under `docs/venv/`. `docs/conf.py`
-    excludes `_build`, `venv`, and `.documentledger` from the Sphinx source scan.
-    If you still see warnings from virtual-environment files, confirm `exclude_patterns`
-    in `docs/conf.py` includes `venv` and `venv/**`, and remove any stale `docs/venv/`
-    before rebuilding:
+      ```bash
+
+      docledger init
+
+      ```
 
 
-    ```bash
+      `init` refuses to run when a config already exists; remove the stale config first
+      only if you intend to start over."
+    links:
+      - source_id: py:function:tests/conftest.py::project
+        source_path: tests/conftest.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact qualified symbol `project`.
+        tracked_hashes:
+          body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
+  - section_id: md:section:docs/troubleshooting.md::the-sphinx-build-warns-about-files-inside-the-virtual-environment
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - The Sphinx build warns about files inside the virtual environment
+    heading_slug: the-sphinx-build-warns-about-files-inside-the-virtual-environment
+    line_span:
+      - 49
+      - 57
+    section_hash: e6a7e5794c1d21f2787a63a47fe3ae39942045dca17a210dcdea8a1863fb9546
+    summary: The Sphinx build warns about files inside the virtual environment
+    text: "## The Sphinx build warns about files inside the virtual environment
 
-    rm -rf docs/venv docs/_build
 
-    bash docs/build.sh
-
-    ```'
-  links: []
-- section_id: md:section:docs/troubleshooting.md::storage-migration-errors
-  doc_path: docs/troubleshooting.md
-  heading_path:
-  - Troubleshooting
-  - Storage migration errors
-  heading_slug: storage-migration-errors
-  line_span:
-  - 62
-  - 68
-  section_hash: 5ae9f21636725af068e88bfe39d8a6518ab47ff3fe312462dfac40e8cd8588a8
-  summary: Storage migration errors
-  text: '## Storage migration errors
+      The documentation build creates a virtual environment under `docs/venv/`. `docs/conf.py`
+      excludes `_build`, `venv`, and `.documentledger` from the Sphinx source scan.
+      If you still see warnings from virtual-environment files, confirm `exclude_patterns`
+      in `docs/conf.py` includes `venv` and `venv/**`, and remove any stale `docs/venv/`
+      before rebuilding:
 
 
-    - `storage_migration_required`: run `docledger storage migrate --dry-run` and
-    review the plan.
+      ```bash
 
-    - `project_uuid_mismatch`: compare the legacy and shared manifest identities;
-    pass `--adopt-project-uuid` only after review.
+      rm -rf docs/venv docs/_build
 
-    - `source_index_missing` or `source_index_repair_failed`: restore the committed
-    `source-index.json`, or use explicit repair only when the reconstructed SHA-256
-    exactly matches `scan.yaml`.
+      bash docs/build.sh
 
-    - `storage_binding_invalid`: repair the canonical binding through an explicit
-    initialization/recovery command; status and verification never repair it silently.
+      ```"
+    links: []
+  - section_id: md:section:docs/troubleshooting.md::storage-migration-errors
+    doc_path: docs/troubleshooting.md
+    heading_path:
+      - Troubleshooting
+      - Storage migration errors
+    heading_slug: storage-migration-errors
+    line_span:
+      - 62
+      - 68
+    section_hash: 5ae9f21636725af068e88bfe39d8a6518ab47ff3fe312462dfac40e8cd8588a8
+    summary: Storage migration errors
+    text: "## Storage migration errors
 
-    - `legacy_cleanup_unsafe`: verify the completed migration journal, unchanged legacy
-    inventory, and provisional proposal disposition before using `--yes`.'
-  links:
-  - source_id: py:function:tests/conftest.py::project
-    source_path: tests/conftest.py
-    coverage: implementation-note
-    impact: unknown
-    reason: Section contains exact qualified symbol `project`.
-    tracked_hashes:
-      body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
+
+      - `storage_migration_required`: run `docledger storage migrate --dry-run` and
+      review the plan.
+
+      - `project_uuid_mismatch`: compare the legacy and shared manifest identities;
+      pass `--adopt-project-uuid` only after review.
+
+      - `source_index_missing` or `source_index_repair_failed`: restore the committed
+      `source-index.json`, or use explicit repair only when the reconstructed SHA-256
+      exactly matches `scan.yaml`.
+
+      - `storage_binding_invalid`: repair the canonical binding through an explicit
+      initialization/recovery command; status and verification never repair it silently.
+
+      - `legacy_cleanup_unsafe`: verify the completed migration journal, unchanged legacy
+      inventory, and provisional proposal disposition before using `--yes`."
+    links:
+      - source_id: py:function:tests/conftest.py::project
+        source_path: tests/conftest.py
+        coverage: implementation-note
+        impact: unknown
+        reason: Section contains exact qualified symbol `project`.
+        tracked_hashes:
+          body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
 last_fresh_scan_version: 6
 last_fresh_hash: be9c61964d143c7a3905630b645e2ab38d8566c1025945819aac238976adcfd4
 notes: Docs updated after scan version 6.

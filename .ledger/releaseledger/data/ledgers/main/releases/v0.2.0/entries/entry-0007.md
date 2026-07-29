@@ -7,14 +7,15 @@ versioning:
 entry_id: entry-0007
 release_version: v0.2.0
 kind: changed
-summary: Migrated releaseledger and taskledger storage to unified .ledger/ directory
+summary:
+  Migrated releaseledger and taskledger storage to unified .ledger/ directory
   structure
 status: accepted
 audience: null
 scopes: []
 source_refs: []
 paths:
-- .ledger/ledger.toml
+  - .ledger/ledger.toml
 issues: []
 prs: []
 sources: []

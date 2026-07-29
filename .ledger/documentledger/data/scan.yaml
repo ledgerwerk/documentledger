@@ -64,51 +64,51 @@ doc_hashes:
   docs/troubleshooting.md: be9c61964d143c7a3905630b645e2ab38d8566c1025945819aac238976adcfd4
   docs/usage.md: 35bcc4967af46bd49fed609ef7a1b14419cdec869c1572155b21ce3192980ffa
 changed_sources:
-- documentledger/_version.py
+  - documentledger/_version.py
 deleted_sources: []
 changed_units:
-- source_id: py:file:documentledger/_version.py
-  path: documentledger/_version.py
-  kind: file
-  qualname: documentledger/_version.py
-  change_type: modified
-  changed_hashes:
-  - body_hash
-  - content_hash
-  - decorator_hash
-  - docstring_hash
-  - file_hash
-  - public_contract_hash
-  - signature_hash
-  old_line_span:
-  - 1
-  - 25
-  new_line_span:
-  - 1
-  - 24
+  - source_id: py:file:documentledger/_version.py
+    path: documentledger/_version.py
+    kind: file
+    qualname: documentledger/_version.py
+    change_type: modified
+    changed_hashes:
+      - body_hash
+      - content_hash
+      - decorator_hash
+      - docstring_hash
+      - file_hash
+      - public_contract_hash
+      - signature_hash
+    old_line_span:
+      - 1
+      - 25
+    new_line_span:
+      - 1
+      - 24
 added_units: []
 deleted_units: []
 affected_sections: []
 stale_docs: []
 unlinked_changed_sources:
-- documentledger/_version.py
+  - documentledger/_version.py
 unmapped_changed_units:
-- source_id: py:file:documentledger/_version.py
-  path: documentledger/_version.py
-  kind: file
-  qualname: documentledger/_version.py
-  change_type: modified
-  changed_hashes:
-  - body_hash
-  - content_hash
-  - decorator_hash
-  - docstring_hash
-  - file_hash
-  - public_contract_hash
-  - signature_hash
-  old_line_span:
-  - 1
-  - 25
-  new_line_span:
-  - 1
-  - 24
+  - source_id: py:file:documentledger/_version.py
+    path: documentledger/_version.py
+    kind: file
+    qualname: documentledger/_version.py
+    change_type: modified
+    changed_hashes:
+      - body_hash
+      - content_hash
+      - decorator_hash
+      - docstring_hash
+      - file_hash
+      - public_contract_hash
+      - signature_hash
+    old_line_span:
+      - 1
+      - 25
+    new_line_span:
+      - 1
+      - 24
