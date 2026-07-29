@@ -10,7 +10,7 @@ Run initialization from the repository root:
 docledger init
 ```
 
-By default this creates `documentledger.toml` and a `.documentledger/` storage directory. Use `--project-name` to set the project name, `--documentledger-dir` to choose another storage path, or `--hidden-config` to create `.documentledger.toml` instead.
+By default this creates the canonical `.ledger/` layout: `.ledger/ledger.toml`, the Documentledger tool configuration, and its project data mount. Use `--project-name` to set the project name. Legacy storage-path and hidden-config options are migration-only.
 
 <!-- docledger-section: usage-check-workspace-status -->
 
@@ -173,12 +173,12 @@ Without `--json`, commands print human-readable output and errors print concise 
 
 ## Ledger state and commit policy
 
-Documentledger stores its own state under the configured `.documentledger/` directory. The recommended commit policy for a documentation freshness ledger is:
+Documentledger stores its durable state under `.ledger/documentledger/data/`; rendered and proposal artifacts use the resolved cache mount. The recommended commit policy for a documentation freshness ledger is:
 
-- Commit `.documentledger/storage.yaml`, `.documentledger/scan.yaml`, and `.documentledger/docs/*.yaml`. These are the source of truth for project identity, the current scan baseline, section-level links, tracked hash state, and freshness markers.
-- Ignore `.documentledger/rendered/`. Rendered context is regenerated on demand by `docs build-context`.
+- Commit `.ledger/ledger.toml`, `.ledger/documentledger/config.toml`, `.ledger/documentledger/data/storage.yaml`, `.ledger/documentledger/data/scan.yaml`, and `.ledger/documentledger/data/docs/*.yaml`. These are the source of truth for project identity, the current scan baseline, section-level links, tracked hash state, and freshness markers.
+- Ignore the resolved cache artifacts directory. Rendered context is regenerated on demand by `docs build-context`.
 
-Do not edit `.documentledger/` files directly; use the `docledger` commands so the records stay consistent.
+Do not edit `.ledger/` files directly; use the `docledger` commands so the records stay consistent. Existing `.documentledger/` layouts are compatibility input for explicit migration only.
 
 ## Storage commands
 

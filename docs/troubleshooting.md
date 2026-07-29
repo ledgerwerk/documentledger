@@ -2,7 +2,7 @@
 
 ## `status` reports `uninitialized`
 
-An `uninitialized` result can mean there is no config yet, or that `documentledger.toml` exists but `.documentledger/storage.yaml` is missing. This happens when the storage directory was removed or never created. Re-run initialization from the project root:
+An `uninitialized` result can mean there is no config yet, or that the canonical `.ledger/ledger.toml` exists but `.ledger/documentledger/data/storage.yaml` is missing. This happens when the storage directory was removed or never created. Re-run initialization from the project root:
 
 ```bash
 docledger init
@@ -48,7 +48,7 @@ docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
 
 ## The Sphinx build warns about files inside the virtual environment
 
-The documentation build creates a virtual environment under `docs/venv/`. `docs/conf.py` excludes `_build`, `venv`, and `.documentledger` from the Sphinx source scan. If you still see warnings from virtual-environment files, confirm `exclude_patterns` in `docs/conf.py` includes `venv` and `venv/**`, and remove any stale `docs/venv/` before rebuilding:
+The documentation build creates a virtual environment under `docs/venv/`. `docs/conf.py` excludes `_build`, `venv`, and `.ledger` from the Sphinx source scan. If you still see warnings from virtual-environment files, confirm `exclude_patterns` in `docs/conf.py` includes `venv` and `venv/**`, and remove any stale `docs/venv/` before rebuilding:
 
 ```bash
 rm -rf docs/venv docs/_build

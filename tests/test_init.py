@@ -5,6 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from documentledger.cli import app
+from documentledger.storage import load_config
 from tests.conftest import assert_no_timestamp_keys, invoke_json, load_yaml
 
 
@@ -15,7 +16,6 @@ def test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> No
     assert (project / ".ledger" / "documentledger" / "config.toml").exists()
     assert (project / ".ledger" / "documentledger" / "data" / "storage.yaml").exists()
     assert (project / ".ledger" / "documentledger" / "data" / "docs").is_dir() is False
-    assert not (project / ".documentledger").exists()
     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert storage["schema_version"] == 5
     assert storage["state_version"] == 1
@@ -28,6 +28,15 @@ def test_legacy_init_options_are_rejected(project: Path, runner: CliRunner) -> N
     result = runner.invoke(app, ["--json", "init", "--hidden-config"])
     assert result.exit_code != 0
     assert "legacy-init-options-unsupported" in result.output
+
+
+def test_default_legacy_compatible_config_uses_canonical_storage(tmp_path: Path) -> None:
+    config_path = tmp_path / "documentledger.toml"
+    config_path.write_text('[project]\nname = "demo"\n', encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.storage_dir == tmp_path / ".ledger"
 
 
 def test_reinitialization_fails_cleanly(project: Path, runner: CliRunner) -> None:

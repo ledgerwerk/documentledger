@@ -41,7 +41,7 @@ myst_enable_extensions = [
 myst_heading_anchors = 3
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "_build/**", "venv", "venv/**", "Thumbs.db", ".DS_Store", ".documentledger"]
+exclude_patterns = ["_build", "_build/**", "venv", "venv/**", "Thumbs.db", ".DS_Store", ".ledger"]
 
 html_theme = "sphinx_rtd_theme"
 

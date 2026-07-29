@@ -82,19 +82,19 @@ def _status_classification(workspace: Any) -> tuple[str, str, str]:
         return (
             "bootstrap_required",
             "A baseline scan exists but no documentation links exist.",
-            "documentledger document build-context --bootstrap --out .documentledger/rendered/latest-context.md",
+            "documentledger document build-context --bootstrap --out .ledger/documentledger/data/rendered/latest-context.md",
         )
     if affected_count > 0:
         return (
             "incremental_affected",
             "Linked documentation sections are affected by the latest source changes.",
-            "documentledger document build-context --affected --out .documentledger/rendered/latest-context.md",
+            "documentledger document build-context --affected --out .ledger/documentledger/data/rendered/latest-context.md",
         )
     if unlinked_changed > 0:
         return (
             "mapping_incomplete",
             "Changed source files are not fully linked to documentation.",
-            "documentledger link propose --all-docs --out-dir .documentledger/proposals",
+            "documentledger link propose --all-docs --out-dir .ledger/documentledger/data/proposals",
         )
     return ("incremental_clean", "No affected linked sections remain after the latest scan.", "documentledger scan")
 
@@ -188,10 +188,10 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
     def init(
         ctx: typer.Context,
         project_name: str | None = typer.Option(None, "--project-name"),
-        documentledger_dir: str = typer.Option(".documentledger", "--documentledger-dir"),
+        documentledger_dir: str = typer.Option(".ledger", "--documentledger-dir"),
         hidden_config: bool = typer.Option(False, "--hidden-config"),
     ) -> None:
-        if documentledger_dir != ".documentledger" or hidden_config:
+        if documentledger_dir != ".ledger" or hidden_config:
             raise DocumentledgerError(
                 "legacy_init_options_unsupported",
                 "Fresh initialization uses the canonical schema-3 .ledger layout; legacy storage options are migration-only.",

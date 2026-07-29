@@ -6,7 +6,7 @@
 
 Documentledger discovers `documentledger.toml` or `.documentledger.toml` by walking upward from the current directory. The loaded configuration defines the project metadata, storage directory, scan roots, allowed file extensions, validation commands, and policy flags.
 
-A workspace combines the loaded configuration with storage metadata from `.documentledger/storage.yaml`. Commands that require an initialized workspace fail with a structured `workspace_not_found` error when no config is found, or a `storage_missing` error when the config exists but storage metadata is absent. `status` classifies the workspace operationally (`uninitialized`, `bootstrap_required`, `incremental_clean`, `incremental_affected`, or `mapping_incomplete`) and reports a recommended next command.
+A workspace combines the loaded configuration with storage metadata from the canonical `.ledger/documentledger/data/storage.yaml`. Commands that require an initialized workspace fail with a structured `workspace_not_found` error when no config is found, or a `storage_missing` error when the config exists but storage metadata is absent. `status` classifies the workspace operationally (`uninitialized`, `bootstrap_required`, `incremental_clean`, `incremental_affected`, or `mapping_incomplete`) and reports a recommended next command.
 
 Workspace loading is read-only. It validates the current storage schema and metadata, but it does not rewrite scan or doc records as a side effect of read-only commands.
 
@@ -16,13 +16,13 @@ Workspace loading is read-only. It validates the current storage schema and meta
 
 The storage layer writes YAML files only through the Documentledger APIs:
 
-- `.documentledger/storage.yaml` stores schema metadata, project UUID, the current `state_version`, and compact latest-scan counts used by `status`.
-- `.documentledger/scan.yaml` stores the current source hashes, document hashes, source-index metadata, unit deltas, affected-section snapshots, stale-doc projections, unlinked changed sources, unmapped changed units, and the monotonic current scan `version`.
-- `.documentledger/source-index.json` stores the current source-unit inventory as deterministic compact JSON.
-- `.documentledger/docs/*.yaml` stores document records with `sections[].links[]`, derived `linked_sources`, section hashes, tracked source-unit hashes, freshness metadata including `last_fresh_scan_version`, notes, and a doc-record `version`.
-- `.documentledger/rendered/latest-context.md` is a regenerated cache of the latest rendered update context.
+- `.ledger/documentledger/data/storage.yaml` stores schema metadata, project UUID, the current `state_version`, and compact latest-scan counts used by `status`.
+- `.ledger/documentledger/data/scan.yaml` stores the current source hashes, document hashes, source-index metadata, unit deltas, affected-section snapshots, stale-doc projections, unlinked changed sources, unmapped changed units, and the monotonic current scan `version`.
+- `.ledger/documentledger/data/source-index.json` stores the current source-unit inventory as deterministic compact JSON.
+- `.ledger/documentledger/data/docs/*.yaml` stores document records with `sections[].links[]`, derived `linked_sources`, section hashes, tracked source-unit hashes, freshness metadata including `last_fresh_scan_version`, notes, and a doc-record `version`.
+- The resolved cache `artifacts` mount stores regenerated rendered context and proposals.
 
-Git history is the record of older scan baselines. `.documentledger/scans/` does not exist in the v5 storage model.
+Git history is the record of older scan baselines. `.ledger/documentledger/data/scans/` does not exist in the v5 storage model.
 
 The recommended commit policy is to version `storage.yaml`, `scan.yaml`, and `docs/*.yaml` as the source of truth, and to ignore `rendered/` because it is regenerated on demand.
 
@@ -52,7 +52,7 @@ On the first scan, Documentledger records a clean baseline. On later scans it co
 - `stale_docs` remains available as a compatibility projection of the docs that still contain affected sections.
 - Changed sources with no link record are reported as unlinked changed sources.
 - Changed units with no matching section link are reported as unmapped changed units.
-- If every source and documentation hash matches the previous scan, `.documentledger/scan.yaml` and `.documentledger/source-index.json` are not rewritten, no source ASTs are reparsed, the previous scan version is reused, and the result reports `unchanged` as true.
+- If every source and documentation hash matches the previous scan, `.ledger/documentledger/data/scan.yaml` and `.ledger/documentledger/data/source-index.json` are not rewritten, no source ASTs are reparsed, the previous scan version is reused, and the result reports `unchanged` as true.
 
 <!-- docledger-section: architecture-link-management -->
 

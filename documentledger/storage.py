@@ -24,6 +24,7 @@ from documentledger.identity import doc_record_filename, normalize_repo_path
 from documentledger.models import Config, Workspace
 
 CONFIG_NAMES = ("documentledger.toml", ".documentledger.toml")
+DEFAULT_STORAGE_DIR = ".ledger"
 STORAGE_SCHEMA_VERSION = 5
 SCAN_SCHEMA = "documentledger.scan.v5"
 SOURCE_INDEX_SCHEMA = "documentledger.source_index.v1"
@@ -111,7 +112,7 @@ def load_config(path: Path) -> Config:
     validation_data = DEFAULT_CONFIG["validation"] | data.get("validation", {})
     policy_data = DEFAULT_CONFIG["policy"] | data.get("policy", {})
     root = path.parent.resolve()
-    storage_value = storage_data.get("documentledger_dir", ".documentledger")
+    storage_value = storage_data.get("documentledger_dir", DEFAULT_STORAGE_DIR)
     storage_dir = Path(storage_value)
     if not storage_dir.is_absolute():
         storage_dir = root / storage_dir
@@ -228,7 +229,7 @@ def load_workspace(start: Path | None = None, *, required: bool = True) -> Works
     return Workspace(config=config, metadata=metadata)
 
 
-def init_workspace(project_name: str | None, documentledger_dir: str, hidden_config: bool) -> Workspace:
+def init_workspace(project_name: str | None, documentledger_dir: str = DEFAULT_STORAGE_DIR, hidden_config: bool = False) -> Workspace:
     root = Path.cwd().resolve()
     config_path = root / (".documentledger.toml" if hidden_config else "documentledger.toml")
     if any((root / name).exists() for name in CONFIG_NAMES):
