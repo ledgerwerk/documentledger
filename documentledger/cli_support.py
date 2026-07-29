@@ -15,6 +15,7 @@ from typing import Any
 import typer
 from ledgercore.cli import (
     CLIError,
+    CLIWarning,
     CommonCLIState,
     ErrorEnvelope,
     SuccessEnvelope,
