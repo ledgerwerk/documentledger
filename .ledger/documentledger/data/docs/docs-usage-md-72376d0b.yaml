@@ -1,0 +1,487 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/usage.md
+linked_sources:
+- documentledger/cli.py
+- documentledger/launcher.py
+- documentledger/scanner.py
+- tests/conftest.py
+sections:
+- section_id: md:section:docs/usage.md::bootstrapping-a-new-repository
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Bootstrapping a new repository
+  heading_slug: bootstrapping-a-new-repository
+  line_span:
+  - 100
+  - 115
+  section_hash: abb469a896e3429c99b8937896891c82cd0197ffe2e1b22b0dbf6a282a69cd2b
+  summary: Bootstrapping a new repository
+  text: '## Bootstrapping a new repository
+
+
+    A fresh repository has no links yet, so the first scan reports no stale docs.
+    To drive an initial documentation pass, use the explicit bootstrap flow:
+
+
+    ```bash
+
+    docledger init
+
+    docledger scan
+
+    docledger docs build-context --bootstrap --out /tmp/docledger-bootstrap.md
+
+    docledger links propose --all-docs --out-dir /tmp/docledger-maps
+
+    docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply
+
+    ```
+
+
+    The bootstrap context and proposal flow give agents a deterministic first-pass
+    link graph without applying anything until the full batch validates. See [Bootstrap](bootstrap.md)
+    for the full setup sequence.
+
+
+    <!-- docledger-section: usage-mark-documentation-fresh -->'
+  links: []
+- section_id: md:section:docs/usage.md::check-workspace-status
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Check workspace status
+  heading_slug: check-workspace-status
+  line_span:
+  - 17
+  - 34
+  section_hash: c928480607e41ebb69ad4cae685e9cf2f01d6dc240b5426de7bcb2edf5b21375
+  summary: Check workspace status
+  text: '## Check workspace status
+
+
+    ```bash
+
+    docledger --json status
+
+    ```
+
+
+    Status reports the workspace `state`:
+
+
+    - `uninitialized`: no `documentledger.toml` was found.
+
+    - `bootstrap_required`: there is no baseline scan yet, or there is a baseline
+    but no usable doc links.
+
+    - `incremental_clean`: the latest scan has no affected linked sections.
+
+    - `incremental_affected`: the latest scan has affected linked sections that should
+    be reviewed.
+
+    - `mapping_incomplete`: changed source files are not yet fully linked to documentation.
+
+
+    The result also reports `recommended_command`, `recommended_reason`, compact latest-scan
+    counts, and any root-layout diagnostics that should be fixed before trusting a
+    baseline.
+
+
+    <!-- docledger-section: usage-run-scan -->'
+  links: []
+- section_id: md:section:docs/usage.md::find-and-update-stale-documentation
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Find and update stale documentation
+  heading_slug: find-and-update-stale-documentation
+  line_span:
+  - 87
+  - 99
+  section_hash: 9b19966565b00ba9cdeb5528cc945e31746915692582257f2f3568cd5746c939
+  summary: Find and update stale documentation
+  text: '## Find and update stale documentation
+
+
+    ```bash
+
+    docledger --json docs affected
+
+    docledger docs build-context --affected --out /tmp/docledger-context.md
+
+    ```
+
+
+    `docs affected` reports the live affected sections for the latest scan. After
+    a section is updated and marked fresh, it disappears from `docs affected` immediately;
+    a follow-up scan is optional confirmation, not the only way to clear affectedness.
+
+
+    The rendered context contains only the affected doc sections, their linked changed
+    source units, the current relevant source snippets, unlinked changed sources,
+    and configured validation commands. Inspect the affected sections and linked changed
+    source units first. Expand to whole files only when the changed unit cannot be
+    understood in isolation.
+
+
+    <!-- docledger-section: usage-bootstrapping-a-new-repository -->'
+  links: []
+- section_id: md:section:docs/usage.md::initialize-a-workspace
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Initialize a workspace
+  heading_slug: initialize-a-workspace
+  line_span:
+  - 5
+  - 16
+  section_hash: 5d6e70bdb8da8380131e396a90a805c474835748cd203c606063b3f35a476c17
+  summary: Initialize a workspace
+  text: '## Initialize a workspace
+
+
+    Run initialization from the repository root:
+
+
+    ```bash
+
+    docledger init
+
+    ```
+
+
+    By default this creates `documentledger.toml` and a `.documentledger/` storage
+    directory. Use `--project-name` to set the project name, `--documentledger-dir`
+    to choose another storage path, or `--hidden-config` to create `.documentledger.toml`
+    instead.
+
+
+    <!-- docledger-section: usage-check-workspace-status -->'
+  links:
+  - source_id: py:function:tests/conftest.py::project
+    source_path: tests/conftest.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact qualified symbol `project`.
+    tracked_hashes:
+      body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
+- section_id: md:section:docs/usage.md::json-and-human-output
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - JSON and human output
+  heading_slug: json-and-human-output
+  line_span:
+  - 147
+  - 173
+  section_hash: 8bd3c801f359a57466bb42f84675543445d65b75163580aac0bf85d48842db74
+  summary: JSON and human output
+  text: "## JSON and human output\n\nPass `--json` before the command to emit a stable\
+    \ JSON envelope:\n\n```json\n{ \"ok\": true, \"command\": \"status\", \"result\"\
+    : {}, \"events\": [] }\n```\n\nErrors also use a JSON envelope when `--json` is\
+    \ set, and the envelope preserves the real command name:\n\n```json\n{\n  \"ok\"\
+    : false,\n  \"command\": \"scan\",\n  \"error\": {\n    \"code\": \"workspace_not_found\"\
+    ,\n    \"message\": \"...\",\n    \"remediation\": []\n  },\n  \"events\": []\n\
+    }\n```\n\nWithout `--json`, commands print human-readable output and errors print\
+    \ concise `Error:` messages with remediation hints.\n\n<!-- docledger-section:\
+    \ usage-ledger-state-and-commit-policy -->"
+  links: []
+- section_id: md:section:docs/usage.md::ledger-state-and-commit-policy
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Ledger state and commit policy
+  heading_slug: ledger-state-and-commit-policy
+  line_span:
+  - 174
+  - 182
+  section_hash: 964db75afc0640ef3adfb472ad80345b26926eb43523b0b8a55de741aba946fe
+  summary: Ledger state and commit policy
+  text: '## Ledger state and commit policy
+
+
+    Documentledger stores its own state under the configured `.documentledger/` directory.
+    The recommended commit policy for a documentation freshness ledger is:
+
+
+    - Commit `.documentledger/storage.yaml`, `.documentledger/scan.yaml`, and `.documentledger/docs/*.yaml`.
+    These are the source of truth for project identity, the current scan baseline,
+    section-level links, tracked hash state, and freshness markers.
+
+    - Ignore `.documentledger/rendered/`. Rendered context is regenerated on demand
+    by `docs build-context`.
+
+
+    Do not edit `.documentledger/` files directly; use the `docledger` commands so
+    the records stay consistent.'
+  links:
+  - source_id: py:function:tests/conftest.py::project
+    source_path: tests/conftest.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact qualified symbol `project`.
+    tracked_hashes:
+      body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
+- section_id: md:section:docs/usage.md::link-documentation-to-sources
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Link documentation to sources
+  heading_slug: link-documentation-to-sources
+  line_span:
+  - 55
+  - 86
+  section_hash: 2f5c546bc8fea0a57906cc2ffa635209a4a090b69ea3e7f683fe8835dc0b09e7
+  summary: Link documentation to sources
+  text: "## Link documentation to sources\n\n```bash\ndocledger links add --doc docs/usage.md\
+    \ --source documentledger/cli.py --reason \"Documents CLI workflow.\"\n```\n\n\
+    Whole-file links remain available as a broad fallback, but precise section links\
+    \ are the default:\n\n```bash\ndocledger links add-section \\\n  --doc docs/usage.md\
+    \ \\\n  --section usage-validate-ledger-state \\\n  --source-unit py:function:documentledger/commands/root.py::doctor\
+    \ \\\n  --coverage cli-command \\\n  --impact behavior \\\n  --reason \"Documents\
+    \ the doctor command.\"\n```\n\nLinks use repository-relative POSIX paths. Document\
+    \ paths must have configured documentation extensions, source paths and source\
+    \ units must exist, and coverage and impact values are validated. Keep links precise:\
+    \ section-level links let small command changes affect only the doc sections that\
+    \ actually describe them.\n\nList and remove links with:\n\n```bash\ndocledger\
+    \ links list\ndocledger links remove --doc docs/usage.md --source documentledger/cli.py\n\
+    docledger links remove-section --doc docs/usage.md --section usage-validate-ledger-state\
+    \ --source-unit py:function:documentledger/commands/root.py::doctor\ndocledger\
+    \ links import-map --file /tmp/documentledger-map.yaml --validate\ndocledger links\
+    \ import-map --directory /tmp/documentledger-maps --check-and-apply\n```\n\n<!--\
+    \ docledger-section: usage-find-and-update-stale-documentation -->"
+  links:
+  - source_id: py:file:documentledger/cli.py
+    source_path: documentledger/cli.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact source path `documentledger/cli.py`.
+    tracked_hashes:
+      body_hash: 98daca2591d99ea88db504606584442a36fd8d0f32e2c73b90a533bae81b9cb7
+  - source_id: py:module:documentledger/cli.py
+    source_path: documentledger/cli.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact source path `documentledger/cli.py`.
+    tracked_hashes:
+      body_hash: 54bebd6a5b99d27ffdacdebb6fb6d1fe2cec4666636e3dde7a9872308e1f28b3
+  - source_id: py:function:documentledger/launcher.py::main
+    source_path: documentledger/launcher.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact qualified symbol `main`.
+    tracked_hashes:
+      body_hash: 734247783db31c8ef24dbec97c6ea46346af9ada80cd2f34666fe1315c38f205
+- section_id: md:section:docs/usage.md::mark-documentation-fresh
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Mark documentation fresh
+  heading_slug: mark-documentation-fresh
+  line_span:
+  - 116
+  - 136
+  section_hash: df534b6f026290ee1a403e3a7173b722fa2058968bd919ca2e97448bb56a2500
+  summary: Mark documentation fresh
+  text: '## Mark documentation fresh
+
+
+    After updating and validating an affected section, mark it fresh:
+
+
+    ```bash
+
+    docledger mark-fresh --doc docs/usage.md --section usage-validate-ledger-state
+    --reason "Docs updated after scan version 2."
+
+    ```
+
+
+    `mark-fresh` records the latest scan version, the current document hash, the current
+    section hash, and the tracked source-unit hashes for the selected links. It requires
+    a non-empty reason. Use `--all` to mark every currently affected section from
+    the latest scan, or `--doc` without `--section` to update all affected sections
+    in one doc explicitly.
+
+
+    Unlinked docs are rejected by default:
+
+
+    ```bash
+
+    docledger mark-fresh --doc docs/index.md --reason "Navigation page."        #
+    rejected: unlinked_doc
+
+    docledger mark-fresh --doc docs/index.md --allow-unlinked --reason "Navigation
+    page."
+
+    ```
+
+
+    This prevents silently tracking a doc that can never become stale from source
+    changes. Pass `--allow-unlinked` only for intentionally unlinked docs; the record
+    stores the reason with an `(intentionally unlinked)` marker.
+
+
+    <!-- docledger-section: usage-validate-ledger-state -->'
+  links: []
+- section_id: md:section:docs/usage.md::scan-source-and-documentation-files
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Scan source and documentation files
+  heading_slug: scan-source-and-documentation-files
+  line_span:
+  - 35
+  - 54
+  section_hash: 171b867d96614931f3dc43e6a252b6d469669b6f3fc459071b3f72f5a8f52db4
+  summary: Scan source and documentation files
+  text: '## Scan source and documentation files
+
+
+    ```bash
+
+    docledger --json scan
+
+    ```
+
+
+    A scan collects files from the configured source and documentation roots, hashes
+    them, indexes Python source units, and compares the current state to the previous
+    scan. The first scan establishes a baseline and does not report changed, deleted,
+    stale, or unlinked sources.
+
+
+    Later scans report:
+
+
+    - `unchanged`, `true` when the source and documentation hashes match the previous
+    scan exactly. No scan state is rewritten, no source files are re-indexed, and
+    the previous scan version is reused; the human output prints `No tracked file
+    changes since scan version <version>` instead of `Recorded scan version <version>`.
+
+    - `changed_sources`, source files whose hash changed or that are new since the
+    previous scan.
+
+    - `changed_units`, source units whose tracked semantic hashes changed. For Python
+    this is usually the changed function, method, class, or module contract rather
+    than the whole file.
+
+    - `deleted_sources`, source files that were present in the previous scan and are
+    now gone.
+
+    - `affected_sections`, the documentation sections currently impacted by changed
+    or deleted linked source units.
+
+    - `stale_docs`, a compatibility projection of the docs that still contain affected
+    sections.
+
+    - `unlinked_changed_sources`, changed source files that do not have documentation
+    links.
+
+
+    <!-- docledger-section: usage-link-documentation-to-sources -->'
+  links:
+  - source_id: py:function:documentledger/scanner.py::changed_units
+    source_path: documentledger/scanner.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact qualified symbol `changed_units`.
+    tracked_hashes:
+      body_hash: c7051c5636ea606c46d4efe36f2690774318d682db35edec8230c0bacc5f3eaa
+  - source_id: py:function:tests/conftest.py::project
+    source_path: tests/conftest.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact qualified symbol `project`.
+    tracked_hashes:
+      body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
+- section_id: md:section:docs/usage.md::usage
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  heading_slug: usage
+  line_span:
+  - 1
+  - 4
+  section_hash: 5355906c6343b97ef55f38169ae3de54ec632e9b28238ac6104805953682a99d
+  summary: Usage
+  text: '# Usage
+
+
+    <!-- docledger-section: usage-initialize-workspace -->'
+  links: []
+- section_id: md:section:docs/usage.md::validate-ledger-state
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Validate ledger state
+  heading_slug: validate-ledger-state
+  line_span:
+  - 137
+  - 146
+  section_hash: cf92ad80781d91c0a3d40c558409783c0fe1db7971630bd21db99317558111b2
+  summary: Validate ledger state
+  text: '## Validate ledger state
+
+
+    ```bash
+
+    docledger doctor
+
+    ```
+
+
+    Doctor checks storage schema metadata, document record paths, suspicious root
+    configuration, missing documentation files, missing source files, duplicate edges,
+    missing source-unit ids, and missing section ids.
+
+
+    <!-- docledger-section: usage-json-and-human-output -->'
+  links: []
+- section_id: md:section:docs/usage.md::storage-commands
+  doc_path: docs/usage.md
+  heading_path:
+  - Usage
+  - Storage commands
+  heading_slug: storage-commands
+  line_span:
+  - 183
+  - 194
+  section_hash: 70061c813b3df76689dc2205bafab4d645ba9161cdc7be36f883260bacb1951f
+  summary: Storage commands
+  text: '## Storage commands
+
+
+    Use `docledger storage where` to inspect the active layout. Migrate a legacy workspace
+    with a reviewed dry-run plan, then verify before any cleanup:
+
+
+    ```bash
+
+    docledger storage migrate --dry-run --plan-file migration.json
+
+    docledger storage migrate --plan-file migration.json --adopt-project-uuid
+
+    docledger storage verify --strict
+
+    docledger storage cleanup-legacy --dry-run
+
+    ```
+
+
+    Routine commands never migrate automatically and read-only commands do not initialize
+    cache directories or repair bindings.'
+  links:
+  - source_id: py:function:tests/conftest.py::project
+    source_path: tests/conftest.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact qualified symbol `project`.
+    tracked_hashes:
+      body_hash: f75282a3af8d986d65df843884629f53dd5fe1c7b08532a8bd87d11337895d43
+last_fresh_scan_version: 6
+last_fresh_hash: 35bcc4967af46bd49fed609ef7a1b14419cdec869c1572155b21ce3192980ffa
+notes: Docs updated after scan version 6.
+version: 261

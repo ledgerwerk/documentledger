@@ -1,0 +1,12 @@
+schema_version = 1
+migration = "documentledger-legacy-to-schema3"
+migration_id = "documentledger-db7ede7870c71e59"
+phase = "complete"
+project_uuid = "a2d23037-56c6-40af-bf68-803d29f23054"
+plan_sha256 = "db7ede7870c71e590627a36bdadb66c58fca286fd330b3297eb320dffb4fb535"
+legacy_config = "/data/data/com.termux/files/home/src/documentledger/documentledger.toml"
+legacy_data = "/data/data/com.termux/files/home/src/documentledger/.documentledger"
+target_config = "/data/data/com.termux/files/home/src/documentledger/.ledger/documentledger/config.toml"
+target_data = "/data/data/com.termux/files/home/src/documentledger/.ledger/documentledger/data"
+manifest_after_sha256 = "b8f1192507f685e1d67955e958aaf6a55d875819c51276cb216663cc9b676981"
+source_index_repaired = "false"

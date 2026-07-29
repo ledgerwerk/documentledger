@@ -34,7 +34,7 @@ State is hash- and version-based. Timestamps are intentionally absent from persi
 
 All user supplied doc and source paths are normalized as repository-relative POSIX paths. Absolute paths, backslash paths, empty paths, `.` paths, and paths containing `..` are rejected. Document record filenames are derived from the documentation path slug plus a short SHA-256 digest, so records remain filesystem-safe while preserving unique document identities.
 
-Source units and doc sections use stable semantic ids rather than line-number identities. For Python, ids look like `py:function:documentledger/cli.py::doctor`. For Markdown, ids look like `md:section:docs/usage.md::usage-validate-ledger-state`.
+Source units and doc sections use stable semantic ids rather than line-number identities. For Python, ids look like `py:function:documentledger/commands/root.py::doctor`. For Markdown, ids look like `md:section:docs/usage.md::usage-validate-ledger-state`.
 
 <!-- docledger-section: architecture-scanning-algorithm -->
 

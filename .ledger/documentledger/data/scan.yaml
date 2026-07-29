@@ -1,0 +1,114 @@
+schema: documentledger.scan.v5
+version: 8
+source_index_file: source-index.json
+source_index_hash: f16b48902e330e49fe73582f3b6feb9c4a4f0b7405a7dd418bbcdd1e736704cb
+source_file_count: 48
+source_unit_count: 422
+doc_file_count: 8
+source_hashes:
+  documentledger/__init__.py: 5ef8cc8b9b4fdc0d9e24309d92942470dbaf76cf7926502f4e85a26390376cca
+  documentledger/_version.py: 151efa07a6f53487d3a0942b3cb759f734b3bec732a911635e9835e2fccf0f4b
+  documentledger/cli.py: 98daca2591d99ea88db504606584442a36fd8d0f32e2c73b90a533bae81b9cb7
+  documentledger/cli_support.py: 5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab
+  documentledger/command_catalog.py: 691f110da092fb4e375034172281472100cc8dccc912fceaaa31a387fcfa4c11
+  documentledger/commands/__init__.py: 342d28295cbba70747f7be3adaf5aaa1c889a4a98eba2658e56819796bc29231
+  documentledger/commands/config.py: 3230a6e81a86140d9d4189f6d4a7d8467bf20d9d3ca4b602cdb3250d3df7051b
+  documentledger/commands/document.py: 7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb
+  documentledger/commands/link.py: bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098
+  documentledger/commands/migrate.py: 8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c
+  documentledger/commands/root.py: e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805
+  documentledger/commands/schema.py: d282b04ab6df93879ae73f2ecb34017160820730e6b686c21cbf0b220d387efc
+  documentledger/commands/source.py: 9c930924e84696390988dd64a02aba7a53c9f3a5df289ed43183a2865969fe7b
+  documentledger/commands/storage.py: 9dc3d0a7d7af205c0b882211a6bdb9d46d850fdf4f755ddbd7b94867b4f4f18f
+  documentledger/config.py: d0bf19ae4a91750c5211f5b99776fa8faa72024cd382941e142cd235094d2af0
+  documentledger/doc_index.py: 48ad713bbfe5fe762dcfb45e992988f2c2d3b03ca443ec21f739fd7227f0c6b9
+  documentledger/errors.py: dfff7b79bae112e798eb32234fe43f449b9f343deb7922ea292345e8424d8f3e
+  documentledger/identity.py: b4ce2de09622f444f98b3e2d6df9d4b4b05823ce09f4d853e40620d53aeffa5f
+  documentledger/impact.py: 6a23ec17ef2b8b6d043e83f087a93b1f5ac7c93c677fa6accc8ea44d8048b495
+  documentledger/launcher.py: 4bca1bbb1c11f839e7a3947cc073edfcc3b1692ed171ffdd41404138e735ea33
+  documentledger/legacy.py: f64a391050ead4eff0a2c3a6aeb03b94d991825467d1c4e32dd472148b1f594a
+  documentledger/links.py: 6b8864998d8303b9812ff0d278bbcb211e22c40e18c3c79e5aba5c4eeab1f892
+  documentledger/migration.py: a56ae697edf909d288c1c1f61681a8126bf894839e0d4bcbed55ef712d7e5dc6
+  documentledger/models.py: 68eeec0a477f0a6aecd7de341f175e1a108e7334be1dee45fcfbca3cf9d2ab46
+  documentledger/project.py: 731f47ad409780f3b2c381b20411132741f0ca44a2facd0d4b331f46a798a032
+  documentledger/render.py: 6ff5004464c50e40023a8db34bb54f1d69827b2ee37545cb1dfb42ffdb02fd6f
+  documentledger/scanner.py: f17257c6d753f7ed0c373c9fab544422e4f0c519f810fa13fa90e85c3f7f760f
+  documentledger/source_index.py: 919da65697231a9f9cc1d4006986094efe8194f5aeb42174ef35dc6fac6d51aa
+  documentledger/storage.py: 136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f
+  tests/__init__.py: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  tests/conftest.py: e30044a2c40e5f5ce02886ad08ece93688896b6ca520c695ea5336177142ffea
+  tests/test_build_context_selectors.py: 47b6f45586edfb6f6a1b52e81a25f1e9e3a5cd66c0927566a4953b43c3303503
+  tests/test_cli_pagination.py: 119bf9a712a59c737b10a94fffd534244e598a3a28b2090736e4258cf19fb025
+  tests/test_doc_index.py: 39ec6766cfcbb47de2053bbf890f648758a7a864f5212467530f4bdfd0567a53
+  tests/test_docs.py: 5313f6f76fb5d62064586ba8e4f9c1677c9305eeadcf850c988f4cdd2761198e
+  tests/test_init.py: 804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9
+  tests/test_json_contract.py: 468afe7bc846c57b860b0797b808a305e20c3e38a3ae9d762b1c5d90f000c314
+  tests/test_links.py: c8b8423197a80ce0f5ad0a65c183e5b46db05234fc692e1026befe0515075d18
+  tests/test_links_batch.py: e9f6e552058255edc7f068e054d65ad4d7a8d697411fca0567ea0607fc74b413
+  tests/test_render.py: ddc6bf54c0899aa3b854838cc21e74dfa7ac9cb8f9b4a0e04ae663786b66b479
+  tests/test_review_fixes.py: f9ca9a83eb04da83e9a54c29c6ed8a77aa7ba5091474a5a47edcab7450a5f842
+  tests/test_scan.py: 6642a4a578080c76aba10456e3fbcfadb346acce72aa5e1c496f11a5dc9e9763
+  tests/test_scan_incremental.py: f2bb13499828e774e4f3d86a8a7225b5e204f8f99dd27d02ca8d46218d6aa26e
+  tests/test_skill_files.py: a1e12261587d9444cf10afe2d5ed87550803d3dfd3e0ac0cb1d9d62363a63a42
+  tests/test_status.py: d871c78a9084bf82e34e18118e83ef643860c11e45daaa6f4737a7c589fc7d9f
+  tests/test_storage_migration.py: 193f00eef16fa0d282c90f3af04bb9550e7018df851f78416f642211ebba7e23
+  tests/test_storage_read_only.py: 0b0f0b1c92fe7ed3f3fbca6abe81cb18af9d92e1115bb25e918246b6983374e8
+  tests/test_workflow_extras.py: 49137abd58e092f52101e5395162d84a1a8d9291284c8f6bf4e21dfce0b50f12
+doc_hashes:
+  README.md: 3daf662ac9aade5c1b67ece20162dbb8189c5e04120d8424acd9333a5bb2ba75
+  docs/api.md: b080ffde7ddd3d02f2252aebb91ea3c594e4bb0f0b57482bd49fd1892214b58f
+  docs/architecture.md: 9904a66e8bfe08f7c436378944d28a00f8b2f80ea58e5c0cfae7d9c9ae13e4ef
+  docs/bootstrap.md: 8aff098885dc00be547a5a56344a9a82947083386b62ee7dc4be84c2c17ee743
+  docs/changelog.md: 57ff513ab5aafbf47e927079ad9241cf68c7da5b78fcbdc0797dfb47f7d4210a
+  docs/index.md: 9ffa638d257a8b02d19655c520eaa11e11bb30b0d0c4e6fd413e9888fa7e8542
+  docs/troubleshooting.md: be9c61964d143c7a3905630b645e2ab38d8566c1025945819aac238976adcfd4
+  docs/usage.md: 35bcc4967af46bd49fed609ef7a1b14419cdec869c1572155b21ce3192980ffa
+changed_sources:
+- documentledger/_version.py
+deleted_sources: []
+changed_units:
+- source_id: py:file:documentledger/_version.py
+  path: documentledger/_version.py
+  kind: file
+  qualname: documentledger/_version.py
+  change_type: modified
+  changed_hashes:
+  - body_hash
+  - content_hash
+  - decorator_hash
+  - docstring_hash
+  - file_hash
+  - public_contract_hash
+  - signature_hash
+  old_line_span:
+  - 1
+  - 25
+  new_line_span:
+  - 1
+  - 24
+added_units: []
+deleted_units: []
+affected_sections: []
+stale_docs: []
+unlinked_changed_sources:
+- documentledger/_version.py
+unmapped_changed_units:
+- source_id: py:file:documentledger/_version.py
+  path: documentledger/_version.py
+  kind: file
+  qualname: documentledger/_version.py
+  change_type: modified
+  changed_hashes:
+  - body_hash
+  - content_hash
+  - decorator_hash
+  - docstring_hash
+  - file_hash
+  - public_contract_hash
+  - signature_hash
+  old_line_span:
+  - 1
+  - 25
+  new_line_span:
+  - 1
+  - 24

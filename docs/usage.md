@@ -64,7 +64,7 @@ Whole-file links remain available as a broad fallback, but precise section links
 docledger links add-section \
   --doc docs/usage.md \
   --section usage-validate-ledger-state \
-  --source-unit py:function:documentledger/cli.py::doctor \
+  --source-unit py:function:documentledger/commands/root.py::doctor \
   --coverage cli-command \
   --impact behavior \
   --reason "Documents the doctor command."
@@ -77,7 +77,7 @@ List and remove links with:
 ```bash
 docledger links list
 docledger links remove --doc docs/usage.md --source documentledger/cli.py
-docledger links remove-section --doc docs/usage.md --section usage-validate-ledger-state --source-unit py:function:documentledger/cli.py::doctor
+docledger links remove-section --doc docs/usage.md --section usage-validate-ledger-state --source-unit py:function:documentledger/commands/root.py::doctor
 docledger links import-map --file /tmp/documentledger-map.yaml --validate
 docledger links import-map --directory /tmp/documentledger-maps --check-and-apply
 ```

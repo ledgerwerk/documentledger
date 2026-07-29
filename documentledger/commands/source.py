@@ -1,4 +1,5 @@
 """Source commands: list, show."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,7 +10,6 @@ from documentledger.cli_support import emit_success, get_state, handle_command_e
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
 from documentledger.storage import load_workspace
-from documentledger.storage import coerce_int
 
 
 def _normalize_cursor(cursor: str | None) -> int:

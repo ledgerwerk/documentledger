@@ -1,13 +1,12 @@
 """Root-level commands: init, status, info, doctor, check, next-action, scan, coverage, commands, help."""
+
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Annotated, Any
 
 import typer
-from ledgercore.cli import CommonCLIState
 
 from documentledger.cli_support import emit_success, get_state, handle_command_error
 from documentledger.errors import DocumentledgerError
@@ -15,8 +14,8 @@ from documentledger.storage import (
     STORAGE_SCHEMA_VERSION,
     coerce_int,
     iter_doc_records,
-    load_workspace,
     latest_scan,
+    load_workspace,
 )
 
 # Import domain functions lazily where needed to avoid circular imports.
@@ -69,7 +68,6 @@ def _scan_diagnostics(workspace: Any) -> list[dict[str, str]]:
 
 
 def _status_classification(workspace: Any) -> tuple[str, str, str]:
-    from documentledger.links import list_links
     from documentledger.storage import iter_doc_records
 
     last_scan_version = coerce_int(workspace.metadata.get("last_scan_version"), 0)
@@ -182,7 +180,7 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
     return result
 
 
-def register_root_commands(app: typer.Typer) -> None:
+def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
     """Register root-level commands on the main app."""
 
     @app.command()
@@ -229,13 +227,15 @@ def register_root_commands(app: typer.Typer) -> None:
             "project_uuid": workspace.metadata.get("project_uuid") or workspace.config.project_uuid,
         }
         if paths is not None:
-            result.update({
-                "manifest_path": str(paths.manifest_path),
-                "config_path": str(paths.config_path),
-                "data_dir": str(paths.data_dir),
-                "artifacts_dir": str(paths.artifacts_dir) if paths.artifacts_dir else None,
-                "layout_source": paths.layout_source,
-            })
+            result.update(
+                {
+                    "manifest_path": str(paths.manifest_path),
+                    "config_path": str(paths.config_path),
+                    "data_dir": str(paths.data_dir),
+                    "artifacts_dir": str(paths.artifacts_dir) if paths.artifacts_dir else None,
+                    "layout_source": paths.layout_source,
+                }
+            )
         result["scan_counters"] = {
             "last_scan_version": coerce_int(workspace.metadata.get("last_scan_version"), 0),
             "source_file_count": coerce_int(workspace.metadata.get("last_scan_source_file_count"), 0),
@@ -246,9 +246,7 @@ def register_root_commands(app: typer.Typer) -> None:
         doc_records = iter_doc_records(workspace)
         result["document_count"] = len(doc_records)
         result["section_count"] = sum(len(r.get("sections", []) or []) for r in doc_records)
-        result["linked_section_count"] = sum(
-            1 for r in doc_records for s in (r.get("sections", []) or []) if s.get("links")
-        )
+        result["linked_section_count"] = sum(1 for r in doc_records for s in (r.get("sections", []) or []) if s.get("links"))
         emit_success(ctx, "info", result, "Info retrieved.", _profile_events(ctx, "info", started_at))
 
     @app.command()
@@ -277,7 +275,9 @@ def register_root_commands(app: typer.Typer) -> None:
         audit = audit_links(workspace)
         issues.extend(list(audit.get("issues", [])))
         result = {"ok": not issues, "issues": issues}
-        emit_success(ctx, "doctor", result, "Doctor passed." if not issues else "Doctor found issues.", _profile_events(ctx, "doctor", started_at))
+        emit_success(
+            ctx, "doctor", result, "Doctor passed." if not issues else "Doctor found issues.", _profile_events(ctx, "doctor", started_at)
+        )
 
     @app.command()
     @handle_command_error("check")
@@ -314,10 +314,12 @@ def register_root_commands(app: typer.Typer) -> None:
 
         affected = resolve_affected_sections(workspace)
         if affected:
-            issues.append({
-                "code": "stale_documentation",
-                "message": f"{len(affected)} documentation sections are stale.",
-            })
+            issues.append(
+                {
+                    "code": "stale_documentation",
+                    "message": f"{len(affected)} documentation sections are stale.",
+                }
+            )
 
         result = {"ok": not issues, "issues": issues}
         human = "Check passed." if not issues else f"Check found {len(issues)} issue(s)."
@@ -428,7 +430,7 @@ def register_root_commands(app: typer.Typer) -> None:
     def commands(ctx: typer.Context) -> None:
         from documentledger.command_catalog import COMMAND_INVENTORY
 
-        state = get_state(ctx)
+        # state intentionally unused — commands catalog is stateless
         result = {"commands": [entry.as_mapping() for entry in COMMAND_INVENTORY.entries]}
         human = COMMAND_INVENTORY.human_table()
         emit_success(ctx, "commands", result, human)
@@ -437,11 +439,11 @@ def register_root_commands(app: typer.Typer) -> None:
     @handle_command_error("help")
     def help_cmd(
         ctx: typer.Context,
-        command_path: list[str] = typer.Argument(..., help="Command path to show help for."),
+        command_path: Annotated[list[str], typer.Argument(help="Command path to show help for.")] = [],  # noqa: B006
     ) -> None:
         from documentledger.command_catalog import COMMAND_INVENTORY
 
-        state = get_state(ctx)
+        # state intentionally unused — help catalog is stateless
         path = " ".join(command_path)
         meta = COMMAND_INVENTORY.resolve(path)
         if meta is None:

@@ -1,0 +1,82 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/bootstrap.md
+linked_sources:
+- documentledger/launcher.py
+sections:
+- section_id: md:section:docs/bootstrap.md::bootstrapping-a-new-repository
+  doc_path: docs/bootstrap.md
+  heading_path:
+  - Bootstrapping a new repository
+  heading_slug: bootstrapping-a-new-repository
+  line_span:
+  - 1
+  - 4
+  section_hash: e12f1c1f6edcca8226c697dac06c5b71a4a74d9c7660ea7355ad3899c8567697
+  summary: Bootstrapping a new repository
+  text: '# Bootstrapping a new repository
+
+
+    Documentledger computes staleness from explicit doc-to-source links. A freshly
+    initialized repository has no links yet, so the first scan reports no stale docs
+    even though no documentation exists. This page describes the recommended setup
+    sequence for first-time documentation work.'
+  links: []
+- section_id: md:section:docs/bootstrap.md::setup-sequence
+  doc_path: docs/bootstrap.md
+  heading_path:
+  - Bootstrapping a new repository
+  - Setup sequence
+  heading_slug: setup-sequence
+  line_span:
+  - 9
+  - 48
+  section_hash: 179540f19a685d25ea613ba9f6910ed356d88fda47ad29ff38c87914f78609c6
+  summary: Setup sequence
+  text: "## Setup sequence\n\n1. Initialize the workspace and record a baseline scan:\n\
+    \n   ```bash\n   docledger init\n   docledger --json scan\n   ```\n\n2. Render\
+    \ a bootstrap context that includes the unlinked source inventory and current\
+    \ doc inventory:\n\n   ```bash\n   docledger docs build-context --bootstrap\n\
+    \   ```\n\n   The bootstrap context file lists every source file that has no doc\
+    \ record link. These are the sources that need documentation or explicit omission.\n\
+    \n3. Create documentation files for those sources under a configured documentation\
+    \ root (for example `docs/`).\n\n4. Generate deterministic proposal files and\
+    \ review them before applying:\n\n   ```bash\n   docledger links propose --all-docs\n\
+    \   docledger --json links import-map --directory <reviewed-proposals> --check-and-apply\n\
+    \   ```\n\n5. Run a link audit and coverage review:\n\n   ```bash\n   docledger\
+    \ --json links audit\n   docledger --json coverage\n   ```\n\n6. Validate the\
+    \ documentation with the configured validation commands, then mark the new docs\
+    \ fresh:\n\n   ```bash\n   docledger mark-fresh --all --reason \"Initial docs\
+    \ after bootstrap link application.\"\n   ```\n\nFrom this point on, normal incremental\
+    \ maintenance applies: subsequent scans mark a doc stale only when one of its\
+    \ linked sources changes."
+  links:
+  - source_id: py:function:documentledger/launcher.py::main
+    source_path: documentledger/launcher.py
+    coverage: implementation-note
+    impact: unknown
+    reason: Section contains exact qualified symbol `main`.
+    tracked_hashes:
+      body_hash: 734247783db31c8ef24dbec97c6ea46346af9ada80cd2f34666fe1315c38f205
+- section_id: md:section:docs/bootstrap.md::why-the-first-scan-is-a-baseline
+  doc_path: docs/bootstrap.md
+  heading_path:
+  - Bootstrapping a new repository
+  - Why the first scan is a baseline
+  heading_slug: why-the-first-scan-is-a-baseline
+  line_span:
+  - 5
+  - 8
+  section_hash: 41e8297d37d1c62169bf8474f519ee479146dc20a3b33507f6554c6893b7e195
+  summary: Why the first scan is a baseline
+  text: '## Why the first scan is a baseline
+
+
+    The first `docledger scan` hashes every configured source and documentation file
+    and stores them as the baseline. Because there is no previous scan to compare
+    against, it reports no changed, deleted, stale, or unlinked sources. Staleness
+    and unlinked-source reporting only begin from the second scan onward.'
+  links: []
+last_fresh_scan_version: 4
+last_fresh_hash: 8aff098885dc00be547a5a56344a9a82947083386b62ee7dc4be84c2c17ee743
+notes: Docs updated after scan version 4.
+version: 249

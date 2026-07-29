@@ -1,4 +1,5 @@
 """Document commands: list, sections, affected, stale, build-context, mark-fresh."""
+
 from __future__ import annotations
 
 import json
@@ -8,13 +9,11 @@ from typing import Any
 
 import typer
 from ledgercore.atomic import atomic_write_text
-from ledgercore.yamlio import write_yaml as core_write_yaml
 
 from documentledger.cli_support import emit_success, get_state, handle_command_error
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
 from documentledger.storage import (
-    coerce_int,
     latest_scan,
     load_doc_record,
     load_workspace,
@@ -29,7 +28,7 @@ def _profile_events(ctx: typer.Context, operation: str, started_at: float) -> li
     return [{"event": "profile", "operation": operation, "elapsed_ms": round((perf_counter() - started_at) * 1000, 3)}]
 
 
-def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
+def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:  # noqa: C901
     """Register document commands on the docs app and as aliases on the main app."""
 
     @docs_app.command("list")
@@ -217,7 +216,9 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
             "schema": "documentledger.doc_record.v4",
             "doc_path": doc_path,
             "linked_sources": [],
-            "sections": [section.to_record() | {"links": []} for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path)],
+            "sections": [
+                section.to_record() | {"links": []} for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path)
+            ],
             "last_fresh_scan_version": 0,
             "last_fresh_hash": "",
             "notes": "",

@@ -16,3 +16,9 @@ root = "../ledger"
 
 [ledgers.taskledger.mounts.indexes]
 storage = "cache"
+
+[ledgers.documentledger.mounts.data]
+storage = "project"
+
+[ledgers.documentledger.mounts.artifacts]
+storage = "cache"

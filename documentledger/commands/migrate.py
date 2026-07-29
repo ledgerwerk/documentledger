@@ -1,4 +1,5 @@
 """Migrate commands: status, plan, apply, recover, cleanup."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,10 +9,9 @@ import typer
 
 from documentledger.cli_support import emit_success, get_state, handle_command_error
 from documentledger.errors import DocumentledgerError
-from documentledger.storage import load_workspace
 
 
-def register_migrate_commands(app: typer.Typer, migrate_app: typer.Typer, storage_app: typer.Typer) -> None:
+def register_migrate_commands(app: typer.Typer, migrate_app: typer.Typer, storage_app: typer.Typer) -> None:  # noqa: C901
     """Register migrate commands and legacy storage compatibility wrappers."""
 
     @migrate_app.command("status")
@@ -159,11 +159,13 @@ def register_migrate_commands(app: typer.Typer, migrate_app: typer.Typer, storag
         from documentledger.cli_support import CLIWarning, get_state
 
         state = get_state(ctx)
-        state = state.with_warning(CLIWarning(
-            code="deprecated-command",
-            message="'storage migrate' is deprecated. Use 'migrate plan storage-layout' or 'migrate apply storage-layout'.",
-            replacement="migrate plan storage-layout" if dry_run else "migrate apply storage-layout",
-        ))
+        state = state.with_warning(
+            CLIWarning(
+                code="deprecated-command",
+                message="'storage migrate' is deprecated. Use 'migrate plan storage-layout' or 'migrate apply storage-layout'.",
+                replacement="migrate plan storage-layout" if dry_run else "migrate apply storage-layout",
+            )
+        )
         # Temporarily replace context state for the warning
         ctx.obj["state"] = state
 
@@ -197,11 +199,13 @@ def register_migrate_commands(app: typer.Typer, migrate_app: typer.Typer, storag
         from documentledger.migration import recover_migration
 
         state = get_state(ctx)
-        state = state.with_warning(CLIWarning(
-            code="deprecated-command",
-            message="'storage recover' is deprecated. Use 'migrate recover'.",
-            replacement="migrate recover",
-        ))
+        state = state.with_warning(
+            CLIWarning(
+                code="deprecated-command",
+                message="'storage recover' is deprecated. Use 'migrate recover'.",
+                replacement="migrate recover",
+            )
+        )
         ctx.obj["state"] = state
 
         result = recover_migration(state.root, journal_path=Path(journal), policy="auto")
@@ -221,11 +225,13 @@ def register_migrate_commands(app: typer.Typer, migrate_app: typer.Typer, storag
         from documentledger.migration import cleanup_legacy
 
         state = get_state(ctx)
-        state = state.with_warning(CLIWarning(
-            code="deprecated-command",
-            message="'storage cleanup-legacy' is deprecated. Use 'migrate cleanup storage-layout'.",
-            replacement="migrate cleanup storage-layout",
-        ))
+        state = state.with_warning(
+            CLIWarning(
+                code="deprecated-command",
+                message="'storage cleanup-legacy' is deprecated. Use 'migrate cleanup storage-layout'.",
+                replacement="migrate cleanup storage-layout",
+            )
+        )
         ctx.obj["state"] = state
 
         result = cleanup_legacy(
@@ -246,11 +252,13 @@ def register_migrate_commands(app: typer.Typer, migrate_app: typer.Typer, storag
         from documentledger.migration import verify_canonical
 
         state = get_state(ctx)
-        state = state.with_warning(CLIWarning(
-            code="deprecated-command",
-            message="'storage verify' is deprecated. Use 'storage validate'.",
-            replacement="storage validate",
-        ))
+        state = state.with_warning(
+            CLIWarning(
+                code="deprecated-command",
+                message="'storage verify' is deprecated. Use 'storage validate'.",
+                replacement="storage validate",
+            )
+        )
         ctx.obj["state"] = state
 
         result = verify_canonical(state.root, strict=strict)

@@ -3,6 +3,7 @@
 Defines every canonical command and alias in a CommandInventory.
 Used by: commands, help, generated CLI reference, drift tests.
 """
+
 from __future__ import annotations
 
 from ledgercore.cli import CommandInventory, CommandMetadata

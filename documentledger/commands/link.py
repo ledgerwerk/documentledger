@@ -1,4 +1,5 @@
 """Link commands: list, add, remove, add-section, remove-section, import-map, audit, propose."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,7 +21,7 @@ def _profile_events(ctx: typer.Context, operation: str, started_at: float) -> li
     return [{"event": "profile", "operation": operation, "elapsed_ms": round((perf_counter() - started_at) * 1000, 3)}]
 
 
-def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:
+def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:  # noqa: C901
     """Register link commands on the links app."""
 
     @links_app.command("list")

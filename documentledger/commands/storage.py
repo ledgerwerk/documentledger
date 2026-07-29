@@ -1,14 +1,11 @@
 """Storage commands: where, validate."""
-from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from __future__ import annotations
 
 import typer
 
 from documentledger.cli_support import emit_success, get_state, handle_command_error
 from documentledger.errors import DocumentledgerError
-from documentledger.storage import load_workspace
 
 
 def register_storage_commands(app: typer.Typer, storage_app: typer.Typer) -> None:
