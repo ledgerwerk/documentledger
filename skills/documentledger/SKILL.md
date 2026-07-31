@@ -1,69 +1,61 @@
 ---
 name: documentledger
-description: Maintain documentation freshness using the docledger CLI and linked source evidence.
+description: Maintain documentation freshness using the canonical documentledger CLI and linked source evidence.
 ---
 
 # Documentledger workflow
 
 Use this skill when updating documentation in a repository that uses Documentledger.
 
+<!-- docledger-section: skill-entry -->
+
 ## Entry protocol
 
-1. Run `docledger --json status`.
-2. Run `docledger storage where` when storage layout is unclear.
-3. Inspect `state`, `layout_source`, `recommended_command`, and any reported `issues`.
-4. Run `docledger --json doctor`.
+1. Run `documentledger --json status`.
+2. Run `documentledger storage where` when storage layout is unclear.
+3. Inspect `state`, `layout_source`, `recommended_command`, and reported `issues`.
+4. Run `documentledger --json doctor`.
 5. Stop on invalid roots, missing storage, schema errors, invalid bindings, or link corruption.
+
+<!-- docledger-section: skill-bootstrap -->
 
 ## Bootstrap branch
 
-Use this when the workspace has no baseline scan or no usable documentation links yet.
+Use this when there is no baseline scan or usable documentation link graph.
 
-1. Run `docledger --json scan`.
-2. Run `docledger docs build-context --bootstrap`.
-3. Inspect the saved context file.
-4. Run `docledger links propose --all-docs` (or provide an explicit output directory).
-5. Review and correct the proposal files.
-6. Run `docledger --json links import-map --directory /tmp/docledger-maps --check-and-apply`.
-7. Run `docledger --json links audit`.
-8. Run `docledger --json coverage`.
-9. Run the configured documentation validation commands.
-10. Run `docledger mark-fresh --all --reason "Bootstrap documentation completed after scan version VERSION."`.
-11. Run `docledger --json status` and confirm the workspace is clean.
+1. Run `documentledger --json scan`.
+2. Run `documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md`.
+3. Inspect the saved context.
+4. Run `documentledger link propose --all-docs --out-dir /tmp/documentledger-maps`.
+5. Review and correct proposal files.
+6. Run `documentledger --json link import-map --directory /tmp/documentledger-maps --check-and-apply`.
+7. Run `documentledger --json link audit` and `documentledger --json coverage`.
+8. Run configured documentation validation commands.
+9. Run `documentledger document mark-fresh --all --reason "Bootstrap documentation completed after scan version VERSION."`.
+
+<!-- docledger-section: skill-incremental -->
 
 ## Incremental branch
 
-Use this when the workspace already has links and a baseline.
+1. Run `documentledger --json scan`.
+2. Run `documentledger --json document affected`.
+3. Run `documentledger document build-context --affected --out /tmp/documentledger-context.md`.
+4. Inspect affected sections and source-unit evidence.
+5. Update only affected sections unless consistency requires more.
+6. Run configured validation commands.
+7. Mark the changed section fresh with a required reason.
+8. Run `documentledger --json link audit` and `documentledger --json check`.
+9. Finish with `documentledger --json status`.
 
-1. Run `docledger --json scan`.
-2. Run `docledger --json docs affected`.
-3. Run `docledger docs build-context --affected --out /tmp/docledger-context.md`.
-4. Inspect affected sections and linked changed source units first.
-5. Rewrite only the affected sections unless broader consistency requires more.
-6. Run the configured validation commands before `mark-fresh`; always do validation before `mark-fresh`.
-7. Run `docledger mark-fresh --doc DOC --section SECTION --reason "Docs updated after scan version VERSION."`.
-8. Run `docledger --json status` and confirm there are no stale linked sections.
+<!-- docledger-section: skill-precision -->
 
-## Completion gate
+## Precision and safety
 
-Do not report completion unless all applicable checks pass:
+Prefer `documentledger link add-section` edges over broad file links. Never invent edges just to improve coverage. Do not edit `.ledger/` records manually, add timestamps, or migrate storage as a side effect of documentation work. A first scan is a baseline and reports no deltas.
 
-- link batch applied or confirmed unnecessary;
-- `docledger --json links audit` passes;
-- no unresolved mapping errors remain;
-- configured validation commands pass;
-- `mark-fresh` succeeds for the changed docs or sections;
-- final `docledger --json status` is clean;
-- changed docs and key commands are reported.
-
-## Rules
-
-- Do not edit `.ledger/` or legacy `.documentledger/` storage directly; use `docledger storage` commands.
-- Treat `.ledger/documentledger/data/source-index.json` as committed baseline state.
-- Migration is explicit and copy-first; never migrate from `status`, `doctor`, `scan`, or another routine command.
-- Do not mark docs fresh before updating and validating docs.
-- Do not rewrite all docs by default.
-- Do not invent links between docs and code.
-- Always save build context to a file; print it only when explicitly requested.
-- Prefer compact discovery commands such as `docledger --json sources list --ids-only` and `docledger --json docs sections --outline`.
-- Use `docledger --json coverage` to review missing or partial link coverage.
+:::{deprecated}
+`docledger`, plural groups, root `mark-fresh`, and legacy storage wrappers are compatibility-only. Use `documentledger` with canonical singular command paths in all new automation.
+The legacy `docledger --json status` form is retained here only to identify the compatibility interface for migration.
+The corresponding legacy forms are `docledger --json scan`, `docledger --json docs affected`, and `docledger docs build-context`.
+The workflow contract remains: Inspect affected sections and linked changed source units first, then complete validation before `mark-fresh`.
+:::

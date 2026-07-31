@@ -1,28 +1,60 @@
 # Documentledger
 
-Documentledger is a documentation freshness ledger for coding-agent workflows. It records repository scans, maps documentation files to source files, reports stale documentation when linked source files change or disappear, and renders update context for agents.
+Documentledger is a documentation freshness ledger for coding-agent workflows. It records repository scans, maps documentation files to source units, reports stale documentation when linked implementation changes, and renders bounded update context for agents.
 
 ```{toctree}
 :maxdepth: 2
+:caption: Start here
 
-usage
-architecture
-api
-bootstrap
-troubleshooting
+installation
+quickstart
+concepts
 ```
 
-<!-- docledger-section: index-documentation-freshness-workflow -->
+```{toctree}
+:maxdepth: 2
+:caption: Workflows
+
+usage
+bootstrap
+incremental-workflow
+ci
+migration
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Reference
+
+configuration
+cli
+storage
+schemas
+errors
+api/index
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Project
+
+architecture
+development
+troubleshooting
+changelog
+```
+
+<!-- docledger-section: documentation-freshness-workflow -->
 
 ## Documentation freshness workflow
 
 The supported workflow is:
 
-1. Run `docledger --json status` to confirm that the workspace is initialized.
-2. Run `docledger --json scan` to rewrite `.ledger/documentledger/data/scan.yaml` when current source hashes, documentation hashes, source-unit inventory, or changed source units differ from the latest baseline.
-3. Run `docledger --json docs affected` to find the documentation sections whose linked source units changed.
-4. Run `docledger docs build-context --affected --print` to render update context for affected sections and unlinked changed sources.
-5. Inspect the affected sections and linked changed source units before editing documentation.
-6. Update only the affected sections by default, run configured validation commands, then mark the updated section or doc fresh with `docledger mark-fresh --doc DOC --section SECTION --reason "Docs updated after scan version VERSION."`.
+1. Run `documentledger --json status` to inspect the canonical workspace.
+2. Run `documentledger --json scan` to compare current source and documentation hashes with the latest baseline.
+3. Run `documentledger --json document affected` to find sections affected by linked source-unit changes.
+4. Run `documentledger document build-context --affected --out /tmp/documentledger-context.md` to render bounded update context.
+5. Inspect the affected sections and linked source evidence before editing.
+6. Update the affected sections, run configured validation commands, then mark them fresh with `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs updated after scan version VERSION."`.
 
-Documentledger stores its durable state under `.ledger/documentledger/data/`. Do not edit the canonical `.ledger/` layout directly.
+Documentledger stores durable state in the resolved `data` mount under `.ledger/documentledger/`. Do not edit canonical `.ledger/` records directly.

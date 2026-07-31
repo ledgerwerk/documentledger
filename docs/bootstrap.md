@@ -1,48 +1,59 @@
 # Bootstrapping a new repository
 
-Documentledger computes staleness from explicit doc-to-source links. A freshly initialized repository has no links yet, so the first scan reports no stale docs even though no documentation exists. This page describes the recommended setup sequence for first-time documentation work.
+Bootstrap is the first documentation pass in a newly initialized project.
 
-## Why the first scan is a baseline
+## Bootstrapping a new repository
 
-The first `docledger scan` hashes every configured source and documentation file and stores them as the baseline. Because there is no previous scan to compare against, it reports no changed, deleted, stale, or unlinked sources. Staleness and unlinked-source reporting only begin from the second scan onward.
+Create the canonical project, establish a baseline, and build bounded context before adding or reviewing links.
 
-## Setup sequence
+<!-- docledger-section: why-the-first-scan-is-a-baseline -->
 
-1. Initialize the workspace and record a baseline scan:
+## First scan baseline
 
-   ```bash
-   docledger init
-   docledger --json scan
-   ```
+```bash
+documentledger init --project-name example
+documentledger --json scan
+```
 
-2. Render a bootstrap context that includes the unlinked source inventory and current doc inventory:
+The first scan hashes configured sources and docs but has no prior version for comparison. It therefore reports no deltas. Later scans can report affected sections and unlinked changed sources.
 
-   ```bash
-   docledger docs build-context --bootstrap
-   ```
+<!-- docledger-section: bootstrap-context -->
 
-   The bootstrap context file lists every source file that has no doc record link. These are the sources that need documentation or explicit omission.
+## Build bootstrap context
 
-3. Create documentation files for those sources under a configured documentation root (for example `docs/`).
+```bash
+documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md
+```
 
-4. Generate deterministic proposal files and review them before applying:
+The output contains the current inventory and unlinked source evidence. Use it to decide what documentation should exist before adding links.
 
-   ```bash
-   docledger links propose --all-docs
-   docledger --json links import-map --directory <reviewed-proposals> --check-and-apply
-   ```
+<!-- docledger-section: bootstrap-proposals -->
 
-5. Run a link audit and coverage review:
+## Review deterministic proposals
 
-   ```bash
-   docledger --json links audit
-   docledger --json coverage
-   ```
+```bash
+documentledger link propose --all-docs --out-dir /tmp/documentledger-maps
+documentledger --json link import-map --directory /tmp/documentledger-maps --validate
+documentledger --json link import-map --directory /tmp/documentledger-maps --check-and-apply
+```
 
-6. Validate the documentation with the configured validation commands, then mark the new docs fresh:
+`--validate` checks the complete batch without writing. Review and correct proposal files, then use `--check-and-apply` for an atomic application.
 
-   ```bash
-   docledger mark-fresh --all --reason "Initial docs after bootstrap link application."
-   ```
+<!-- docledger-section: setup-sequence -->
 
-From this point on, normal incremental maintenance applies: subsequent scans mark a doc stale only when one of its linked sources changes.
+## Coverage and final gates {#setup-sequence}
+
+```bash
+documentledger --json link audit
+documentledger --json coverage
+```
+
+Run configured tests and documentation validation before freshness marking. Finish with:
+
+```bash
+documentledger --json doctor
+documentledger --json check
+documentledger --json status
+```
+
+Mark fresh only after validation and only for intentionally linked or explicitly allowed unlinked docs.

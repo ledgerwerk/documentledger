@@ -283,7 +283,7 @@
         "signature_hash": "e5fda322a82c4ddca4761e2dc62d35c3e1b52cc47d669655744d7d92d3c6b7eb"
       },
       "kind": "class",
-      "line_span": [640, 692],
+      "line_span": [641, 693],
       "path": "documentledger/storage.py",
       "qualname": "CommandState",
       "signature": "CommandState",
@@ -342,16 +342,16 @@
     },
     "py:file:documentledger/cli_support.py": {
       "hashes": {
-        "body_hash": "5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab",
-        "content_hash": "5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab",
-        "decorator_hash": "5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab",
-        "docstring_hash": "5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab",
-        "file_hash": "5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab",
-        "public_contract_hash": "5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab",
-        "signature_hash": "5d1743f3e65ccddcf5bfd33582a434274ba44e33eb0f41931519cbcdf07da0ab"
+        "body_hash": "4e9eefc607acb9ce84cbb274c49b81ccd66a6cb95976fef8e7815c4ea2b21ed9",
+        "content_hash": "4e9eefc607acb9ce84cbb274c49b81ccd66a6cb95976fef8e7815c4ea2b21ed9",
+        "decorator_hash": "4e9eefc607acb9ce84cbb274c49b81ccd66a6cb95976fef8e7815c4ea2b21ed9",
+        "docstring_hash": "4e9eefc607acb9ce84cbb274c49b81ccd66a6cb95976fef8e7815c4ea2b21ed9",
+        "file_hash": "4e9eefc607acb9ce84cbb274c49b81ccd66a6cb95976fef8e7815c4ea2b21ed9",
+        "public_contract_hash": "4e9eefc607acb9ce84cbb274c49b81ccd66a6cb95976fef8e7815c4ea2b21ed9",
+        "signature_hash": "4e9eefc607acb9ce84cbb274c49b81ccd66a6cb95976fef8e7815c4ea2b21ed9"
       },
       "kind": "file",
-      "line_span": [1, 122],
+      "line_span": [1, 132],
       "path": "documentledger/cli_support.py",
       "qualname": "documentledger/cli_support.py",
       "signature": "documentledger/cli_support.py",
@@ -410,13 +410,13 @@
     },
     "py:file:documentledger/commands/document.py": {
       "hashes": {
-        "body_hash": "7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb",
-        "content_hash": "7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb",
-        "decorator_hash": "7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb",
-        "docstring_hash": "7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb",
-        "file_hash": "7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb",
-        "public_contract_hash": "7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb",
-        "signature_hash": "7ff1721af375584757f6eeacedac9b9262b6e126997878c55c6afdc6e15d29eb"
+        "body_hash": "79f1d82718165b23f70472dadd670ece1a8204979428331a61d1151293b04c1a",
+        "content_hash": "79f1d82718165b23f70472dadd670ece1a8204979428331a61d1151293b04c1a",
+        "decorator_hash": "79f1d82718165b23f70472dadd670ece1a8204979428331a61d1151293b04c1a",
+        "docstring_hash": "79f1d82718165b23f70472dadd670ece1a8204979428331a61d1151293b04c1a",
+        "file_hash": "79f1d82718165b23f70472dadd670ece1a8204979428331a61d1151293b04c1a",
+        "public_contract_hash": "79f1d82718165b23f70472dadd670ece1a8204979428331a61d1151293b04c1a",
+        "signature_hash": "79f1d82718165b23f70472dadd670ece1a8204979428331a61d1151293b04c1a"
       },
       "kind": "file",
       "line_span": [1, 328],
@@ -427,13 +427,13 @@
     },
     "py:file:documentledger/commands/link.py": {
       "hashes": {
-        "body_hash": "bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098",
-        "content_hash": "bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098",
-        "decorator_hash": "bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098",
-        "docstring_hash": "bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098",
-        "file_hash": "bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098",
-        "public_contract_hash": "bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098",
-        "signature_hash": "bec50daba4ba82cfa0a86dcba5f1d29d865320e89cc6256cc5ab0922cc4f5098"
+        "body_hash": "c7cbb061d53022f659bc845a4273c83cf2e71709075ed370db9346755aed0de2",
+        "content_hash": "c7cbb061d53022f659bc845a4273c83cf2e71709075ed370db9346755aed0de2",
+        "decorator_hash": "c7cbb061d53022f659bc845a4273c83cf2e71709075ed370db9346755aed0de2",
+        "docstring_hash": "c7cbb061d53022f659bc845a4273c83cf2e71709075ed370db9346755aed0de2",
+        "file_hash": "c7cbb061d53022f659bc845a4273c83cf2e71709075ed370db9346755aed0de2",
+        "public_contract_hash": "c7cbb061d53022f659bc845a4273c83cf2e71709075ed370db9346755aed0de2",
+        "signature_hash": "c7cbb061d53022f659bc845a4273c83cf2e71709075ed370db9346755aed0de2"
       },
       "kind": "file",
       "line_span": [1, 256],
@@ -444,13 +444,13 @@
     },
     "py:file:documentledger/commands/migrate.py": {
       "hashes": {
-        "body_hash": "8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c",
-        "content_hash": "8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c",
-        "decorator_hash": "8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c",
-        "docstring_hash": "8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c",
-        "file_hash": "8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c",
-        "public_contract_hash": "8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c",
-        "signature_hash": "8ccfdd6bbda41edd430bcfad3d12a83dbbe1a3bf704054a91c1324073ff04f9c"
+        "body_hash": "a2b8a9d0d5d45882a2b021d8072c56935743375bd43c90f66a882c813e4d6908",
+        "content_hash": "a2b8a9d0d5d45882a2b021d8072c56935743375bd43c90f66a882c813e4d6908",
+        "decorator_hash": "a2b8a9d0d5d45882a2b021d8072c56935743375bd43c90f66a882c813e4d6908",
+        "docstring_hash": "a2b8a9d0d5d45882a2b021d8072c56935743375bd43c90f66a882c813e4d6908",
+        "file_hash": "a2b8a9d0d5d45882a2b021d8072c56935743375bd43c90f66a882c813e4d6908",
+        "public_contract_hash": "a2b8a9d0d5d45882a2b021d8072c56935743375bd43c90f66a882c813e4d6908",
+        "signature_hash": "a2b8a9d0d5d45882a2b021d8072c56935743375bd43c90f66a882c813e4d6908"
       },
       "kind": "file",
       "line_span": [1, 265],
@@ -461,13 +461,13 @@
     },
     "py:file:documentledger/commands/root.py": {
       "hashes": {
-        "body_hash": "e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805",
-        "content_hash": "e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805",
-        "decorator_hash": "e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805",
-        "docstring_hash": "e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805",
-        "file_hash": "e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805",
-        "public_contract_hash": "e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805",
-        "signature_hash": "e2805721cd5ed5da4401653acca216a4f81a7391614fff0c712468eab01a7805"
+        "body_hash": "13a675e51e27f267c3af21a062bcdd1979c89d7011231d14e07238e6ccfc004f",
+        "content_hash": "13a675e51e27f267c3af21a062bcdd1979c89d7011231d14e07238e6ccfc004f",
+        "decorator_hash": "13a675e51e27f267c3af21a062bcdd1979c89d7011231d14e07238e6ccfc004f",
+        "docstring_hash": "13a675e51e27f267c3af21a062bcdd1979c89d7011231d14e07238e6ccfc004f",
+        "file_hash": "13a675e51e27f267c3af21a062bcdd1979c89d7011231d14e07238e6ccfc004f",
+        "public_contract_hash": "13a675e51e27f267c3af21a062bcdd1979c89d7011231d14e07238e6ccfc004f",
+        "signature_hash": "13a675e51e27f267c3af21a062bcdd1979c89d7011231d14e07238e6ccfc004f"
       },
       "kind": "file",
       "line_span": [1, 455],
@@ -767,16 +767,16 @@
     },
     "py:file:documentledger/storage.py": {
       "hashes": {
-        "body_hash": "136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f",
-        "content_hash": "136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f",
-        "decorator_hash": "136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f",
-        "docstring_hash": "136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f",
-        "file_hash": "136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f",
-        "public_contract_hash": "136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f",
-        "signature_hash": "136435d491e8ee4d1f94faa05c72dae9d39c9eafbf7ab4eb3cfe3a6047daa64f"
+        "body_hash": "cf2510ff88c9486b8d48ba3b0097d489983c6106e12c5d00d4e7ebd5cf41f6b7",
+        "content_hash": "cf2510ff88c9486b8d48ba3b0097d489983c6106e12c5d00d4e7ebd5cf41f6b7",
+        "decorator_hash": "cf2510ff88c9486b8d48ba3b0097d489983c6106e12c5d00d4e7ebd5cf41f6b7",
+        "docstring_hash": "cf2510ff88c9486b8d48ba3b0097d489983c6106e12c5d00d4e7ebd5cf41f6b7",
+        "file_hash": "cf2510ff88c9486b8d48ba3b0097d489983c6106e12c5d00d4e7ebd5cf41f6b7",
+        "public_contract_hash": "cf2510ff88c9486b8d48ba3b0097d489983c6106e12c5d00d4e7ebd5cf41f6b7",
+        "signature_hash": "cf2510ff88c9486b8d48ba3b0097d489983c6106e12c5d00d4e7ebd5cf41f6b7"
       },
       "kind": "file",
-      "line_span": [1, 692],
+      "line_span": [1, 693],
       "path": "documentledger/storage.py",
       "qualname": "documentledger/storage.py",
       "signature": "documentledger/storage.py",
@@ -884,18 +884,35 @@
       "signature": "tests/test_docs.py",
       "source_id": "py:file:tests/test_docs.py"
     },
-    "py:file:tests/test_init.py": {
+    "py:file:tests/test_documentation_contract.py": {
       "hashes": {
-        "body_hash": "804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9",
-        "content_hash": "804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9",
-        "decorator_hash": "804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9",
-        "docstring_hash": "804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9",
-        "file_hash": "804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9",
-        "public_contract_hash": "804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9",
-        "signature_hash": "804473903b1cdd9e0f2ad1df9774bcf000f5ab8824eb1cac2f47e82ed217d0b9"
+        "body_hash": "6ad90b508a6f38bf48a764c892e606169d0a8314cff4af94752d9b889758640b",
+        "content_hash": "6ad90b508a6f38bf48a764c892e606169d0a8314cff4af94752d9b889758640b",
+        "decorator_hash": "6ad90b508a6f38bf48a764c892e606169d0a8314cff4af94752d9b889758640b",
+        "docstring_hash": "6ad90b508a6f38bf48a764c892e606169d0a8314cff4af94752d9b889758640b",
+        "file_hash": "6ad90b508a6f38bf48a764c892e606169d0a8314cff4af94752d9b889758640b",
+        "public_contract_hash": "6ad90b508a6f38bf48a764c892e606169d0a8314cff4af94752d9b889758640b",
+        "signature_hash": "6ad90b508a6f38bf48a764c892e606169d0a8314cff4af94752d9b889758640b"
       },
       "kind": "file",
-      "line_span": [1, 43],
+      "line_span": [1, 190],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "tests/test_documentation_contract.py",
+      "signature": "tests/test_documentation_contract.py",
+      "source_id": "py:file:tests/test_documentation_contract.py"
+    },
+    "py:file:tests/test_init.py": {
+      "hashes": {
+        "body_hash": "375f86c51612ab4061bf0bf5b15b63c4c527d998f7ec81693d86f781963c39df",
+        "content_hash": "375f86c51612ab4061bf0bf5b15b63c4c527d998f7ec81693d86f781963c39df",
+        "decorator_hash": "375f86c51612ab4061bf0bf5b15b63c4c527d998f7ec81693d86f781963c39df",
+        "docstring_hash": "375f86c51612ab4061bf0bf5b15b63c4c527d998f7ec81693d86f781963c39df",
+        "file_hash": "375f86c51612ab4061bf0bf5b15b63c4c527d998f7ec81693d86f781963c39df",
+        "public_contract_hash": "375f86c51612ab4061bf0bf5b15b63c4c527d998f7ec81693d86f781963c39df",
+        "signature_hash": "375f86c51612ab4061bf0bf5b15b63c4c527d998f7ec81693d86f781963c39df"
+      },
+      "kind": "file",
+      "line_span": [1, 52],
       "path": "tests/test_init.py",
       "qualname": "tests/test_init.py",
       "signature": "tests/test_init.py",
@@ -1307,7 +1324,7 @@
         "signature_hash": "8bb4811b5b8784c2319dfc1571d35b2dc0ca96c3ec662f362e33fcd286588e73"
       },
       "kind": "function",
-      "line_span": [57, 86],
+      "line_span": [67, 96],
       "path": "documentledger/cli_support.py",
       "qualname": "emit_error",
       "signature": "emit_error(ctx: typer.Context, command: str, exc: DocumentledgerError | CLIError) -> None",
@@ -1323,7 +1340,7 @@
         "signature_hash": "fb57fe9dd702741440f5e7b7d14983d1f8c536878525cee8101106351fa90f98"
       },
       "kind": "function",
-      "line_span": [32, 54],
+      "line_span": [42, 64],
       "path": "documentledger/cli_support.py",
       "qualname": "emit_success",
       "signature": "emit_success(ctx: typer.Context, command: str, result: dict[str, Any] | None=None, human: str='', events: list[dict[str, Any]] | None=None) -> None",
@@ -1339,7 +1356,7 @@
         "signature_hash": "a6656bd793ef5d59a958ed98735b2bcf1c44b61ae2161a99bed72af28b254991"
       },
       "kind": "function",
-      "line_span": [27, 29],
+      "line_span": [37, 39],
       "path": "documentledger/cli_support.py",
       "qualname": "get_state",
       "signature": "get_state(ctx: typer.Context) -> CommonCLIState",
@@ -1355,7 +1372,7 @@
         "signature_hash": "c698922a04fdda9788bf500f4eec2922413fe562a8d0674af1a02e150f85cf32"
       },
       "kind": "function",
-      "line_span": [89, 108],
+      "line_span": [99, 118],
       "path": "documentledger/cli_support.py",
       "qualname": "handle_command_error",
       "signature": "handle_command_error(command: str) -> Any",
@@ -1371,7 +1388,7 @@
         "signature_hash": "2ff5e94df0fd55fd7b4a74c5ef8067dbac6651083e13d8fe0c8aabcedb69a699"
       },
       "kind": "function",
-      "line_span": [120, 122],
+      "line_span": [130, 132],
       "path": "documentledger/cli_support.py",
       "qualname": "normalize_command_path",
       "signature": "normalize_command_path(path: str) -> str",
@@ -1387,7 +1404,7 @@
         "signature_hash": "ba365a3bcdcf0b0b74257a4f1b2779d8eec936098a3d7c3944a4c8f04a05a7f1"
       },
       "kind": "function",
-      "line_span": [111, 117],
+      "line_span": [121, 127],
       "path": "documentledger/cli_support.py",
       "qualname": "version_callback",
       "signature": "version_callback(value: bool) -> None",
@@ -1444,7 +1461,7 @@
     "py:function:documentledger/commands/document.py::register_document_commands": {
       "hashes": {
         "body_hash": "223989700c21bdb0a06ed76d2e0e1463c8e5258f96fc07ee2eaa67d145ee8100",
-        "content_hash": "9e6d100e3d382be6363c356b528b03402fec01d6bf4db9b15dd4c4b02b9f5938",
+        "content_hash": "7d8d66917462e980ee662e76be4de392af82e438955edf32c875d345b6c59368",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "45945a6772d771ff333a9ca7815e2d41868646b38ff4aaf5871df1da55f4ef70",
         "public_contract_hash": "498a47b51068fb7af4d452775b7edb2d856e1df350af6d84765c1cd278b34ec5",
@@ -1476,7 +1493,7 @@
     "py:function:documentledger/commands/link.py::register_link_commands": {
       "hashes": {
         "body_hash": "474357b709594f94f5dd2f15edd204a5b75eaebf0e42796fc05920c7945fb1f7",
-        "content_hash": "bd93b7410094050c8833020be26f4b2158c6bcd0655e33f9da36a56f70759afa",
+        "content_hash": "2d3408fdbf992fccb1b141f66336f642c36aca52f66c851653b3956e98f115d2",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "a2ece92f80673b558938223e08889d92b4c9fd10b1e5af8d799456bf61c7fe74",
         "public_contract_hash": "c7446115c9e5241fb967d98905ebdc778e601a44187231bb281c7b95ffed5117",
@@ -1492,7 +1509,7 @@
     "py:function:documentledger/commands/migrate.py::register_migrate_commands": {
       "hashes": {
         "body_hash": "7bc02849ce2a9a913106fa10a977cb43069c39d2b557160e7cbc038ceb51ca36",
-        "content_hash": "30bcffc6f8b8e8a5e0a1989ecf31577976ce93eccf568928e9ea7b3060f37331",
+        "content_hash": "c20c05e5fb676b21f8512f81023566646c4e51e148511e6a51603076e2db5c2d",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "c9cfe9fe2f155050a37d2c39c06aa36b3245e4200ff81bd20ede24c02e29872c",
         "public_contract_hash": "b470083fbed6ea4658dac090091b67fd062c850759c7cf2ff81d568fb4366aea",
@@ -1555,11 +1572,11 @@
     },
     "py:function:documentledger/commands/root.py::_status_classification": {
       "hashes": {
-        "body_hash": "18568d2015e3dc2904d97178fce29d8aababbe39a80d30671f2987d813bad84b",
-        "content_hash": "a635eee308945d8c594d7d84deb536a8b7f22e55f06129f62f6eb9fef564e019",
+        "body_hash": "79e54a14816bf44d509706ba38c006c1bc778428f432a797b3672e9f382ee2d5",
+        "content_hash": "6f85c916d50377762396c07228ed7b5cdb19391e8c2d9617177a071416082505",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "public_contract_hash": "2fbab8c0f6f73bdeec74320411b154f5a12ebc3ca3dfa558dfaf317195c121b6",
+        "public_contract_hash": "94279f91d50d2589440803136586f621c2fcc0800ef7f96829a22378177a72cf",
         "signature_hash": "eb5bdf64a52372b8b1972a6a93d2e4a9755a78969657f62bb0067f4066e5aa99"
       },
       "kind": "function",
@@ -1587,11 +1604,11 @@
     },
     "py:function:documentledger/commands/root.py::register_root_commands": {
       "hashes": {
-        "body_hash": "e9a31417f39cf7f4cd83a3fc1f1da248cab7134e057a0a9f6f5b77e482579de6",
-        "content_hash": "ea4decc56dc6bf3afc78f874e5d7381e45987a968c7d34153e7ebb2cba573cc3",
+        "body_hash": "9500f1bb3bcf50435b1a6877b9d253e03586e960d3f6b7d01b1f0463ee54644a",
+        "content_hash": "e75b8d104c0af2bd1ff04b28da772f3a4d3dd8a93c684f20bb425745570fafba",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "96e13e364e143283fca4ddfd50c95bee7129329c6fd94a0e657809de932a96ea",
-        "public_contract_hash": "e0bc247870692aceae1b9038819e400ffc15a2e568ca5df16a7976da5d8aaf36",
+        "public_contract_hash": "d1d67da92e8f98ead5989b78f4a020dd377a0d7b854ef5d19acce98b1d10547c",
         "signature_hash": "41006d1389a8413b628ce036b283611e4ea0d130294d1e1cb55e90f8f72f2f64"
       },
       "kind": "function",
@@ -3547,7 +3564,7 @@
         "signature_hash": "984ab6005f477e85ce3b026a300f0af66b679b0f18065cac0e255df75893a6d4"
       },
       "kind": "function",
-      "line_span": [431, 458],
+      "line_span": [432, 459],
       "path": "documentledger/storage.py",
       "qualname": "build_scan_summary",
       "signature": "build_scan_summary(scan: dict[str, Any], *, version: int, source_index_hash: str, source_index_file: str) -> dict[str, Any]",
@@ -3563,7 +3580,7 @@
         "signature_hash": "3969fc5ccd54020f3eb1d31885a4186e1da48bff045ad46699cef6b5fb4c69ad"
       },
       "kind": "function",
-      "line_span": [62, 66],
+      "line_span": [63, 67],
       "path": "documentledger/storage.py",
       "qualname": "coerce_int",
       "signature": "coerce_int(value: object, default: int) -> int",
@@ -3579,7 +3596,7 @@
         "signature_hash": "895d5489bbdb1e5dfaf6520467581c418afa49abb0f850b6a2c16a4e6f886f05"
       },
       "kind": "function",
-      "line_span": [500, 508],
+      "line_span": [501, 509],
       "path": "documentledger/storage.py",
       "qualname": "commit_staged_files",
       "signature": "commit_staged_files(staged: list[tuple[Path, Path]]) -> None",
@@ -3595,7 +3612,7 @@
         "signature_hash": "a247d348c6118594529d6be76e75d34b743bbdbc4c4040ec5ef92806829788e6"
       },
       "kind": "function",
-      "line_span": [133, 148],
+      "line_span": [134, 149],
       "path": "documentledger/storage.py",
       "qualname": "default_metadata",
       "signature": "default_metadata(project_uuid: str) -> dict[str, Any]",
@@ -3611,7 +3628,7 @@
         "signature_hash": "b4f01d3676827f043b7565d21f6f7c77bb28c2afc98538ed1e759d861c41b7ee"
       },
       "kind": "function",
-      "line_span": [101, 103],
+      "line_span": [102, 104],
       "path": "documentledger/storage.py",
       "qualname": "discover_config",
       "signature": "discover_config(start: Path | None=None) -> Path | None",
@@ -3627,7 +3644,7 @@
         "signature_hash": "250389bbcbeba6de3786a244d47ae5829c67b59a8b88f5cc91adbf11e22ffbb7"
       },
       "kind": "function",
-      "line_span": [573, 574],
+      "line_span": [574, 575],
       "path": "documentledger/storage.py",
       "qualname": "doc_record_path",
       "signature": "doc_record_path(workspace: Workspace, doc_path: str) -> Path",
@@ -3643,7 +3660,7 @@
         "signature_hash": "4f92102eca407bceac3f96d2eb6ba24ad34bcd2465a6de3affcdb2f22c54e30d"
       },
       "kind": "function",
-      "line_span": [311, 315],
+      "line_span": [312, 316],
       "path": "documentledger/storage.py",
       "qualname": "doc_sections_map",
       "signature": "doc_sections_map(workspace: Workspace, doc_path: str) -> dict[str, dict[str, Any]]",
@@ -3652,17 +3669,17 @@
     "py:function:documentledger/storage.py::init_workspace": {
       "hashes": {
         "body_hash": "9595b0a7db63d8d58e4acdfaea4b41927ae3e7ccf5e6b27d212d4dfd82e1df6e",
-        "content_hash": "73f50e3a44113fa869046ee26a8f0feaf1b041ff8553aa833b89753e0795dc5c",
+        "content_hash": "ffd4d3e6bc9824ee3917961aae77a168de3a75a93d08520d8fb0a9eb457de569",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "public_contract_hash": "f460c3e193a5e7ef47ae051a8d3146f97f6dcb2b88a8c30da77c7f64cbb7f6ec",
-        "signature_hash": "0d1300c2bf3c2f49e1aff7dd8de80744047bd9e09e9b6220d9327096d54ab72a"
+        "public_contract_hash": "8f4527f5fe71af453598a930222f965081c53ad82408166e00f49a2d37e5f36d",
+        "signature_hash": "e43344f9d2d884ed87f6339a5a029f822c2cb21200a8f79f79476dd198452d7d"
       },
       "kind": "function",
-      "line_span": [231, 257],
+      "line_span": [232, 258],
       "path": "documentledger/storage.py",
       "qualname": "init_workspace",
-      "signature": "init_workspace(project_name: str | None, documentledger_dir: str, hidden_config: bool) -> Workspace",
+      "signature": "init_workspace(project_name: str | None, documentledger_dir: str=DEFAULT_STORAGE_DIR, hidden_config: bool=False) -> Workspace",
       "source_id": "py:function:documentledger/storage.py::init_workspace"
     },
     "py:function:documentledger/storage.py::iter_doc_records": {
@@ -3675,7 +3692,7 @@
         "signature_hash": "80fad66fda810f2b0058f92c1f59c1da1c3844d9fe7a104336c8e1bd036f3414"
       },
       "kind": "function",
-      "line_span": [629, 636],
+      "line_span": [630, 637],
       "path": "documentledger/storage.py",
       "qualname": "iter_doc_records",
       "signature": "iter_doc_records(workspace: Workspace) -> list[dict[str, Any]]",
@@ -3691,7 +3708,7 @@
         "signature_hash": "7125ac4b20a77965ab45ae1661fc72f6e4b3b27e90007940f1a4b2de7bf49f87"
       },
       "kind": "function",
-      "line_span": [569, 570],
+      "line_span": [570, 571],
       "path": "documentledger/storage.py",
       "qualname": "latest_scan",
       "signature": "latest_scan(workspace: Workspace) -> dict[str, Any] | None",
@@ -3707,7 +3724,7 @@
         "signature_hash": "d3ab40d7fd1ca2e59f4c71b9e3c521470bb8c230283c8927c0573714253cd9c1"
       },
       "kind": "function",
-      "line_span": [565, 566],
+      "line_span": [566, 567],
       "path": "documentledger/storage.py",
       "qualname": "latest_scan_summary",
       "signature": "latest_scan_summary(workspace: Workspace) -> dict[str, Any] | None",
@@ -3715,15 +3732,15 @@
     },
     "py:function:documentledger/storage.py::load_config": {
       "hashes": {
-        "body_hash": "5c530bfeea4ff2eab2fddf6ababdc65c1ed4f93f31d5fe00fc4f71d61de602ec",
-        "content_hash": "faec67c46641deb853e503939174bf7f14c364b090c25bcd404f7e4902528e3b",
+        "body_hash": "937b38dc598068bcbe55f1e7eb129ecf5be42110a014562e6382c33c7af6e46c",
+        "content_hash": "1f6de778f4cb8a85559cb77b797da1571dc5507950a9ad05207291000a5392f7",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "public_contract_hash": "884856491a7177f21c968d796c09c6a8e9087978b5e92aa548b9ab7b57b512ca",
+        "public_contract_hash": "57af198af312b268b9981ef2beb51ba4e7afaff8586750c8a35ca3a715ec9dcb",
         "signature_hash": "8389855e17e4f46d2b5bf3c11a8cd24a5aed56e62146892a99c6e59be6b1d77f"
       },
       "kind": "function",
-      "line_span": [106, 130],
+      "line_span": [107, 131],
       "path": "documentledger/storage.py",
       "qualname": "load_config",
       "signature": "load_config(path: Path) -> Config",
@@ -3739,7 +3756,7 @@
         "signature_hash": "d94c699b1152d20969fd6ed9edcf97f4656629c2e4ff72a2e69e05693ac9c7a0"
       },
       "kind": "function",
-      "line_span": [577, 584],
+      "line_span": [578, 585],
       "path": "documentledger/storage.py",
       "qualname": "load_doc_record",
       "signature": "load_doc_record(workspace: Workspace, doc_path: str, *, indexed_sections: dict[str, dict[str, Any]] | None=None) -> dict[str, Any] | None",
@@ -3755,7 +3772,7 @@
         "signature_hash": "4f0534df47471b19f31d8a0b35f699b711420f7f3b1efe58224c99240ea044bd"
       },
       "kind": "function",
-      "line_span": [558, 562],
+      "line_span": [559, 563],
       "path": "documentledger/storage.py",
       "qualname": "load_scan",
       "signature": "load_scan(workspace: Workspace) -> dict[str, Any] | None",
@@ -3771,7 +3788,7 @@
         "signature_hash": "136dfd56dac13dd6a0a0aba85588dc3cf0fa2a5f16d2fea3309f7e250707d122"
       },
       "kind": "function",
-      "line_span": [539, 543],
+      "line_span": [540, 544],
       "path": "documentledger/storage.py",
       "qualname": "load_scan_summary",
       "signature": "load_scan_summary(workspace: Workspace) -> dict[str, Any] | None",
@@ -3787,7 +3804,7 @@
         "signature_hash": "24a7d55ba31750f3f4a47b12ef0c08c8c356f59750638b5367d92072fecf24e3"
       },
       "kind": "function",
-      "line_span": [546, 555],
+      "line_span": [547, 556],
       "path": "documentledger/storage.py",
       "qualname": "load_source_index",
       "signature": "load_source_index(workspace: Workspace, summary: dict[str, Any] | None=None) -> dict[str, dict[str, Any]]",
@@ -3803,7 +3820,7 @@
         "signature_hash": "1948ffcec7df46039a62e32f925369e7327f26db9edd6fb6bcb084193c394940"
       },
       "kind": "function",
-      "line_span": [191, 228],
+      "line_span": [192, 229],
       "path": "documentledger/storage.py",
       "qualname": "load_workspace",
       "signature": "load_workspace(start: Path | None=None, *, required: bool=True) -> Workspace | None",
@@ -3819,7 +3836,7 @@
         "signature_hash": "8da6bb288eb8b98799fc7fa6f5496adeb17bb15119b176eaa82543350cfddb39"
       },
       "kind": "function",
-      "line_span": [264, 265],
+      "line_span": [265, 266],
       "path": "documentledger/storage.py",
       "qualname": "next_state_version",
       "signature": "next_state_version(workspace: Workspace) -> int",
@@ -3835,7 +3852,7 @@
         "signature_hash": "4ffe26643c621164235cb5f92fa4ef69dbdbde687d6a2460b90de63cd671956e"
       },
       "kind": "function",
-      "line_span": [298, 308],
+      "line_span": [299, 309],
       "path": "documentledger/storage.py",
       "qualname": "normalize_changed_unit",
       "signature": "normalize_changed_unit(record: dict[str, Any]) -> dict[str, Any]",
@@ -3851,7 +3868,7 @@
         "signature_hash": "e68a0529dbd803ae00f590f470fb4fe3d6c1b21532cfdb22ef063cbb4a7dca66"
       },
       "kind": "function",
-      "line_span": [330, 374],
+      "line_span": [331, 375],
       "path": "documentledger/storage.py",
       "qualname": "normalize_doc_record",
       "signature": "normalize_doc_record(workspace: Workspace, record: dict[str, Any], *, indexed_sections: dict[str, dict[str, Any]] | None=None) -> dict[str, Any]",
@@ -3867,7 +3884,7 @@
         "signature_hash": "811a6996831752a7202c96d98a25eaaa64deff1f43514d47a3cc60cb11482cb9"
       },
       "kind": "function",
-      "line_span": [276, 281],
+      "line_span": [277, 282],
       "path": "documentledger/storage.py",
       "qualname": "normalize_line_span",
       "signature": "normalize_line_span(value: Any, default: tuple[int, int]=(1, 1)) -> list[int]",
@@ -3883,7 +3900,7 @@
         "signature_hash": "1d78f3f5785ad52bf2678aa6577b6e62546c2b1759da32f5da8d89a0dbf0b283"
       },
       "kind": "function",
-      "line_span": [399, 428],
+      "line_span": [400, 429],
       "path": "documentledger/storage.py",
       "qualname": "normalize_scan_summary",
       "signature": "normalize_scan_summary(record: dict[str, Any], *, source_unit_count: int | None=None) -> dict[str, Any]",
@@ -3899,7 +3916,7 @@
         "signature_hash": "27888877cfac19c125390758432c1baece064a04f824c56b03331f6d2749bf62"
       },
       "kind": "function",
-      "line_span": [318, 327],
+      "line_span": [319, 328],
       "path": "documentledger/storage.py",
       "qualname": "normalize_section_link",
       "signature": "normalize_section_link(record: dict[str, Any]) -> dict[str, Any]",
@@ -3915,7 +3932,7 @@
         "signature_hash": "26eb2d425133f5f482bf2c4f1c432c7c7aeae54b0680ac3a47d1b4d2dabd1ddb"
       },
       "kind": "function",
-      "line_span": [377, 388],
+      "line_span": [378, 389],
       "path": "documentledger/storage.py",
       "qualname": "normalize_source_index_payload",
       "signature": "normalize_source_index_payload(payload: dict[str, Any]) -> dict[str, dict[str, Any]]",
@@ -3931,7 +3948,7 @@
         "signature_hash": "f93231292f5c0462b746eeb6f6d93fd4f8a837788e6615411723e7ac8a14f5e9"
       },
       "kind": "function",
-      "line_span": [284, 295],
+      "line_span": [285, 296],
       "path": "documentledger/storage.py",
       "qualname": "normalize_source_unit_record",
       "signature": "normalize_source_unit_record(source_id: str, record: dict[str, Any], fallback_path: str='') -> dict[str, Any]",
@@ -3947,7 +3964,7 @@
         "signature_hash": "67053b3f7bb771b79bfd19b9f3c824341b1bcfa945e070d05a5cd62c091c1503"
       },
       "kind": "function",
-      "line_span": [87, 91],
+      "line_span": [88, 92],
       "path": "documentledger/storage.py",
       "qualname": "read_json",
       "signature": "read_json(path: Path) -> dict[str, Any]",
@@ -3963,7 +3980,7 @@
         "signature_hash": "f424d5a3645ce64468c6462fe65a940665c8c2e2c4456afd2df98ab30be9f87e"
       },
       "kind": "function",
-      "line_span": [73, 77],
+      "line_span": [74, 78],
       "path": "documentledger/storage.py",
       "qualname": "read_yaml",
       "signature": "read_yaml(path: Path) -> dict[str, Any]",
@@ -3979,7 +3996,7 @@
         "signature_hash": "4c4f67a2c5dc69429e8fde6e498d347f4e0a50128cb34f3a23c8dfb209b4d07c"
       },
       "kind": "function",
-      "line_span": [587, 603],
+      "line_span": [588, 604],
       "path": "documentledger/storage.py",
       "qualname": "save_doc_record",
       "signature": "save_doc_record(workspace: Workspace, record: dict[str, Any]) -> None",
@@ -3995,7 +4012,7 @@
         "signature_hash": "222e35575f8647daee1ecd841e1fa24623038cf20197e04a6f9a7c76fa036bb6"
       },
       "kind": "function",
-      "line_span": [606, 626],
+      "line_span": [607, 627],
       "path": "documentledger/storage.py",
       "qualname": "save_doc_records_batch",
       "signature": "save_doc_records_batch(workspace: Workspace, records: list[dict[str, Any]]) -> int",
@@ -4011,7 +4028,7 @@
         "signature_hash": "7f175a3f4d6e758ed1c26c8b88eae48f5dd7a7e6e41bee8a79a8649815a2f360"
       },
       "kind": "function",
-      "line_span": [272, 273],
+      "line_span": [273, 274],
       "path": "documentledger/storage.py",
       "qualname": "save_metadata",
       "signature": "save_metadata(workspace: Workspace) -> None",
@@ -4027,7 +4044,7 @@
         "signature_hash": "ed2fcca01614e257f0f0b9b69ebdb5de2fa60a537a92ae813df1d118e9dd979e"
       },
       "kind": "function",
-      "line_span": [511, 536],
+      "line_span": [512, 537],
       "path": "documentledger/storage.py",
       "qualname": "save_scan",
       "signature": "save_scan(workspace: Workspace, scan: dict[str, Any]) -> dict[str, Any]",
@@ -4043,7 +4060,7 @@
         "signature_hash": "fe66c2f256f2bf06b64f535e5f0524c4f524f7d410a97b9379a510b9d3de5dc9"
       },
       "kind": "function",
-      "line_span": [461, 462],
+      "line_span": [462, 463],
       "path": "documentledger/storage.py",
       "qualname": "scan_record_path",
       "signature": "scan_record_path(workspace: Workspace) -> Path",
@@ -4059,7 +4076,7 @@
         "signature_hash": "fdcb34ca65cac214b8a84720531a97a01a7c723a87254d1ab49f18f695a57bb6"
       },
       "kind": "function",
-      "line_span": [268, 269],
+      "line_span": [269, 270],
       "path": "documentledger/storage.py",
       "qualname": "set_state_version",
       "signature": "set_state_version(workspace: Workspace, version: int) -> None",
@@ -4075,7 +4092,7 @@
         "signature_hash": "19cde63f0ab5e03431544c78a1207159c28256952ba1f46b1af03626d3c11ac9"
       },
       "kind": "function",
-      "line_span": [465, 466],
+      "line_span": [466, 467],
       "path": "documentledger/storage.py",
       "qualname": "source_index_path",
       "signature": "source_index_path(workspace: Workspace, file_name: str | None=None) -> Path",
@@ -4091,7 +4108,7 @@
         "signature_hash": "3cd75808bd81e7662b57f2331087294e6e893e3adab96ae0d72f32497637798f"
       },
       "kind": "function",
-      "line_span": [391, 396],
+      "line_span": [392, 397],
       "path": "documentledger/storage.py",
       "qualname": "source_index_payload",
       "signature": "source_index_payload(source_units: dict[str, dict[str, Any]]) -> dict[str, Any]",
@@ -4107,7 +4124,7 @@
         "signature_hash": "f0167575936df1b764ac5f6c49ed34164fb87d37cc3b0170e4671ea562234a84"
       },
       "kind": "function",
-      "line_span": [491, 497],
+      "line_span": [492, 498],
       "path": "documentledger/storage.py",
       "qualname": "stage_json",
       "signature": "stage_json(path: Path, data: dict[str, Any], *, compact: bool=False) -> Path",
@@ -4123,7 +4140,7 @@
         "signature_hash": "776cc9a42488e4e6822d8277b5ace3375c0ec502b9992d121ba9c795f822bbac"
       },
       "kind": "function",
-      "line_span": [482, 488],
+      "line_span": [483, 489],
       "path": "documentledger/storage.py",
       "qualname": "stage_yaml",
       "signature": "stage_yaml(path: Path, data: dict[str, Any]) -> Path",
@@ -4139,7 +4156,7 @@
         "signature_hash": "87bbe5a4247598d4360cc7885fc10e59f190a87f1783c1c6faaadcc2acbf393b"
       },
       "kind": "function",
-      "line_span": [260, 261],
+      "line_span": [261, 262],
       "path": "documentledger/storage.py",
       "qualname": "state_version",
       "signature": "state_version(workspace: Workspace) -> int",
@@ -4155,7 +4172,7 @@
         "signature_hash": "5c35d935c566f08ac56a2a448c7011ff9c7996ca1b2b5f61af70c45d347211e9"
       },
       "kind": "function",
-      "line_span": [69, 70],
+      "line_span": [70, 71],
       "path": "documentledger/storage.py",
       "qualname": "strip_timestamp_keys",
       "signature": "strip_timestamp_keys(payload: dict[str, Any]) -> dict[str, Any]",
@@ -4171,7 +4188,7 @@
         "signature_hash": "4eda93b017ba072ce264c25e6ac542896e7608ab5c421a6733a6c29ea07c1b38"
       },
       "kind": "function",
-      "line_span": [469, 479],
+      "line_span": [470, 480],
       "path": "documentledger/storage.py",
       "qualname": "update_scan_metadata",
       "signature": "update_scan_metadata(workspace: Workspace, summary: dict[str, Any]) -> None",
@@ -4187,7 +4204,7 @@
         "signature_hash": "ac2127cdcb5ba5bc0540637b612f0979ecbf20657afbf84a99deaf7ed3247261"
       },
       "kind": "function",
-      "line_span": [151, 180],
+      "line_span": [152, 181],
       "path": "documentledger/storage.py",
       "qualname": "validate_storage_metadata",
       "signature": "validate_storage_metadata(metadata: dict[str, Any]) -> dict[str, Any]",
@@ -4203,7 +4220,7 @@
         "signature_hash": "a662df4a09089e8dfbbaae032601e2ea5f6fc6f2b22fcfe66be88b8d1bb139f0"
       },
       "kind": "function",
-      "line_span": [43, 46],
+      "line_span": [44, 47],
       "path": "documentledger/storage.py",
       "qualname": "workspace_data_dir",
       "signature": "workspace_data_dir(workspace: Workspace) -> Path",
@@ -4219,7 +4236,7 @@
         "signature_hash": "135a1ad74d8fb25a0168deb8c3b85fd96f6ba8f964c588833e624eaa4e8d2836"
       },
       "kind": "function",
-      "line_span": [37, 40],
+      "line_span": [38, 41],
       "path": "documentledger/storage.py",
       "qualname": "workspace_root",
       "signature": "workspace_root(workspace: Workspace) -> Path",
@@ -4235,7 +4252,7 @@
         "signature_hash": "e50820f817fe94457f953fcd1d4606ba8567eda49d7eb28fdf220f28d11ab127"
       },
       "kind": "function",
-      "line_span": [94, 98],
+      "line_span": [95, 99],
       "path": "documentledger/storage.py",
       "qualname": "write_json",
       "signature": "write_json(path: Path, data: dict[str, Any], *, compact: bool=False) -> None",
@@ -4251,7 +4268,7 @@
         "signature_hash": "3d17dba294f191234edcfa836d64496ade74e86dfd48d6f1616833ed08cfef69"
       },
       "kind": "function",
-      "line_span": [80, 84],
+      "line_span": [81, 85],
       "path": "documentledger/storage.py",
       "qualname": "write_yaml",
       "signature": "write_yaml(path: Path, data: dict[str, Any]) -> None",
@@ -4753,6 +4770,230 @@
       "signature": "test_mark_fresh_updates_fields(project: Path, runner: CliRunner) -> None",
       "source_id": "py:function:tests/test_docs.py::test_mark_fresh_updates_fields"
     },
+    "py:function:tests/test_documentation_contract.py::_markdown_files": {
+      "hashes": {
+        "body_hash": "8ce6ef5a7033f515b5b09bf661d4a4ac27a7d0a663f899212892f27cf57e3c5a",
+        "content_hash": "6ed8238fdc5b9bf40a464815e91edec0ece3b556c8ab266af27dee41826a9c05",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "6cb8bf69862e9a296c2a66dfadbca996e7883c827a5f5def54b1a57e10032ebb",
+        "signature_hash": "2a8467f8cd2b5ee48571e996193f6cda10acc71afab234b763deed69c5b3e380"
+      },
+      "kind": "function",
+      "line_span": [17, 22],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "_markdown_files",
+      "signature": "_markdown_files() -> list[Path]",
+      "source_id": "py:function:tests/test_documentation_contract.py::_markdown_files"
+    },
+    "py:function:tests/test_documentation_contract.py::_requirement_pairs": {
+      "hashes": {
+        "body_hash": "29bd213cb7f8636794946ca6d013cbbf6abd4dee1b58277163b5153ef59cba30",
+        "content_hash": "a2de54b21ca8ba4aeba8407beb47fbf87d3cabc629fc8a2b2c946491fd51e05a",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "6f867568ae09d7224adc3c1e5a39b9e0672ce2fdda6289fbb301f09ac9a2ad5b",
+        "signature_hash": "ca513d183ae6b1c724af8d8ae9d3be5787f883503878d243055b2e0925deda4a"
+      },
+      "kind": "function",
+      "line_span": [25, 34],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "_requirement_pairs",
+      "signature": "_requirement_pairs(path: Path) -> set[tuple[str, str]]",
+      "source_id": "py:function:tests/test_documentation_contract.py::_requirement_pairs"
+    },
+    "py:function:tests/test_documentation_contract.py::_toctree_entries": {
+      "hashes": {
+        "body_hash": "4a980f9e65a040dbdecff8d55b165ee0574b11390aea81e4336f69d794bd5160",
+        "content_hash": "03b41c2c11cd289d209dddbe4410ec174def5243648165375cb8ab6df7dd10f4",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "5f135b3cd3f46dc0b418538ae50e188ca46246987c31cb7fe1576963d9653527",
+        "signature_hash": "649a1a3c0fbb2c2399636f7912005ad7ed711352aee1e057d69e020c4de9de92"
+      },
+      "kind": "function",
+      "line_span": [100, 115],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "_toctree_entries",
+      "signature": "_toctree_entries(path: Path) -> list[str]",
+      "source_id": "py:function:tests/test_documentation_contract.py::_toctree_entries"
+    },
+    "py:function:tests/test_documentation_contract.py::test_api_modules_import": {
+      "hashes": {
+        "body_hash": "8c1497867e23fd1c9bd02f0d20ba2d408a8a89a4d839a0147ca2d6fa4a3e34a8",
+        "content_hash": "5378ec4bd1dded47de51587730a5a0a147c4574edec92d0d2313c9f843d6bf92",
+        "decorator_hash": "072a1e4e5261823b1a8143a9c554f4f3de624d57e259a94eba74f1255d6278f2",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "26ba282f22b6af0a1cca99fba2a796861c9498826275efcd52e9a5ebd76ccc2a",
+        "signature_hash": "101f2b30dc4d10c5e06c593c7fe330890c8f176526b248aeb3222e06a7ecab28"
+      },
+      "kind": "function",
+      "line_span": [181, 182],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_api_modules_import",
+      "signature": "test_api_modules_import(module: str) -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_api_modules_import"
+    },
+    "py:function:tests/test_documentation_contract.py::test_canonical_command_registration_matches_catalog": {
+      "hashes": {
+        "body_hash": "9c424311eb93eef20aa72bfeed4a482a706649312abc5cbbca02f2ba5c4de928",
+        "content_hash": "d4a54578d09d0a52c117388ae42359483841529ecddd731321768d303851b785",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "1d25ba58f7cb227172e1d9a823621fc777151891a019ab73712e1802be36b47b",
+        "signature_hash": "669f88befeed30eb45b5d704ff54f50f586a94dc8634d8602763b7914861d0a1"
+      },
+      "kind": "function",
+      "line_span": [70, 88],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_canonical_command_registration_matches_catalog",
+      "signature": "test_canonical_command_registration_matches_catalog() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_canonical_command_registration_matches_catalog"
+    },
+    "py:function:tests/test_documentation_contract.py::test_cli_generator_has_no_drift": {
+      "hashes": {
+        "body_hash": "265d4fa902cea816000e4f9434870ef91a9a699421fcd56aa39d0c0422c03651",
+        "content_hash": "2ea66cc730d1863bfd3305dc22bad162e9cc9480a6a6f965caba2847a603b4bc",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "9d990b08dd9eb2bfd49a403030c77c13b67909fde3f6dd07f86b4057e2a64f4f",
+        "signature_hash": "94f1904afddea91ae339b211dc5cbaea7cfd594574961435356829e460344bfb"
+      },
+      "kind": "function",
+      "line_span": [60, 67],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_cli_generator_has_no_drift",
+      "signature": "test_cli_generator_has_no_drift() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_cli_generator_has_no_drift"
+    },
+    "py:function:tests/test_documentation_contract.py::test_cli_reference_covers_catalog_exactly_once": {
+      "hashes": {
+        "body_hash": "549d6ee9e60d841a242dc1a3c5249472b8ebdc5eed6cd1936a9d18034771f447",
+        "content_hash": "a8d08314e578abb034254a7647a6ea5e388f9da79e71870ddbd01bba34392c66",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "5b12267c229cb2829738dcfb529f1747c23e4e186f2632c248b65fb30f50bfe3",
+        "signature_hash": "976ceb746dc630e01ee784d5ebfc52fd632309bf5c4da521d3b13fd9ac1db7d6"
+      },
+      "kind": "function",
+      "line_span": [48, 57],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_cli_reference_covers_catalog_exactly_once",
+      "signature": "test_cli_reference_covers_catalog_exactly_once() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_cli_reference_covers_catalog_exactly_once"
+    },
+    "py:function:tests/test_documentation_contract.py::test_deprecated_syntax_is_confined_to_compatibility_guidance": {
+      "hashes": {
+        "body_hash": "a8b0d9eb11fc77bf5c8e340e3ea3e4c8e3be5f6addf251a63990297475a12e5a",
+        "content_hash": "79b0af9820ad4e4d79e388f919be4664079667959b8a64f88cfc35994c31f148",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "fb03f53bb7511b462d69166d82fc8e5214aa2e2716598eac52aa9fcb5e3cdda8",
+        "signature_hash": "fb8d63f8e874077a8beae6ed40c3028b12b5fc4654f57c9a215ef3b419274653"
+      },
+      "kind": "function",
+      "line_span": [91, 97],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_deprecated_syntax_is_confined_to_compatibility_guidance",
+      "signature": "test_deprecated_syntax_is_confined_to_compatibility_guidance() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_deprecated_syntax_is_confined_to_compatibility_guidance"
+    },
+    "py:function:tests/test_documentation_contract.py::test_documentation_requirements_match_project_extra": {
+      "hashes": {
+        "body_hash": "008ac2487c450af37d725b6fe0a49b694111368cd18cc16d437112643990021d",
+        "content_hash": "979374d65bb899a975b6242f40ac781e825b7f5a51e4b9b8486a4f7b9cee81c8",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "60aa11a135ee4613eb1e84d45ecfe1ab28101982b7e176ada7b4f4ddae1e69f7",
+        "signature_hash": "becab4873116d760add5f1d271bfbd0bbfa424ce470fa37403a61f0702e57b19"
+      },
+      "kind": "function",
+      "line_span": [37, 45],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_documentation_requirements_match_project_extra",
+      "signature": "test_documentation_requirements_match_project_extra() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_documentation_requirements_match_project_extra"
+    },
+    "py:function:tests/test_documentation_contract.py::test_local_markdown_links_resolve": {
+      "hashes": {
+        "body_hash": "633fbb921cbbe52a0a3800543b7bd34f91c4a1998f321115a09aa27acadc97b8",
+        "content_hash": "f9123a338fb095bd0e1cb11016ef5db16e611fbda54075a463678a848c04254e",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "5e2cbcda407e66a7342884297c165f7a340b722339df4aa39ec516894ceb2d09",
+        "signature_hash": "ebd98316b581a6b888e466fbd07dd1ca30b0b1f4640d157bed1121602c2dbf7d"
+      },
+      "kind": "function",
+      "line_span": [148, 155],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_local_markdown_links_resolve",
+      "signature": "test_local_markdown_links_resolve() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_local_markdown_links_resolve"
+    },
+    "py:function:tests/test_documentation_contract.py::test_published_markdown_is_reachable_from_root_toctrees": {
+      "hashes": {
+        "body_hash": "81d3d0e7492578751859b17ef347b52eef5550e020ee760cb981159702ba061c",
+        "content_hash": "d857f7fcbeed880e6f47b6e54e72c91a20860ae60c70f8302d4110e6f53a7f04",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "dc4b9b892bacf6bfe9efd59d4e7d0d39fc8d19b59dd952ab8c6ee1a908f5cf67",
+        "signature_hash": "447c79cad1f2d2fc72633a4ca3610bb2c0c63054b87a174e982f0434ecef706f"
+      },
+      "kind": "function",
+      "line_span": [118, 131],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_published_markdown_is_reachable_from_root_toctrees",
+      "signature": "test_published_markdown_is_reachable_from_root_toctrees() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_published_markdown_is_reachable_from_root_toctrees"
+    },
+    "py:function:tests/test_documentation_contract.py::test_section_markers_are_unique_and_precede_h2": {
+      "hashes": {
+        "body_hash": "a25a5bff09ccba34daeafe7bb85bb1c7289aa41b534241faf8855310818273de",
+        "content_hash": "1ccf36371ee0e616afe04a551d5abe1b702206c786a5fcc34de72f6b7d19d5ab",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "c481f8fd437bb7ea13c4ff8a531294bac6c4a73210f1d6c71cf4db09fbcabe26",
+        "signature_hash": "54a82e3b24dbe07f15e6d7171690f8d4fe0a30877f571738ae3b842fa788c97e"
+      },
+      "kind": "function",
+      "line_span": [134, 145],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_section_markers_are_unique_and_precede_h2",
+      "signature": "test_section_markers_are_unique_and_precede_h2() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_section_markers_are_unique_and_precede_h2"
+    },
+    "py:function:tests/test_documentation_contract.py::test_strict_build_and_generated_changelog_contracts": {
+      "hashes": {
+        "body_hash": "ce31dc98d33334a76802ffbf98fe973036ee04e04c7caeaf5397965ee905b620",
+        "content_hash": "079590acca90eac6967a79857578ab9ef47da679c0bdeed5cbc9683fed5e5097",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "c1029d6c898569c86ebbba18ffc37a024cc1ba617c34b756d6c4bd3e03a867ee",
+        "signature_hash": "1d0fbdb9c6e46971970b0293077785e34570862dd7dae838f6f9e229dddae7ff"
+      },
+      "kind": "function",
+      "line_span": [185, 190],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "test_strict_build_and_generated_changelog_contracts",
+      "signature": "test_strict_build_and_generated_changelog_contracts() -> None",
+      "source_id": "py:function:tests/test_documentation_contract.py::test_strict_build_and_generated_changelog_contracts"
+    },
+    "py:function:tests/test_init.py::test_default_legacy_compatible_config_uses_canonical_storage": {
+      "hashes": {
+        "body_hash": "4659f39bc06fc5bfb7e9aba53d3828ddad0fccbb0c6a1725bd58c4b1d76de656",
+        "content_hash": "d6b45b964b2e7587ccceec257924cee114e4b3675c11d8642c47a29e46a5fdd7",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "public_contract_hash": "93e81b186c9cbcf89e1d9375177fd2b675093d3ab184cb418f21c5a9940765ad",
+        "signature_hash": "59c60539d3f18a68b89077e8af611e0ca6be82be3a57f185e20f3e4b53e03244"
+      },
+      "kind": "function",
+      "line_span": [33, 39],
+      "path": "tests/test_init.py",
+      "qualname": "test_default_legacy_compatible_config_uses_canonical_storage",
+      "signature": "test_default_legacy_compatible_config_uses_canonical_storage(tmp_path: Path) -> None",
+      "source_id": "py:function:tests/test_init.py::test_default_legacy_compatible_config_uses_canonical_storage"
+    },
     "py:function:tests/test_init.py::test_external_storage_option_is_rejected": {
       "hashes": {
         "body_hash": "1af622fde8aeb15bfab2dc982a06d833b9da2c883436812ea4264f875293e9c9",
@@ -4763,7 +5004,7 @@
         "signature_hash": "0c0c93159abe08a304c621534dfa8c9d9e35539578d8f0e3dcf0f1d35d8b2f24"
       },
       "kind": "function",
-      "line_span": [40, 43],
+      "line_span": [49, 52],
       "path": "tests/test_init.py",
       "qualname": "test_external_storage_option_is_rejected",
       "signature": "test_external_storage_option_is_rejected(project: Path, runner: CliRunner) -> None",
@@ -4771,15 +5012,15 @@
     },
     "py:function:tests/test_init.py::test_init_creates_config_and_storage": {
       "hashes": {
-        "body_hash": "13ea372b426b1bf429206fac737d0bfffa1656c0734739d12b678afe89f7bb81",
-        "content_hash": "fd09f633543f2179449841737b314ee7bb8ea25ef682891c4ff562431650e2e2",
+        "body_hash": "883a4b6dbc89d0a4e632f2175393da0383da7e8102fc9654e9bbd41e8aea8e26",
+        "content_hash": "82a4f2f59cb54dad7706b3b36d1839b239b055922bc9468fe72750130c17256f",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "public_contract_hash": "19d39f942ff27d06328fb0ea2e381b358f38ee4dbbcc04059005f5c8e5d3c498",
+        "public_contract_hash": "27db3977b9bdbbd59687e76ebf8417319307a520baa61a80d3020b36215abac0",
         "signature_hash": "e67819ef262f95bb892397f8c65e59bb65587b426f05cf453015f1f9a65fb24f"
       },
       "kind": "function",
-      "line_span": [11, 24],
+      "line_span": [12, 24],
       "path": "tests/test_init.py",
       "qualname": "test_init_creates_config_and_storage",
       "signature": "test_init_creates_config_and_storage(project: Path, runner: CliRunner) -> None",
@@ -4811,7 +5052,7 @@
         "signature_hash": "045bc3ba5bb36d6f3347a9d84128551e1f0933f5d8d9f92fa1ce85dc0beb4409"
       },
       "kind": "function",
-      "line_span": [33, 37],
+      "line_span": [42, 46],
       "path": "tests/test_init.py",
       "qualname": "test_reinitialization_fails_cleanly",
       "signature": "test_reinitialization_fails_cleanly(project: Path, runner: CliRunner) -> None",
@@ -5947,7 +6188,7 @@
         "signature_hash": "808737dd81ca99e43ef954ff2d566b0bf16f7f5cc74e428d44caff427bb0a054"
       },
       "kind": "method",
-      "line_span": [671, 678],
+      "line_span": [672, 679],
       "path": "documentledger/storage.py",
       "qualname": "CommandState.get_doc_record",
       "signature": "get_doc_record(self, doc_path: str) -> dict[str, Any] | None",
@@ -5963,7 +6204,7 @@
         "signature_hash": "4450f7be4714a7e6c0f0f7c86f4d689e89af34469f63b3d0a2453d973f6420de"
       },
       "kind": "method",
-      "line_span": [665, 669],
+      "line_span": [666, 670],
       "path": "documentledger/storage.py",
       "qualname": "CommandState.get_doc_sections",
       "signature": "get_doc_sections(self, doc_path: str) -> dict[str, dict[str, Any]]",
@@ -5979,7 +6220,7 @@
         "signature_hash": "f470d6597638710a496b7b0da2a516e138f8376014b6f8051b653c3a24e9d84c"
       },
       "kind": "method",
-      "line_span": [659, 663],
+      "line_span": [660, 664],
       "path": "documentledger/storage.py",
       "qualname": "CommandState.get_scan",
       "signature": "get_scan(self) -> dict[str, Any] | None",
@@ -5995,7 +6236,7 @@
         "signature_hash": "041ba6f01e64bdc9b3ab6566b2e1c704f8922f4335cb45c6aede99a72bd56254"
       },
       "kind": "method",
-      "line_span": [648, 651],
+      "line_span": [649, 652],
       "path": "documentledger/storage.py",
       "qualname": "CommandState.get_scan_summary",
       "signature": "get_scan_summary(self) -> dict[str, Any] | None",
@@ -6011,7 +6252,7 @@
         "signature_hash": "c34cc9c971f5a074f1acd95656460e3031df46fa682d65604814cf36f7602b12"
       },
       "kind": "method",
-      "line_span": [653, 657],
+      "line_span": [654, 658],
       "path": "documentledger/storage.py",
       "qualname": "CommandState.get_source_units",
       "signature": "get_source_units(self) -> dict[str, dict[str, Any]]",
@@ -6027,7 +6268,7 @@
         "signature_hash": "53a975ab1d3e01ad920862f75b098bbe5c44c6b37b1f6003357e29960fca3121"
       },
       "kind": "method",
-      "line_span": [680, 692],
+      "line_span": [681, 693],
       "path": "documentledger/storage.py",
       "qualname": "CommandState.list_doc_records",
       "signature": "list_doc_records(self) -> list[dict[str, Any]]",
@@ -6083,15 +6324,15 @@
     },
     "py:module:documentledger/cli_support.py": {
       "hashes": {
-        "body_hash": "9f57c657c082293530c17849af1c53eb9a60b38a42c0b315f58b93a4e6df542f",
-        "content_hash": "0b6568c5983e424f2425ee5a60940466f5a2a333da2ba98710132cfeb5fa9088",
+        "body_hash": "298fb5a045c7522899af57fdad894ef8fe7430a474f013bd340ba4a0979c0649",
+        "content_hash": "7743df3f522d0a99d91ae306a9acf66749e0e66a6eb14c70072990e0aee4be0a",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "def3892c9d37df9802fe66dea0c0c27f1ef350cbed177971c80666459b22b035",
-        "public_contract_hash": "80dbfd2857bfa22944edf10107873bd55e82e77af961f1f5eb48d0a44c0f879d",
+        "public_contract_hash": "1dd9d14d13c2ae1eb9a67995470fdce218d226dabab64ab65dd12ffffea4ac8c",
         "signature_hash": "7b42afdb3e6dee3ea96a4db93851c34798eff5ca1a878add40b2187bbce25bae"
       },
       "kind": "module",
-      "line_span": [1, 122],
+      "line_span": [1, 132],
       "path": "documentledger/cli_support.py",
       "qualname": "documentledger/cli_support.py",
       "signature": "documentledger/cli_support.py",
@@ -6148,7 +6389,7 @@
     "py:module:documentledger/commands/document.py": {
       "hashes": {
         "body_hash": "03f5cf71a931de84bf27ad0b3b434ac94c365f6f7a67b9d74c166200374b2236",
-        "content_hash": "693a6dbe682458bb78318374e880e2be145556de3d4a5d4f136b2bcc1588ce44",
+        "content_hash": "f2113681ffb6b2667e2fd885d4ea0d6c3aac02668f8ab1f5e09e4dab79cac4f4",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "3b3f074b103e5bdf3bf0715fef08ec3eabb70dccacfaec9b1c31f76603482125",
         "public_contract_hash": "f815850e4591e60209695cbabd10b301c1a51af17aafc1e4447fe67790134d9c",
@@ -6164,7 +6405,7 @@
     "py:module:documentledger/commands/link.py": {
       "hashes": {
         "body_hash": "1057457aba43558a40499e8a363a95f999f336efd69c9f3c2eae7c8077d589b0",
-        "content_hash": "a9666fb199fc2a31851481af4145086dc8f4e748398e99588174eca56cb9aed9",
+        "content_hash": "dfb9532c8af8bc1c31ba8f7819f58765a2c5d84a8046ae7585ec5d80286871ac",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "49d05e0d5855d60479368cc83c0a1b6e58dfc7bfe0f32cd917d7016126543832",
         "public_contract_hash": "734df92ac5b77b618035e5286efd8bf3dbc576738eb157dd9871391fac252ad5",
@@ -6180,7 +6421,7 @@
     "py:module:documentledger/commands/migrate.py": {
       "hashes": {
         "body_hash": "fe424e849d6f41f4243e3ea0b258a438791062aab116aa6db0e7441ec1ed066e",
-        "content_hash": "e527b458e6e0360cbee60941cddacb546911692ed29a9700b0816c14f464548c",
+        "content_hash": "7ae59d7af794b46f33d19f51d23db83c37b5fc0f9388c7764a88c190f94b1960",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "245a42918fb05962b64a9b7dcc6b4914ef640446747fd36685fa10bf293e045d",
         "public_contract_hash": "4d3e0e5fced159fd5b17f70d521aa695af457f5b0a12c5cdc1817e3e97504dc4",
@@ -6195,11 +6436,11 @@
     },
     "py:module:documentledger/commands/root.py": {
       "hashes": {
-        "body_hash": "e26c3fc51299a7715dcce1ee376240e96a1f8afd2a349a456704998aa3cf8416",
-        "content_hash": "03375683cffaa8da58a8d93f9490a5488b2f1f7398dc013319876b1e0260942e",
+        "body_hash": "b8744bab62656313369be4e0fb3506a44a919d04a16b4752b13c7e4892eb03d6",
+        "content_hash": "7160703201fc789fa68e7ece596de8423faf94173bc452b20d2b57389437ee87",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "0565fb718b929072472ad29667ad78325bbbcd8c4f3432d5360b3214cb536363",
-        "public_contract_hash": "74858992283184ba61201c5f1ebfe977e01e4a155228c97cbd305acfbed85775",
+        "public_contract_hash": "14691a2b3b4840f9843793715e572073862097b475546a99384b367bfe590a58",
         "signature_hash": "1c75373d4fa8eab6d0121994d0571edabbe80644b7be984353e5f6a7d0fba5b9"
       },
       "kind": "module",
@@ -6483,15 +6724,15 @@
     },
     "py:module:documentledger/storage.py": {
       "hashes": {
-        "body_hash": "6b4685de519b1765d8817a23016d58135caebe696f5621e0041270991c887c8b",
-        "content_hash": "0eb66ec518fb5de26bd18ee6e6b597886822a5cf296c665002daae81bf894e0d",
+        "body_hash": "35f1b3fba09968ab0284ee56f2f0465379e31cdf81d32efbc2c791f09b6f2d22",
+        "content_hash": "111e18dce850056eff93650ed04369784b121e4135e00177aab58af63668350f",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "docstring_hash": "68c579671a960e2d38e9f86f3d75236a8ba937e85918c6078ff33150d4d55cf5",
-        "public_contract_hash": "734963a81cf6ef947f76682b7d62872778ec61f6a7f21a2de20d05643d9826fc",
-        "signature_hash": "d16b4b248ec806e1ddb3a2921997ea63374ffdbfc5746355ceea86963231d1a0"
+        "public_contract_hash": "79c93fb86dc3bc3403c29a686ed3ef706e7246077f6fc952565f83dc4a4330e6",
+        "signature_hash": "5c46d4e86424945560ff3893d5ca6822e759d622c31cfe127ccd9e0c9aac9937"
       },
       "kind": "module",
-      "line_span": [1, 692],
+      "line_span": [1, 693],
       "path": "documentledger/storage.py",
       "qualname": "documentledger/storage.py",
       "signature": "documentledger/storage.py",
@@ -6593,17 +6834,33 @@
       "signature": "tests/test_docs.py",
       "source_id": "py:module:tests/test_docs.py"
     },
-    "py:module:tests/test_init.py": {
+    "py:module:tests/test_documentation_contract.py": {
       "hashes": {
-        "body_hash": "820c4d23b1777a7a1f12c9693d164ed64b00c688079ad9e7c49f34b79de095fb",
-        "content_hash": "ed96b1715890284524d6409a452f60536347672acc6900177d6abb2c6d30b339",
+        "body_hash": "d4c7d1aacb73155e4aa74512d09284f9542430808137203e5fa00c2c151b6022",
+        "content_hash": "f43b1fb53fa0de060095efe43d484a3f5d639c77731d935f2f17d329b258e8fe",
         "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "docstring_hash": "545c38b0922de19734fbffde62792c37c2aef6a3216cfa472449173165220f7d",
-        "public_contract_hash": "f18db73da6400d7e58c012ebd5e185f646e6d9b09489012519ec387becbea55e",
-        "signature_hash": "f92f1f86d175c28b6d541aeadce2f710882cb2fafd3a9a5fa5f9e8adad7c165f"
+        "docstring_hash": "e943804e875b7dfbc94cad3b7153124c7f940475b90e7da55f1bf50b610b4d82",
+        "public_contract_hash": "340fcc4c1c63bd81923ebcff1e15aa77942e7919b2e37e3208c7ddacb9e27386",
+        "signature_hash": "94c1042acf01c95398e3505315acdd3b34556014ea46feb13a2b2cd0f9301d4e"
       },
       "kind": "module",
-      "line_span": [1, 43],
+      "line_span": [1, 190],
+      "path": "tests/test_documentation_contract.py",
+      "qualname": "tests/test_documentation_contract.py",
+      "signature": "tests/test_documentation_contract.py",
+      "source_id": "py:module:tests/test_documentation_contract.py"
+    },
+    "py:module:tests/test_init.py": {
+      "hashes": {
+        "body_hash": "a020bc47a0d28729fbe691f6c0638bf1dc62cf398e7f980390e3f265a2e580b2",
+        "content_hash": "0d0c3eb6c297dcb2adb4ea368e65f4e8f496e6e0a96db1846600c6b5db79e674",
+        "decorator_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "docstring_hash": "7c370d9536d7d0d6a0f7cd7f9826692acd93e4fb05ba46f7b630b879740343d3",
+        "public_contract_hash": "d7413e1ef912dc10d2eb2dcdd8158b3937f4b2185c2e5518e3e024d136367457",
+        "signature_hash": "87ebffe9c440197b570774099b08ebb1ff9f20dc83cb4c5e79bfb61dd758d0bc"
+      },
+      "kind": "module",
+      "line_span": [1, 52],
       "path": "tests/test_init.py",
       "qualname": "tests/test_init.py",
       "signature": "tests/test_init.py",
