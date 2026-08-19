@@ -671,6 +671,7 @@ documentledger document mark-fresh
 | `--doc`            | no       | ``      | `text`    |
 | `--section`        | no       | ``      | `text`    |
 | `--all`            | no       | ``      | `boolean` |
+| `--affected`       | no       | ``      | `boolean` |
 | `--allow-unlinked` | no       | ``      | `boolean` |
 | `--reason`         | yes      | ``      | `text`    |
 
@@ -1009,10 +1010,11 @@ documentledger link propose
 
 ### Arguments and options
 
-| Parameter    | Required | Default | Type      |
-| ------------ | -------- | ------- | --------- |
-| `--all-docs` | no       | ``      | `boolean` |
-| `--out-dir`  | no       | ``      | `text`    |
+| Parameter          | Required | Default | Type      |
+| ------------------ | -------- | ------- | --------- |
+| `--all-docs`       | no       | ``      | `boolean` |
+| `--out-dir, --out` | no       | ``      | `text`    |
+| `--include-tests`  | no       | ``      | `boolean` |
 
 ### JSON result and errors
 

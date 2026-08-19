@@ -5,7 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from documentledger.cli import app
-from tests.conftest import assert_no_timestamp_keys, invoke_json, load_yaml, write_precision_sample
+from tests.conftest import assert_no_timestamp_keys, invoke_json, invoke_json_may_fail, load_yaml, write_precision_sample
 
 
 def test_docs_list_shows_known_docs(project: Path, runner: CliRunner) -> None:
@@ -153,3 +153,42 @@ def test_mark_fresh_section_clears_live_affectedness_without_new_scan(project: P
     after = invoke_json(runner, ["document", "affected"])["result"]["affected_sections"]
     assert update["updated_sections"] == ["docs/usage.md::usage-validate-ledger-state"]
     assert after == []
+
+
+def test_mark_fresh_all_selects_configured_docs_after_clean_scan(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
+    invoke_json(runner, ["scan"])
+    data = invoke_json(
+        runner,
+        ["document", "mark-fresh", "--all", "--allow-unlinked", "--reason", "Reviewed bootstrap coverage."],
+    )
+    assert data["result"]["selector"] == "all"
+    assert data["result"]["selected_docs"] == ["README.md", "docs/usage.md"]
+
+
+def test_mark_fresh_all_preflights_unlinked_docs_before_writing(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
+    invoke_json(runner, ["scan"])
+    before = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
+    exit_code, data = invoke_json_may_fail(
+        runner,
+        ["document", "mark-fresh", "--all", "--reason", "Should fail before writes."],
+    )
+    assert exit_code != 0
+    assert data["error"]["code"] == "unlinked-doc"
+    after = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
+    assert after["state_version"] == before["state_version"]
+    assert not (project / ".ledger" / "documentledger" / "data" / "docs").exists()
+
+
+def test_mark_fresh_rejects_conflicting_all_and_affected_selectors(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    invoke_json(runner, ["scan"])
+    exit_code, data = invoke_json_may_fail(
+        runner,
+        ["document", "mark-fresh", "--all", "--affected", "--allow-unlinked", "--reason", "invalid"],
+    )
+    assert exit_code != 0
+    assert data["error"]["code"] == "invalid-selector"

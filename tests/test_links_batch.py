@@ -54,6 +54,38 @@ def test_import_map_reapply_is_noop(project: Path, runner) -> None:
     assert second["unchanged_edges"] == 1
 
 
+def test_import_map_accepts_empty_reviewed_document_as_noop(project: Path, runner) -> None:
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
+    empty = project / "empty.yaml"
+    empty.write_text(
+        "schema: documentledger.mapping_proposal.v1\ndoc_path: docs/usage.md\nsections: []\n",
+        encoding="utf-8",
+    )
+    result = invoke_json(runner, ["link", "import-map", "--file", str(empty), "--check-and-apply"])
+    assert result["result"]["empty_mapping_files"] == 1
+    assert result["result"]["documents"] == 0
+    assert result["result"]["planned_edges"] == 0
+    assert not (project / ".ledger" / "documentledger" / "data" / "docs").exists()
+    assert any(event["event"] == "mapping_skipped_empty" for event in result["events"])
+
+
+def test_import_map_mixed_empty_and_reviewed_files_preserves_empty_noop(project: Path, runner) -> None:
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
+    maps = project / "maps"
+    maps.mkdir()
+    write_map(maps / "scan.yaml", section="usage-run-scan", source_unit="py:function:documentledger/cli.py::scan", reason="Documents scan.")
+    (maps / "index.yaml").write_text(
+        "schema: documentledger.mapping_proposal.v1\ndoc_path: README.md\nsections: []\n",
+        encoding="utf-8",
+    )
+    result = invoke_json(runner, ["link", "import-map", "--directory", str(maps), "--check-and-apply"])["result"]
+    assert result["empty_mapping_files"] == 1
+    assert result["documents"] == 1
+    assert result["added_edges"] == 1
+
+
 def test_replace_section_preserves_all_supplied_edges(project: Path, runner) -> None:
     invoke_json(runner, ["init"])
     write_precision_sample(project)

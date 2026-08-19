@@ -39,6 +39,8 @@ documentledger --json link import-map --directory /tmp/documentledger-maps --che
 
 `--validate` checks the complete batch without writing. Review and correct proposal files, then use `--check-and-apply` for an atomic application.
 
+An empty top-level `sections: []` file is a valid reviewed no-op for a document. Empty `links: []` inside a named section remains invalid unless an explicit clearing operation is requested.
+
 <!-- docledger-section: setup-sequence -->
 
 ## Coverage and final gates {#setup-sequence}
@@ -48,7 +50,16 @@ documentledger --json link audit
 documentledger --json coverage
 ```
 
-Run configured tests and documentation validation before freshness marking. Finish with:
+Review coverage before freshness marking: every configured document must be linked or explicitly accepted as intentionally unlinked, while internal and test source units may remain intentionally omitted. Run configured tests and documentation validation before freshness marking. For a reviewed bootstrap batch, finish with:
+
+```bash
+documentledger document mark-fresh --all --allow-unlinked \
+  --reason "Bootstrap documentation completed after scan version VERSION."
+```
+
+Do not weaken lint, Sphinx, type-check, or documentation validation settings solely to make this gate pass.
+
+Then run:
 
 ```bash
 documentledger --json doctor

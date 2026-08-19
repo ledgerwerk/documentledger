@@ -7,7 +7,6 @@ from time import perf_counter
 from typing import Any
 
 import typer
-from ledgercore.yamlio import write_yaml as core_write_yaml
 
 from documentledger.cli_support import emit_success, get_state, handle_command_error
 from documentledger.errors import DocumentledgerError
@@ -115,10 +114,15 @@ def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:  #
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
         prepared = prepare_mapping_batch(workspace, mapping_paths)
-        events = [{"event": "mapping_validated", "file": path} for path in prepared.mapping_paths]
+        empty_paths = set(prepared.empty_mapping_paths)
+        events = [
+            {"event": "mapping_skipped_empty" if path in empty_paths else "mapping_validated", "file": path}
+            for path in prepared.mapping_paths
+        ]
         if validate:
             result = {
                 "mapping_files": len(prepared.mapping_paths),
+                "empty_mapping_files": prepared.empty_mapping_count,
                 "documents": len(prepared.documents),
                 "sections": prepared.section_count,
                 "planned_edges": prepared.planned_edges,
@@ -151,106 +155,19 @@ def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:  #
     def link_propose(
         ctx: typer.Context,
         all_docs: bool = typer.Option(False, "--all-docs"),
-        out_dir: str | None = typer.Option(None, "--out-dir"),
+        out_dir: str | None = typer.Option(None, "--out-dir", "--out"),
+        include_tests: bool = typer.Option(False, "--include-tests"),
     ) -> None:
-        from documentledger.doc_index import doc_sections_for_file
-        from documentledger.links import current_source_inventory
-        from documentledger.scanner import collect_files
+        from documentledger.links import propose_mappings
 
         started_at = perf_counter()
-        if not all_docs:
-            raise DocumentledgerError("invalid_selector", "Use --all-docs for proposal generation.")
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        inventory = current_source_inventory(workspace)
-        docs = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
-        artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
-        output_dir = (
-            Path(out_dir) if out_dir else ((artifacts_dir / "proposals") if artifacts_dir else workspace.config.storage_dir / "proposals")
-        )
-        if (
-            out_dir is None
-            and artifacts_dir is not None
-            and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
-            and not artifacts_dir.exists()
-        ):
-            import ledgercore
-
-            from documentledger.project import resolve_canonical_project
-
-            canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
-            ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        written_files: list[str] = []
-        proposed_sections = 0
-        proposed_edges = 0
-        events: list[dict[str, Any]] = []
-
-        def _proposal_links_for_text(section_text: str, inventory: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-            proposals: list[dict[str, Any]] = []
-            seen: set[tuple[str, str, str]] = set()
-            for unit in sorted(inventory.values(), key=lambda item: (str(item.get("path", "")), str(item.get("source_id", "")))):
-                source_path = str(unit.get("path", ""))
-                qualname = str(unit.get("qualname", ""))
-                match_text = None
-                reason = None
-                evidence_kind = None
-                if source_path and source_path in section_text:
-                    match_text = source_path
-                    reason = f"Section contains exact source path `{source_path}`."
-                    evidence_kind = "exact-source-reference"
-                elif qualname and qualname != source_path and qualname in section_text:
-                    match_text = qualname
-                    reason = f"Section contains exact qualified symbol `{qualname}`."
-                    evidence_kind = "exact-qualified-symbol"
-                if match_text is None:
-                    continue
-                source_id = str(unit.get("source_id", ""))
-                key = (source_id, "implementation-note", "unknown")
-                if key in seen:
-                    continue
-                seen.add(key)
-                proposals.append(
-                    {
-                        "source_unit": source_id,
-                        "coverage": "implementation-note",
-                        "impact": "unknown",
-                        "reason": reason,
-                        "confidence": "high",
-                        "evidence": {"kind": evidence_kind, "text": match_text},
-                    }
-                )
-            return proposals
-
-        for doc_path in docs:
-            sections_payload: list[dict[str, Any]] = []
-            for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
-                links = _proposal_links_for_text(section.text, inventory)
-                if not links:
-                    continue
-                sections_payload.append({"section": section.heading_slug, "links": links})
-                proposed_sections += 1
-                proposed_edges += len(links)
-            if not sections_payload:
-                continue
-            target = output_dir / f"{Path(doc_path).stem}.yaml"
-            core_write_yaml(
-                target,
-                {"schema": "documentledger.mapping_proposal.v1", "doc_path": doc_path, "sections": sections_payload},
-                sort_keys=False,
-            )
-            written_files.append(str(target))
-            events.append({"event": "proposal_written", "file": str(target), "sections": len(sections_payload)})
-        result = {
-            "documents": len(docs),
-            "proposal_files": written_files,
-            "proposed_sections": proposed_sections,
-            "proposed_edges": proposed_edges,
-        }
+        result, events = propose_mappings(workspace, all_docs=all_docs, out_dir=out_dir, include_tests=include_tests)
         emit_success(
             ctx,
             "link propose",
             result,
-            f"Wrote {len(written_files)} proposal files.",
+            f"Wrote {len(result['proposal_files'])} proposal files.",
             events + _profile_events(ctx, "link propose", started_at),
         )

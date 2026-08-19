@@ -104,6 +104,8 @@ documentledger document mark-fresh \
 
 Mark fresh only after validation. Section-level marking updates the live affected projection without requiring another scan. Unlinked documents are rejected unless `--allow-unlinked` is explicitly appropriate.
 
+`--all` selects all configured documents; `--affected` selects only currently affected documents. For bootstrap, use `--all --allow-unlinked` only after reviewing coverage and explicitly accepting any remaining unlinked documents.
+
 <!-- docledger-section: json-and-human-output -->
 
 ## JSON, human, and profile output

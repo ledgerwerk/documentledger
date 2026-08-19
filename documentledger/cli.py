@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
 import typer
 from ledgercore.cli import CLIWarning, CommonCLIState
@@ -474,10 +473,15 @@ def _register_links_aliases() -> None:
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
         prepared = prepare_mapping_batch(workspace, mapping_paths)
-        events = [{"event": "mapping_validated", "file": path} for path in prepared.mapping_paths]
+        empty_paths = set(prepared.empty_mapping_paths)
+        events = [
+            {"event": "mapping_skipped_empty" if path in empty_paths else "mapping_validated", "file": path}
+            for path in prepared.mapping_paths
+        ]
         if validate:
             result = {
                 "mapping_files": len(prepared.mapping_paths),
+                "empty_mapping_files": prepared.empty_mapping_count,
                 "documents": len(prepared.documents),
                 "sections": prepared.section_count,
                 "planned_edges": prepared.planned_edges,
@@ -506,134 +510,33 @@ def _register_links_aliases() -> None:
     def links_propose(
         ctx: typer.Context,
         all_docs: bool = typer.Option(False, "--all-docs"),
-        out_dir: str | None = typer.Option(None, "--out-dir"),
+        out_dir: str | None = typer.Option(None, "--out-dir", "--out"),
+        include_tests: bool = typer.Option(False, "--include-tests"),
     ) -> None:
-        _handle_links_propose(ctx, all_docs, out_dir, get_state, emit_success, load_workspace)
-
-
-def _proposal_links_for_section(section_text: str, inv: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Find source-link proposals for a single document section."""
-    proposals: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
-    for unit in sorted(inv.values(), key=lambda i: (str(i.get("path", "")), str(i.get("source_id", "")))):
-        sp = str(unit.get("path", ""))
-        qn = str(unit.get("qualname", ""))
-        mt: str | None = None
-        reason: str | None = None
-        evidence_kind: str | None = None
-        if sp and sp in section_text:
-            mt, reason, evidence_kind = sp, f"Section contains exact source path `{sp}`.", "exact-source-reference"
-        elif qn and qn != sp and qn in section_text:
-            mt, reason, evidence_kind = qn, f"Section contains exact qualified symbol `{qn}`.", "exact-qualified-symbol"
-        if mt is None:
-            continue
-        sid = str(unit.get("source_id", ""))
-        dedup_key = (sid, "implementation-note", "unknown")
-        if dedup_key in seen:
-            continue
-        seen.add(dedup_key)
-        proposals.append(
-            {
-                "source_unit": sid,
-                "coverage": "implementation-note",
-                "impact": "unknown",
-                "reason": reason,
-                "confidence": "high",
-                "evidence": {"kind": evidence_kind, "text": mt},
-            }
-        )
-    return proposals
-
-
-def _ensure_artifacts_dir(workspace: object, out_dir_str: str | None, artifacts_dir: Path | None) -> Path:
-    """Return output_dir, initialising the artifacts binding if needed."""
-    from pathlib import Path
-
-    output_dir = (
-        Path(out_dir_str)
-        if out_dir_str
-        else (
-            (artifacts_dir / "proposals") if artifacts_dir else workspace.config.storage_dir / "proposals"  # type: ignore[union-attr]
-        )
-    )
-    if (
-        out_dir_str is None
-        and artifacts_dir is not None
-        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"  # type: ignore[union-attr]
-        and not artifacts_dir.exists()
-    ):
-        import ledgercore
-
-        from documentledger.project import resolve_canonical_project
-
-        canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)  # type: ignore[union-attr]
-        ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
-    return output_dir
+        _handle_links_propose(ctx, all_docs, out_dir, include_tests, get_state, emit_success, load_workspace)
 
 
 def _handle_links_propose(
     ctx: typer.Context,
     all_docs: bool,
     out_dir: str | None,
+    include_tests: bool,
     get_state: object,
     emit_success: object,
     load_workspace: object,
 ) -> None:
-    """Implementation of links propose, extracted for complexity control."""
-    from pathlib import Path
+    """Compatibility adapter for the canonical proposal service."""
+    from documentledger.links import propose_mappings
 
-    from ledgercore.yamlio import write_yaml as core_write_yaml
-
-    from documentledger.doc_index import doc_sections_for_file
-    from documentledger.errors import DocumentledgerError
-    from documentledger.links import current_source_inventory
-    from documentledger.scanner import collect_files
-
-    if not all_docs:
-        raise DocumentledgerError("invalid_selector", "Use --all-docs for proposal generation.")
     state = get_state(ctx)  # type: ignore[operator]
     workspace = load_workspace(start=state.root)  # type: ignore[operator]
-    inventory = current_source_inventory(workspace)
-    docs = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
-    artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
-    output_dir = _ensure_artifacts_dir(workspace, out_dir, artifacts_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    written_files: list[str] = []
-    proposed_sections = 0
-    proposed_edges = 0
-    events: list[dict[str, Any]] = []
-    for doc_path in docs:
-        sections_payload = []
-        for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
-            links = _proposal_links_for_section(section.text, inventory)
-            if not links:
-                continue
-            sections_payload.append({"section": section.heading_slug, "links": links})
-            proposed_sections += 1
-            proposed_edges += len(links)
-        if not sections_payload:
-            continue
-        target = output_dir / f"{Path(doc_path).stem}.yaml"
-        core_write_yaml(
-            target,
-            {"schema": "documentledger.mapping_proposal.v1", "doc_path": doc_path, "sections": sections_payload},
-            sort_keys=False,
-        )
-        written_files.append(str(target))
-        events.append({"event": "proposal_written", "file": str(target), "sections": len(sections_payload)})
-    result = {
-        "documents": len(docs),
-        "proposal_files": written_files,
-        "proposed_sections": proposed_sections,
-        "proposed_edges": proposed_edges,
-    }
-    emit_success(ctx, "link propose", result, f"Wrote {len(written_files)} proposal files.", events)  # type: ignore[operator]
+    result, events = propose_mappings(workspace, all_docs=all_docs, out_dir=out_dir, include_tests=include_tests)
+    emit_success(ctx, "link propose", result, f"Wrote {len(result['proposal_files'])} proposal files.", events)  # type: ignore[operator]
 
 
 def _register_mark_fresh_alias() -> None:
     """Register the legacy mark-fresh root command alias."""
     from documentledger.cli_support import emit_success, get_state, handle_command_error
-    from documentledger.errors import DocumentledgerError
     from documentledger.storage import load_workspace
 
     @app.command("mark-fresh")
@@ -643,6 +546,7 @@ def _register_mark_fresh_alias() -> None:
         doc: str | None = typer.Option(None, "--doc"),
         section: str | None = typer.Option(None, "--section"),
         all_docs: bool = typer.Option(False, "--all"),
+        affected: bool = typer.Option(False, "--affected"),
         allow_unlinked: bool = typer.Option(False, "--allow-unlinked"),
         reason: str = typer.Option(..., "--reason"),
     ) -> None:
@@ -658,69 +562,22 @@ def _register_mark_fresh_alias() -> None:
             )
         )
         ctx.obj["state"] = state
-        # Delegate to the canonical handler
-        import json
-
-        from documentledger.commands.document import _selected_sections_for_mark_fresh
-        from documentledger.doc_index import doc_sections_for_file
-        from documentledger.identity import normalize_repo_path
-        from documentledger.impact import resolve_affected_sections
-        from documentledger.links import current_source_inventory
-        from documentledger.scanner import file_hash
-        from documentledger.storage import latest_scan, save_doc_record
-
-        if not reason.strip():
-            raise DocumentledgerError("reason_required", "mark-fresh requires a non-empty reason.")
         workspace = load_workspace(start=state.root)
-        scan_record = latest_scan(workspace)
-        if scan_record is None:
-            raise DocumentledgerError("scan_missing", "mark-fresh requires a latest scan.")
-        if doc and all_docs:
-            raise DocumentledgerError("invalid_selector", "Use --doc or --all, not both.")
-        if section and not doc:
-            raise DocumentledgerError("doc_required", "Use --doc when selecting --section.")
-        doc_paths = (
-            [normalize_repo_path(doc)]
-            if doc
-            else sorted({str(item["doc_path"]) for item in resolve_affected_sections(workspace)})
-            if all_docs
-            else []
+        from documentledger.freshness import mark_fresh
+
+        result = mark_fresh(
+            workspace,
+            doc=doc,
+            section=section,
+            all_docs=all_docs,
+            affected=affected,
+            allow_unlinked=allow_unlinked,
+            reason=reason,
         )
-        if not doc_paths:
-            raise DocumentledgerError("doc_required", "Select --doc DOC or --all.")
-        inventory = current_source_inventory(workspace)
-        updated_docs, updated_sections = [], []
-        for doc_path in doc_paths:
-            record, sections = _selected_sections_for_mark_fresh(workspace, doc_path, section, allow_unlinked)
-            before = json.dumps(record, sort_keys=True)
-            for sel in sections:
-                for cur in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
-                    if cur.section_id != str(sel.get("section_id")):
-                        continue
-                    sel["heading_path"] = list(cur.heading_path)
-                    sel["heading_slug"] = cur.heading_slug
-                    sel["line_span"] = [cur.line_span[0], cur.line_span[1]]
-                    sel["section_hash"] = cur.section_hash
-                    sel["summary"] = cur.summary
-                    break
-                for link in sel.get("links", []) or []:
-                    sid = str(link.get("source_id", ""))
-                    if sid not in inventory:
-                        raise DocumentledgerError("source_unit_not_found", f"Cannot mark fresh while linked source unit is missing: {sid}")
-                    cu = inventory[sid]
-                    tracked = dict(link.get("tracked_hashes", {}))
-                    link["tracked_hashes"] = {n: str(cu["hashes"][n]) for n in tracked if n in cu.get("hashes", {})}
-                updated_sections.append(f"{doc_path}::{sel['heading_slug']}")
-            record["last_fresh_scan_version"] = scan_record["version"]
-            record["last_fresh_hash"] = file_hash(workspace.config.root / doc_path)
-            record["notes"] = reason if record.get("linked_sources") else f"{reason} (intentionally unlinked)"
-            if json.dumps(record, sort_keys=True) != before:
-                save_doc_record(workspace, record)
-            updated_docs.append(doc_path)
         emit_success(
             ctx,
             "mark-fresh",
-            {"updated_docs": updated_docs, "updated_sections": updated_sections, "scan_version": scan_record["version"]},
+            result,
             "Marked docs fresh.",
         )
 

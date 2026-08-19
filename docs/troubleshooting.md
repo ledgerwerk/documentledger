@@ -36,7 +36,7 @@ Run `documentledger --json scan` once to create a baseline. A clean first scan i
 
 ## Check reports stale sections
 
-Run `documentledger document affected`, inspect bounded context, update the affected sections, run validation, and use section-level `documentledger document mark-fresh`. Do not mark fresh before validation.
+Run `documentledger document affected`, inspect bounded context, update the affected sections, run validation, and use section-level `documentledger document mark-fresh`. `--all` means all configured documents; use `--affected` for only affected documents. Do not mark fresh before validation or weaken validation settings merely to pass.
 
 <!-- docledger-section: troubleshooting-index -->
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -14,10 +13,7 @@ from documentledger.cli_support import emit_success, get_state, handle_command_e
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
 from documentledger.storage import (
-    latest_scan,
-    load_doc_record,
     load_workspace,
-    save_doc_record,
 )
 
 
@@ -203,53 +199,6 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
         human = str(rendered["content"]) if print_output else f"Saved context to {output_path}"
         emit_success(ctx, "document build-context", result, human, _profile_events(ctx, "document build-context", started_at))
 
-    def _selected_sections_for_mark_fresh(
-        workspace: Any,
-        doc_path: str,
-        section_ref: str | None,
-        allow_unlinked: bool,
-    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        from documentledger.doc_index import doc_sections_for_file
-        from documentledger.impact import resolve_affected_sections
-
-        record = load_doc_record(workspace, doc_path) or {
-            "schema": "documentledger.doc_record.v4",
-            "doc_path": doc_path,
-            "linked_sources": [],
-            "sections": [
-                section.to_record() | {"links": []} for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path)
-            ],
-            "last_fresh_scan_version": 0,
-            "last_fresh_hash": "",
-            "notes": "",
-            "version": 0,
-        }
-        linked = record.get("linked_sources", []) or []
-        if not linked and not allow_unlinked:
-            raise DocumentledgerError(
-                "unlinked_doc",
-                f"{doc_path} has no linked sources; mark-fresh is rejected for unlinked docs by default.",
-                [
-                    "Add links with `documentledger link add` or `documentledger link add-section` before marking this doc fresh.",
-                    "Pass --allow-unlinked to record this doc as intentionally unlinked.",
-                ],
-            )
-        if section_ref:
-            wanted = [
-                section
-                for section in record.get("sections", []) or []
-                if section_ref in {str(section.get("heading_slug")), str(section.get("section_id"))}
-            ]
-            if not wanted:
-                raise DocumentledgerError("section_not_found", f"No section {section_ref} exists in {doc_path}")
-            return record, wanted
-        affected_sections = resolve_affected_sections(workspace, docs=[doc_path])
-        affected_ids = {str(item["section_id"]) for item in affected_sections}
-        selected = [section for section in (record.get("sections", []) or []) if str(section.get("section_id")) in affected_ids] or list(
-            record.get("sections", []) or []
-        )
-        return record, selected
-
     @docs_app.command("mark-fresh")
     @handle_command_error("document mark-fresh")
     def document_mark_fresh(
@@ -257,72 +206,26 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
         doc: str | None = typer.Option(None, "--doc"),
         section: str | None = typer.Option(None, "--section"),
         all_docs: bool = typer.Option(False, "--all"),
+        affected: bool = typer.Option(False, "--affected"),
         allow_unlinked: bool = typer.Option(False, "--allow-unlinked"),
         reason: str = typer.Option(..., "--reason"),
     ) -> None:
-        from documentledger.doc_index import doc_sections_for_file
-        from documentledger.impact import resolve_affected_sections
-        from documentledger.links import current_source_inventory
-        from documentledger.scanner import file_hash
-
-        if not reason.strip():
-            raise DocumentledgerError("reason_required", "mark-fresh requires a non-empty reason.")
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        scan_record = latest_scan(workspace)
-        if scan_record is None:
-            raise DocumentledgerError("scan_missing", "mark-fresh requires a latest scan.")
-        if doc and all_docs:
-            raise DocumentledgerError("invalid_selector", "Use --doc or --all, not both.")
-        if section and not doc:
-            raise DocumentledgerError("doc_required", "Use --doc when selecting --section.")
-        doc_paths = (
-            [normalize_repo_path(doc)]
-            if doc
-            else sorted({str(item["doc_path"]) for item in resolve_affected_sections(workspace)})
-            if all_docs
-            else []
+        from documentledger.freshness import mark_fresh
+
+        result = mark_fresh(
+            workspace,
+            doc=doc,
+            section=section,
+            all_docs=all_docs,
+            affected=affected,
+            allow_unlinked=allow_unlinked,
+            reason=reason,
         )
-        if not doc_paths:
-            raise DocumentledgerError("doc_required", "Select --doc DOC or --all.")
-        inventory = current_source_inventory(workspace)
-        updated_docs: list[str] = []
-        updated_sections: list[str] = []
-        for doc_path in doc_paths:
-            record, sections = _selected_sections_for_mark_fresh(workspace, doc_path, section, allow_unlinked)
-            before = json.dumps(record, sort_keys=True)
-            for selected_section in sections:
-                for current_section in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
-                    if current_section.section_id != str(selected_section.get("section_id")):
-                        continue
-                    selected_section["heading_path"] = list(current_section.heading_path)
-                    selected_section["heading_slug"] = current_section.heading_slug
-                    selected_section["line_span"] = [current_section.line_span[0], current_section.line_span[1]]
-                    selected_section["section_hash"] = current_section.section_hash
-                    selected_section["summary"] = current_section.summary
-                    break
-                for link in selected_section.get("links", []) or []:
-                    source_id = str(link.get("source_id", ""))
-                    if source_id not in inventory:
-                        raise DocumentledgerError(
-                            "source_unit_not_found",
-                            f"Cannot mark fresh while linked source unit is missing: {source_id}",
-                        )
-                    current_unit = inventory[source_id]
-                    tracked = dict(link.get("tracked_hashes", {}))
-                    link["tracked_hashes"] = {
-                        name: str(current_unit["hashes"][name]) for name in tracked if name in current_unit.get("hashes", {})
-                    }
-                updated_sections.append(f"{doc_path}::{selected_section['heading_slug']}")
-            record["last_fresh_scan_version"] = scan_record["version"]
-            record["last_fresh_hash"] = file_hash(workspace.config.root / doc_path)
-            record["notes"] = reason if record.get("linked_sources") else f"{reason} (intentionally unlinked)"
-            if json.dumps(record, sort_keys=True) != before:
-                save_doc_record(workspace, record)
-            updated_docs.append(doc_path)
         emit_success(
             ctx,
             "document mark-fresh",
-            {"updated_docs": updated_docs, "updated_sections": updated_sections, "scan_version": scan_record["version"]},
+            result,
             "Marked docs fresh.",
         )

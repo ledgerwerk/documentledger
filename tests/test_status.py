@@ -24,6 +24,18 @@ def test_status_reports_latest_scan_version_after_scan(project: Path, runner: Cl
     assert data["result"]["last_scan_version"] == 1
 
 
+def test_status_recommendations_use_canonical_commands_and_separate_freshness(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    before_scan = invoke_json(runner, ["status"])["result"]
+    assert before_scan["recommended_command"] == "documentledger scan"
+    assert before_scan["freshness_state"] == "clean"
+    assert before_scan["mapping_state"] == "review_required"
+    invoke_json(runner, ["scan"])
+    after_scan = invoke_json(runner, ["status"])["result"]
+    assert ".ledger/documentledger/data" not in after_scan["recommended_command"]
+    assert "docledger" not in after_scan["recommended_command"]
+
+
 def test_status_reports_missing_workspace(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:
     monkeypatch.chdir(tmp_path)
     data = invoke_json(runner, ["status"])

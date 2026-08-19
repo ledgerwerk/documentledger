@@ -82,19 +82,19 @@ def _status_classification(workspace: Any) -> tuple[str, str, str]:
         return (
             "bootstrap_required",
             "A baseline scan exists but no documentation links exist.",
-            "documentledger document build-context --bootstrap --out .ledger/documentledger/data/rendered/latest-context.md",
+            "documentledger document build-context --bootstrap",
         )
     if affected_count > 0:
         return (
             "incremental_affected",
             "Linked documentation sections are affected by the latest source changes.",
-            "documentledger document build-context --affected --out .ledger/documentledger/data/rendered/latest-context.md",
+            "documentledger document build-context --affected",
         )
     if unlinked_changed > 0:
         return (
             "mapping_incomplete",
             "Changed source files are not fully linked to documentation.",
-            "documentledger link propose --all-docs --out-dir .ledger/documentledger/data/proposals",
+            "documentledger link propose --all-docs",
         )
     return ("incremental_clean", "No affected linked sections remain after the latest scan.", "documentledger scan")
 
@@ -148,6 +148,13 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
         }
     issues = _scan_diagnostics(workspace)
     state, reason, command = _status_classification(workspace)
+    affected_count = coerce_int(workspace.metadata.get("last_scan_affected_section_count"), 0)
+    unlinked_changed = coerce_int(workspace.metadata.get("last_scan_unlinked_changed_source_count"), 0)
+    linked_sections = sum(
+        1 for record in iter_doc_records(workspace) for section in (record.get("sections", []) or []) if section.get("links")
+    )
+    freshness_state = "clean" if affected_count == 0 else "affected"
+    coverage_review_required = linked_sections <= 0 or unlinked_changed > 0
     result = {
         "initialized": True,
         "state": state,
@@ -166,6 +173,13 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
         "last_scan_unlinked_changed_source_count": coerce_int(workspace.metadata.get("last_scan_unlinked_changed_source_count"), 0),
         "recommended_command": command,
         "recommended_reason": reason,
+        "freshness_state": freshness_state,
+        "mapping_state": "review_required" if coverage_review_required else "not_stale",
+        "coverage_review_required": coverage_review_required,
+        "coverage": {
+            "documents_with_records": len(iter_doc_records(workspace)),
+            "sections_linked": linked_sections,
+        },
         "issues": issues,
     }
     if paths is not None:

@@ -72,7 +72,7 @@ Use `documentledger migrate status`, `migrate plan`, `migrate apply`, `migrate r
 
 ## Bootstrapping a new repository
 
-The first scan is a baseline; use `documentledger document build-context --bootstrap` and review deterministic link proposals before applying them.
+The first scan is a baseline; use `documentledger document build-context --bootstrap`, review deterministic link proposals and coverage (including intentional no-op mappings), then apply them before marking all configured documents fresh with `--allow-unlinked`.
 
 ## Documentation and development
 

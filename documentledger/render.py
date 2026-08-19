@@ -5,6 +5,7 @@ from typing import Any
 
 from documentledger.doc_index import doc_sections_for_file
 from documentledger.impact import resolve_affected_sections, stale_doc_details
+from documentledger.links import current_source_inventory
 from documentledger.models import Workspace
 from documentledger.storage import iter_doc_records, latest_scan, workspace_root
 
@@ -118,6 +119,24 @@ def selected_doc_sections(workspace: Workspace, docs: list[str], section_id: str
     return sorted(items, key=lambda item: (str(item["doc_path"]), str(item["section_id"])))
 
 
+def enrich_linked_source_units(workspace: Workspace, sections: list[dict[str, Any]]) -> None:
+    """Resolve every rendered link against the current source inventory."""
+    inventory = current_source_inventory(workspace)
+    for section in sections:
+        for unit in section.get("changed_units", []) or []:
+            source_id = str(unit.get("source_id", ""))
+            current = inventory.get(source_id)
+            if current is None:
+                unit["missing"] = True
+                unit["line_span"] = [0, 0]
+                continue
+            unit["missing"] = False
+            unit["source_path"] = str(current.get("path", unit.get("source_path", "")))
+            unit["line_span"] = list(current.get("line_span", [0, 0]))
+            unit["kind"] = str(current.get("kind", ""))
+            unit["signature"] = str(current.get("signature", ""))
+
+
 def bootstrap_inventory(workspace: Workspace, scan: dict[str, Any] | None) -> tuple[list[str], list[str]]:
     all_docs = sorted((scan.get("doc_hashes", {}) or {}).keys()) if scan else []
     all_sources = set((scan.get("source_hashes", {}) or {}).keys()) if scan else set()
@@ -125,6 +144,23 @@ def bootstrap_inventory(workspace: Workspace, scan: dict[str, Any] | None) -> tu
     for record in iter_doc_records(workspace):
         linked_sources.update(str(source) for source in (record.get("linked_sources", []) or []))
     return sorted(all_sources - linked_sources), all_docs
+
+
+def source_role(source_path: str) -> str:
+    normalized = source_path.replace("\\", "/")
+    parts = normalized.split("/")
+    return "test" if "tests" in parts or normalized.startswith("test") or Path(normalized).name.startswith("test_") else "production"
+
+
+def bootstrap_source_records(workspace: Workspace) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    inventory = current_source_inventory(workspace)
+    production = [dict(unit) for unit in inventory.values() if source_role(str(unit.get("path", ""))) == "production"]
+    tests = [dict(unit) for unit in inventory.values() if source_role(str(unit.get("path", ""))) == "test"]
+
+    def unit_key(unit: dict[str, Any]) -> tuple[str, str, str]:
+        return (str(unit.get("path", "")), str(unit.get("line_span", [0, 0])[0]), str(unit.get("source_id", "")))
+
+    return sorted(production, key=unit_key), sorted(tests, key=unit_key)
 
 
 def render_context(
@@ -155,11 +191,14 @@ def render_context(
     else:
         raise ValueError(f"Unsupported render mode: {mode}")
 
+    if mode != "bootstrap":
+        enrich_linked_source_units(workspace, selected_sections)
+
     unlinked_changed = list(scan.get("unlinked_changed_sources", []) or []) if scan else []
     bootstrap_sources, bootstrap_docs = bootstrap_inventory(workspace, scan)
     lines = [
         "---",
-        "documentledger_schema: documentledger.context.v4",
+        "documentledger_schema: documentledger.context.v5",
         f"scan_version: {scan_version}",
         f"state_version: {workspace.metadata.get('state_version', 0)}",
         f"mode: {mode}",
@@ -182,7 +221,27 @@ def render_context(
         lines.extend(block_lines)
 
     if mode == "bootstrap":
-        append_block("bootstrap-docs", ["## Document inventory", "", *([f"- {doc}" for doc in bootstrap_docs] or ["- None"]), ""])
+        production_units, test_units = bootstrap_source_records(workspace)
+        source_unit_count = len(production_units) + len(test_units)
+        append_block(
+            "bootstrap-docs",
+            [
+                "## Repository documentation outline",
+                "",
+                *(
+                    line
+                    for doc in bootstrap_docs
+                    for line in [
+                        f"### {doc}",
+                        *[
+                            f"- {' / '.join(section.heading_path) or section.heading_slug} ({section.section_id})"
+                            for section in doc_sections_for_file(workspace_root(workspace) / doc, doc)
+                        ],
+                        "",
+                    ]
+                ),
+            ],
+        )
         append_block(
             "bootstrap-sources",
             [
@@ -190,7 +249,69 @@ def render_context(
                 "",
                 *([f"- {source}" for source in bootstrap_sources] or ["- None"]),
                 "",
-                "Create or update relevant docs, then add links with `docledger links add` or `docledger links add-section`.",
+                "Create or update relevant docs, then add links with `documentledger link add` or `documentledger link add-section`.",
+                "",
+            ],
+        )
+        for role, units in (("Production", production_units), ("Test", test_units)):
+            outline_lines = [f"## {role} source outline", ""]
+            by_path: dict[str, list[dict[str, Any]]] = {}
+            for unit in units:
+                by_path.setdefault(str(unit.get("path", "")), []).append(unit)
+            for path, path_units in sorted(by_path.items()):
+                outline_lines.append(f"### {path}")
+                for unit in path_units:
+                    span = list(unit.get("line_span", [0, 0]))
+                    outline_lines.append(
+                        f"- {unit.get('source_id', '')} — {unit.get('kind', '')} {unit.get('qualname', '')} "
+                        f"`{unit.get('signature', '')}` (lines {span[0]}-{span[1]})"
+                    )
+                outline_lines.append("")
+            append_block(f"bootstrap-{role.lower()}-outline", outline_lines or [f"## {role} source outline", "", "- None", ""])
+
+        evidence_units = [
+            unit
+            for unit in production_units
+            if str(unit.get("kind", "")) in {"class", "function", "method"}
+            and not str(unit.get("qualname", "")).split(".")[-1].startswith("_")
+        ][:40]
+        evidence_lines = ["## High-value source evidence", ""]
+        for unit in evidence_units:
+            span = list(unit.get("line_span", [0, 0]))
+            evidence_lines.extend(
+                [
+                    f"### {unit.get('source_id', '')}",
+                    f"- path: {unit.get('path', '')}",
+                    f"- kind: {unit.get('kind', '')}",
+                    f"- signature: `{unit.get('signature', '')}`",
+                    f"- lines: {span[0]}-{span[1]}",
+                    "",
+                    "```python",
+                    source_snippet(workspace_root(workspace), str(unit.get("path", "")), span, max_lines=max_source_lines),
+                    "```",
+                    "",
+                ]
+            )
+        append_block("bootstrap-source-evidence", evidence_lines or ["## High-value source evidence", "", "- None", ""])
+        cli_units = [unit for unit in production_units if "/cli" in str(unit.get("path", ""))]
+        append_block(
+            "bootstrap-cli-inventory",
+            [
+                "## CLI command inventory",
+                "",
+                *(f"- {unit.get('source_id', '')} — `{unit.get('signature', '')}`" for unit in cli_units or ["- None detected"]),
+                "",
+            ],
+        )
+        append_block(
+            "bootstrap-counts",
+            [
+                "## Bootstrap counts",
+                "",
+                f"- source files: {len({str(unit.get('path', '')) for unit in production_units + test_units})}",
+                f"- source units: {source_unit_count}",
+                f"- production units rendered as evidence: {len(evidence_units)}",
+                f"- test units omitted from evidence: {len(test_units)}",
                 "",
             ],
         )
@@ -222,6 +343,8 @@ def render_context(
                     [
                         f"- {unit['source_id']}",
                         f"  - path: {unit['source_path']}",
+                        f"  - status: {'missing' if unit.get('missing') else 'live'}",
+                        *([f"  - kind: {unit['kind']}", f"  - signature: `{unit['signature']}`"] if not unit.get("missing") else []),
                         f"  - lines: {unit['line_span'][0]}-{unit['line_span'][1]}",
                         f"  - changed: {', '.join(unit.get('changed_hashes', []) or ['file_hash'])}",
                         f"  - reason: {unit['reason'] or 'No recorded reason.'}",
@@ -264,7 +387,7 @@ def render_context(
             "- Rewrite only the selected sections unless broader consistency requires more.",
             "- Do not invent behavior.",
             "- Run the configured validation commands when they exist.",
-            '- Run `docledger mark-fresh --doc DOC --section SECTION --reason "Docs '
+            '- Run `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs '
             'updated after scan version VERSION."` only after docs are updated and validated.',
             "",
         ],

@@ -27,11 +27,13 @@ Use this when there is no baseline scan or usable documentation link graph.
 2. Run `documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md`.
 3. Inspect the saved context.
 4. Run `documentledger link propose --all-docs --out-dir /tmp/documentledger-maps`.
-5. Review and correct proposal files.
+5. Review and correct proposal files, including accepting top-level `sections: []` files as intentional no-op decisions.
 6. Run `documentledger --json link import-map --directory /tmp/documentledger-maps --check-and-apply`.
 7. Run `documentledger --json link audit` and `documentledger --json coverage`.
-8. Run configured documentation validation commands.
-9. Run `documentledger document mark-fresh --all --reason "Bootstrap documentation completed after scan version VERSION."`.
+8. Review coverage: classify every configured document as linked or intentionally unlinked, and distinguish omitted/internal/test source units from unresolved coverage.
+9. Run configured documentation validation commands.
+10. Run `documentledger document mark-fresh --all --allow-unlinked --reason "Bootstrap documentation completed after scan version VERSION."` only after the coverage review explicitly accepts remaining unlinked docs.
+11. Run `documentledger --json check` and `documentledger --json status`.
 
 <!-- docledger-section: skill-incremental -->
 
@@ -58,4 +60,6 @@ Prefer `documentledger link add-section` edges over broad file links. Never inve
 The legacy `docledger --json status` form is retained here only to identify the compatibility interface for migration.
 The corresponding legacy forms are `docledger --json scan`, `docledger --json docs affected`, and `docledger docs build-context`.
 The workflow contract remains: Inspect affected sections and linked changed source units first, then complete validation before `mark-fresh`.
+
+Do not weaken lint, Sphinx, type-check, or documentation validation settings solely to make the completion gate pass. Fix documented content first; if a validation configuration change is necessary, report it separately with rationale.
 :::

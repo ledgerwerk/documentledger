@@ -34,6 +34,7 @@ def test_context_includes_expected_sections(project: Path, runner: CliRunner) ->
     assert "documentledger/old.py" in text
     assert "documentledger/unlinked.py" in text
     assert "python -m pytest -q" in text
+    assert "(source no longer exists)" in text
 
 
 def test_print_and_saved_output_match(project: Path, runner: CliRunner) -> None:
@@ -49,7 +50,7 @@ def test_context_front_matter_uses_state_version_without_legacy_timestamp(projec
     result = runner.invoke(__import__("documentledger.cli").cli.app, ["docs", "build-context", "--all", "--print"])
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert "documentledger_schema: documentledger.context.v4" in lines[:6]
+    assert "documentledger_schema: documentledger.context.v5" in lines[:6]
     assert any(line.startswith("scan_version: ") for line in lines[:5])
     assert any(line.startswith("state_version: ") for line in lines[:5])
     assert f"{'generated'}_at:" not in result.output
@@ -92,3 +93,50 @@ def test_affected_context_includes_only_target_section_and_source_unit(project: 
     assert "docs/usage.md :: Usage / Validate ledger state" in result.output
     assert "py:function:documentledger/cli.py::doctor" in result.output
     assert "py:function:documentledger/cli.py::scan" not in result.output
+    assert 'def doctor(ctx: typer.Context, json: bool = typer.Option(False, "--json"))' in result.output
+
+
+def test_doc_and_all_context_resolve_live_source_spans_and_excerpts(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
+    invoke_json(
+        runner,
+        [
+            "link",
+            "add-section",
+            "--doc",
+            "docs/usage.md",
+            "--section",
+            "usage-validate-ledger-state",
+            "--source-unit",
+            "py:function:documentledger/cli.py::doctor",
+            "--coverage",
+            "cli-command",
+            "--impact",
+            "behavior",
+            "--reason",
+            "Documents doctor.",
+        ],
+    )
+    invoke_json(runner, ["scan"])
+    for selector in (["--doc", "docs/usage.md"], ["--all"]):
+        result = runner.invoke(__import__("documentledger.cli").cli.app, ["document", "build-context", *selector, "--print"])
+        assert result.exit_code == 0
+        assert "status: live" in result.output
+        assert "signature: `doctor(ctx: typer.Context) -> None`" in result.output
+        assert "def doctor(ctx: typer.Context) -> None:" in result.output
+
+
+def test_bootstrap_context_contains_source_outlines_signatures_and_counts(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
+    invoke_json(runner, ["scan"])
+    result = runner.invoke(__import__("documentledger.cli").cli.app, ["document", "build-context", "--bootstrap", "--print"])
+    assert result.exit_code == 0
+    assert "documentledger.context.v5" in result.output
+    assert "## Repository documentation outline" in result.output
+    assert "## Production source outline" in result.output
+    assert "py:function:documentledger/cli.py::doctor" in result.output
+    assert "signature: `doctor(ctx: typer.Context) -> None`" in result.output
+    assert "## High-value source evidence" in result.output
+    assert "## Bootstrap counts" in result.output
