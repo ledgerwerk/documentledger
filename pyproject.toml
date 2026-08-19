@@ -30,6 +30,7 @@ classifiers = [
 ]
 dependencies = [
     "typer",
+    "click",
     # Active dependency: ledgercore provides shared storage, identity, and hashing helpers.
     "ledgercore>=0.6.0,<0.7.0",
     "PyYAML",
