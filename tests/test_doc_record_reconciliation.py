@@ -30,7 +30,7 @@ def test_removed_unlinked_section_is_pruned(project: Path, runner: CliRunner) ->
     write_generated_doc(project, include_old=False)
 
     result = invoke_json(runner, ["scan"])
-    workspace, record = generated_record(project)
+    _, record = generated_record(project)
 
     assert result["result"]["reconciliation"]["unlinked_sections_pruned"] == 1
     section_ids = {section["section_id"] for section in record["sections"]}
@@ -46,7 +46,7 @@ def test_unchanged_scan_repairs_preexisting_unlinked_record(project: Path, runne
     write_generated_doc(project)
     invoke_json(runner, ["scan"])
     invoke_json(runner, ["document", "mark-fresh", "--all", "--allow-unlinked", "--reason", "baseline"])
-    workspace, record = generated_record(project)
+    workspace, _ = generated_record(project)
     record_path = doc_record_path(workspace, "docs/generated.md")
     payload = load_yaml(record_path)
     payload["sections"].append(

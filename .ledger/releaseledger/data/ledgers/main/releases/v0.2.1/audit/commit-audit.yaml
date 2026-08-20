@@ -1,0 +1,231 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.2.1
+git_base_ref: v0.2.0
+git_base_sha: 6962cc7b28a003ec8c95c563805d858ecc38e52d
+git_head_ref: HEAD
+git_head_sha: 3bad04054e6f8090d3a9807314e800874870000a
+git_range: 6962cc7b28a003ec8c95c563805d858ecc38e52d..3bad04054e6f8090d3a9807314e800874870000a
+commit_count: 5
+rows:
+  - sha: 484e1109219b289c70053352c3fe8001c3244e35
+    source_ref: git:484e1109219b289c70053352c3fe8001c3244e35
+    short_sha: 484e110
+    changed_paths:
+      - .github/workflows/docs.yml
+      - .ledger/documentledger/data/docs/docs-usage-md-72376d0b.yaml
+      - .ledger/documentledger/data/scan.yaml
+      - .ledger/documentledger/data/source-index.json
+      - .ledger/documentledger/data/storage.yaml
+      - README.md
+      - docs/Makefile
+      - docs/api.md
+      - docs/api/cli-internals.md
+      - docs/api/index.md
+      - docs/api/indexing-and-links.md
+      - docs/api/migration-and-errors.md
+      - docs/api/project-and-config.md
+      - docs/api/rendering-and-impact.md
+      - docs/api/storage-and-scanning.md
+      - docs/architecture.md
+      - docs/bootstrap.md
+      - docs/build.sh
+      - docs/ci.md
+      - docs/cli.md
+      - docs/concepts.md
+      - docs/conf.py
+      - docs/configuration.md
+      - docs/development.md
+      - docs/errors.md
+      - docs/incremental-workflow.md
+      - docs/index.md
+      - docs/installation.md
+      - docs/migration.md
+      - docs/quickstart.md
+      - docs/requirements.txt
+      - docs/schemas.md
+      - docs/storage.md
+      - docs/troubleshooting.md
+      - docs/usage.md
+      - scripts/generate_cli_reference.py
+      - skills/documentledger/SKILL.md
+      - tests/test_documentation_contract.py
+    stats:
+      files_changed: 0
+      insertions: 3253
+      deletions: 1021
+    inspected: true
+    inspected_paths:
+      - .github/workflows/docs.yml
+      - README.md
+      - docs
+      - scripts/generate_cli_reference.py
+      - tests/test_documentation_contract.py
+    observed_behavior:
+      Added the generated CLI reference and expanded the user and developer
+      documentation set, with a documentation CI workflow that builds Sphinx output
+      and verifies the generated reference.
+    public_impact: docs
+    decision: accepted
+    evidence_subject: "doc: add documentation"
+    target_entry_key: entry-0007
+    target_entry_id: entry-0007
+    notes:
+      Covered by the existing documentation entry; the generated reference script
+      is also represented by the existing added entry.
+  - sha: 4b8b3538ac87f17f6c95606902cc71153161e351
+    source_ref: git:4b8b3538ac87f17f6c95606902cc71153161e351
+    short_sha: 4b8b353
+    changed_paths:
+      - README.md
+      - docs/bootstrap.md
+      - docs/cli.md
+      - docs/troubleshooting.md
+      - docs/usage.md
+      - documentledger/cli.py
+      - documentledger/commands/document.py
+      - documentledger/commands/link.py
+      - documentledger/commands/root.py
+      - documentledger/freshness.py
+      - documentledger/links.py
+      - documentledger/render.py
+      - skills/documentledger/SKILL.md
+      - tests/test_bootstrap_workflow.py
+      - tests/test_docs.py
+      - tests/test_links_batch.py
+      - tests/test_render.py
+      - tests/test_status.py
+      - tests/test_workflow_extras.py
+    stats:
+      files_changed: 0
+      insertions: 841
+      deletions: 392
+    inspected: true
+    inspected_paths:
+      - documentledger/freshness.py
+      - documentledger/cli.py
+      - documentledger/commands/document.py
+      - documentledger/commands/link.py
+      - documentledger/render.py
+      - tests/test_bootstrap_workflow.py
+      - tests/test_links_batch.py
+      - tests/test_render.py
+      - tests/test_status.py
+      - docs/bootstrap.md
+      - docs/usage.md
+    observed_behavior:
+      Added shared freshness handling, conservative link proposal generation,
+      richer bootstrap and affected-document context, status coverage indicators, and
+      render output for linked source evidence, with focused workflow and rendering
+      tests.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "feat: better bootstrapping and code scan"
+    target_entry_key: entry-0002
+    target_entry_id: entry-0002
+    notes:
+      Covered by the existing freshness entry; related behavior is also represented
+      by the existing CLI, render, link, quality, and documentation entries.
+  - sha: 81b5dae434e03ef20f2918b6f6ec157e75b8e858
+    source_ref: git:81b5dae434e03ef20f2918b6f6ec157e75b8e858
+    short_sha: 81b5dae
+    changed_paths:
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/entries/entry-0001.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/entries/entry-0002.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/entries/entry-0003.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/entries/entry-0004.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/entries/entry-0005.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/entries/entry-0006.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/entries/entry-0007.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1/release.md
+      - docs/changelog.md
+    stats:
+      files_changed: 0
+      insertions: 224
+      deletions: 0
+    inspected: true
+    inspected_paths:
+      - docs/changelog.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.2.1
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+    observed_behavior:
+      Recorded the initial v0.2.1 releaseledger entries and rendered
+      changelog section; this is release bookkeeping and does not add product behavior.
+    public_impact: internal
+    decision: internal
+    evidence_subject: "doc: changelog"
+    notes: Internal release bookkeeping is intentionally excluded from the public changelog.
+  - sha: 16b56a13e91197dfc87d568982457ae238b451a3
+    source_ref: git:16b56a13e91197dfc87d568982457ae238b451a3
+    short_sha: 16b56a1
+    changed_paths:
+      - pyproject.toml
+    stats:
+      files_changed: 0
+      insertions: 1
+      deletions: 0
+    inspected: true
+    inspected_paths:
+      - pyproject.toml
+    observed_behavior:
+      Declared Click as an explicit runtime dependency so installations
+      include the library required by the command-line implementation.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "feat: add missing dep"
+    target_entry_id: entry-0008
+    notes: Add a public dependency entry with this git source ref.
+  - sha: 3bad04054e6f8090d3a9807314e800874870000a
+    source_ref: git:3bad04054e6f8090d3a9807314e800874870000a
+    short_sha: 3bad040
+    changed_paths:
+      - docs/concepts.md
+      - docs/incremental-workflow.md
+      - docs/troubleshooting.md
+      - docs/usage.md
+      - documentledger/cli_support.py
+      - documentledger/commands/document.py
+      - documentledger/commands/link.py
+      - documentledger/commands/root.py
+      - documentledger/doc_records.py
+      - documentledger/errors.py
+      - documentledger/links.py
+      - documentledger/models.py
+      - documentledger/scanner.py
+      - skills/documentledger/SKILL.md
+      - tests/test_build_context_output.py
+      - tests/test_doc_record_reconciliation.py
+      - tests/test_json_contract.py
+    stats:
+      files_changed: 0
+      insertions: 603
+      deletions: 22
+    inspected: true
+    inspected_paths:
+      - documentledger/doc_records.py
+      - documentledger/commands/document.py
+      - documentledger/commands/link.py
+      - documentledger/commands/root.py
+      - documentledger/links.py
+      - documentledger/scanner.py
+      - tests/test_doc_record_reconciliation.py
+      - tests/test_build_context_output.py
+      - tests/test_json_contract.py
+      - docs/concepts.md
+      - docs/incremental-workflow.md
+      - docs/troubleshooting.md
+      - docs/usage.md
+    observed_behavior:
+      Added durable document-record reconciliation for new, changed,
+      removed, and linked orphaned sections, plus raw stdout context output, structured
+      error details, stricter link and check failures, and regression coverage for generated-document
+      workflows.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "feat: handle external generated doc files"
+    target_entry_id: entry-0009
+    notes: Add a public changed entry with this git source ref.

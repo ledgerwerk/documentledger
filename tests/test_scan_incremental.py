@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import documentledger.scanner as scanner
+from documentledger import scanner
 from tests.conftest import invoke_json, load_json, load_yaml
 
 

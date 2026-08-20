@@ -320,8 +320,7 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
         from documentledger.links import audit_links
 
         audit = audit_links(workspace)
-        for issue in audit.get("issues", []):
-            issues.append(issue)
+        issues.extend(audit.get("issues", []))
 
         # Check stale docs
         from documentledger.impact import resolve_affected_sections

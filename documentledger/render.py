@@ -387,8 +387,10 @@ def render_context(
             "- Rewrite only the selected sections unless broader consistency requires more.",
             "- Do not invent behavior.",
             "- Run the configured validation commands when they exist.",
-            '- Run `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs '
-            'updated after scan version VERSION."` only after docs are updated and validated.',
+            (
+                '- Run `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs '
+                'updated after scan version VERSION."` only after docs are updated and validated.'
+            ),
             "",
         ],
     )

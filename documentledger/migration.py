@@ -282,10 +282,9 @@ def apply_migration(
     )
     migration_root = plan.project_root / ".ledger" / "migrations" / plan.migration_id
     stage_data = migration_root / "data"
-    if migration_root.exists():
-        if any(migration_root.iterdir()):
-            # A matching staging tree is resumable; unrelated content is not.
-            pass
+    if migration_root.exists() and any(migration_root.iterdir()):
+        # A matching staging tree is resumable; unrelated content is not.
+        pass
     migration_root.mkdir(parents=True, exist_ok=True)
     lock_path = _lock_path(plan)
     if lock_path.exists():
@@ -353,7 +352,7 @@ def apply_migration(
                 and binding.mount == DATA_MOUNT
                 and str(existing_metadata.get("project_uuid")) == plan.canonical_uuid
             )
-        except Exception:
+        except ledgercore.LedgerCoreError:
             data_installed = False
         if not data_installed:
             raise DocumentledgerError(

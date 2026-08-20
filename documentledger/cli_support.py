@@ -25,12 +25,12 @@ from documentledger.errors import DocumentledgerError, to_cli_error
 
 __all__ = (
     "CLIWarning",
-    "get_state",
-    "emit_success",
     "emit_error",
+    "emit_success",
+    "get_state",
     "handle_command_error",
-    "version_callback",
     "normalize_command_path",
+    "version_callback",
 )
 
 
