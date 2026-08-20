@@ -51,8 +51,6 @@ Use stable section ids and source-unit ids for precise links. Cursor, selector, 
 
 <!-- docledger-section: link-documentation-to-sources -->
 
-(link-documentation-to-sources)=
-
 ## Add broad and precise links
 
 Prefer section-to-source-unit edges:

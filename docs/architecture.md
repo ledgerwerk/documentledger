@@ -14,8 +14,6 @@ Typer command modules register the canonical singular `document`, `source`, and 
 
 <!-- docledger-section: cli-structure-and-errors -->
 
-(cli-structure-and-errors)=
-
 ## CLI state and result envelopes
 
 Global options create a command state containing root, JSON, profile, and warnings. A centralized error wrapper preserves the real command path and renders either human output or a stable JSON envelope with `ok`, `command`, `result` or `error`, and `events`.
@@ -28,15 +26,11 @@ Global options create a command state containing root, JSON, profile, and warnin
 
 <!-- docledger-section: storage-model -->
 
-(storage-model)=
-
 ## Storage and atomic state transitions
 
 Storage writers validate schema constants, strip timestamp keys, increment integer state versions, and use atomic writes. Durable data includes `storage.yaml`, `scan.yaml`, `source-index.json`, and document records under `docs/*.yaml`. Rendered context and proposals use the resolved cache `artifacts` mount. Read-only commands validate state without repairing or rewriting it.
 
 <!-- docledger-section: scanning-algorithm -->
-
-(scanning-algorithm)=
 
 ## Scanning and source-unit identity
 

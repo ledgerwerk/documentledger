@@ -43,8 +43,6 @@ An empty top-level `sections: []` file is a valid reviewed no-op for a document.
 
 <!-- docledger-section: setup-sequence -->
 
-(setup-sequence)=
-
 ## Coverage and final gates
 
 ```bash
