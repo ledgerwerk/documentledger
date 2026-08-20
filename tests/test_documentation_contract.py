@@ -67,6 +67,14 @@ def test_cli_generator_has_no_drift() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_cli_generator_normalizes_legacy_click_type_names() -> None:
+    from scripts.generate_cli_reference import _canonical_type_name
+
+    assert _canonical_type_name("text") == "str"
+    assert _canonical_type_name("integer") == "int"
+    assert _canonical_type_name("boolean") == "boolean"
+
+
 def test_canonical_command_registration_matches_catalog() -> None:
     from typer.main import get_command
 

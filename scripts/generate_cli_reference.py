@@ -12,6 +12,8 @@ from click import Argument, Command
 from typer.main import get_command
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 OUTPUT = ROOT / "docs" / "cli.md"
 
 
@@ -27,6 +29,12 @@ def _default(value: Any) -> str:
         return ""
     return repr(value)
 
+_CANONICAL_TYPE_NAMES = {"text": "str", "integer": "int"}
+
+
+def _canonical_type_name(name: str) -> str:
+    return _CANONICAL_TYPE_NAMES.get(name, name)
+
 
 def _parameters(command: Command) -> str:
     if not command.params:
@@ -37,7 +45,7 @@ def _parameters(command: Command) -> str:
             name = parameter.name
         else:
             name = ", ".join(parameter.opts)
-        kind = getattr(parameter.type, "name", str(parameter.type))
+        kind = _canonical_type_name(getattr(parameter.type, "name", str(parameter.type)))
         rows.append(f"| `{name}` | {'yes' if parameter.required else 'no'} | `{_default(parameter.default)}` | `{kind}` |")
     return "\n".join(rows)
 
