@@ -29,6 +29,7 @@ def _default(value: Any) -> str:
         return ""
     return repr(value)
 
+
 _CANONICAL_TYPE_NAMES = {"text": "str", "integer": "int"}
 
 
