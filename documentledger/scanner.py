@@ -155,10 +155,13 @@ def filter_unit_changes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def run_scan(workspace: Workspace) -> ScanResult:
+    from documentledger.doc_records import reconcile_doc_records
+
     source_paths = collect_files(workspace, workspace.config.source_roots, workspace.config.source_extensions)
     doc_paths = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
     source_hashes = hash_paths(workspace, source_paths)
     doc_hashes = hash_paths(workspace, doc_paths)
+    reconciliation = reconcile_doc_records(workspace)
     previous_summary = latest_scan_summary(workspace)
     if not scan_state_changed(previous_summary, source_hashes, doc_hashes):
         assert previous_summary is not None
@@ -176,6 +179,7 @@ def run_scan(workspace: Workspace) -> ScanResult:
             source_units={},
             source_hashes=source_hashes,
             doc_hashes=doc_hashes,
+            reconciliation=reconciliation.to_record(),
             unchanged=True,
         )
 
@@ -244,5 +248,6 @@ def run_scan(workspace: Workspace) -> ScanResult:
         source_units=source_units,
         source_hashes=source_hashes,
         doc_hashes=doc_hashes,
+        reconciliation=reconciliation.to_record(),
         unchanged=False,
     )

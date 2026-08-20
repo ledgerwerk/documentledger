@@ -131,4 +131,5 @@ class ScanResult:
     source_units: dict[str, dict[str, Any]] = field(default_factory=dict)
     source_hashes: dict[str, str] = field(default_factory=dict)
     doc_hashes: dict[str, str] = field(default_factory=dict)
+    reconciliation: dict[str, int] = field(default_factory=dict)
     unchanged: bool = False

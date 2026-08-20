@@ -82,6 +82,7 @@ def emit_error(
             "code": cli_err.code,
             "message": cli_err.message,
             "remediation": list(cli_err.remediation),
+            "details": dict(cli_err.details or {}),
         },
         events=(),
         warnings=state.warnings,
@@ -107,8 +108,9 @@ def handle_command_error(command: str) -> Any:
             try:
                 return func(ctx, *args, **kwargs)
             except DocumentledgerError as exc:
+                cli_err = to_cli_error(exc)
                 emit_error(ctx, command, exc)
-                raise typer.Exit(code=exc.exit_code) from exc
+                raise typer.Exit(code=int(cli_err.exit_code)) from exc
             except CLIError as exc:
                 emit_error(ctx, command, exc)
                 raise typer.Exit(code=int(exc.exit_code)) from exc

@@ -10,7 +10,7 @@ This is the normal agent operation after bootstrap.
 2. `documentledger --json doctor`
 3. `documentledger --json scan`
 4. `documentledger --json document affected`
-5. `documentledger document build-context --affected --out /tmp/documentledger-context.md`
+5. `documentledger document build-context --affected --out -`
 6. Inspect source-unit evidence and section links.
 7. Edit affected sections unless consistency requires a broader update.
 8. Run configured validation commands.
@@ -18,6 +18,12 @@ This is the normal agent operation after bootstrap.
 10. Run `documentledger --json link audit`.
 11. Run `documentledger --json check`.
 12. Finish with `documentledger --json status`.
+
+`scan` reconciles each existing durable document record with the current Markdown section
+index before deciding that the scan is unchanged. It adds new headings, refreshes structural
+metadata for surviving sections, prunes removed sections with empty `links`, and retains
+removed linked sections as actionable orphans. The reconciliation counters are included in
+the scan result. `doctor` and `link audit` remain read-only.
 
 <!-- docledger-section: incremental-freshness-projection -->
 

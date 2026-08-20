@@ -35,6 +35,8 @@ _EXIT_CODE_MAP: dict[str, ExitCode] = {
     "legacy_init_options_unsupported": ExitCode.USAGE,
     "doc_required": ExitCode.USAGE,
     "reason_required": ExitCode.USAGE,
+    "unsupported_output_target": ExitCode.USAGE,
+    "stdout_json_conflict": ExitCode.USAGE,
     # Exit 3: workspace/resource unavailable
     "workspace_not_found": ExitCode.UNAVAILABLE,
     "storage_missing": ExitCode.UNAVAILABLE,
@@ -58,6 +60,8 @@ _EXIT_CODE_MAP: dict[str, ExitCode] = {
     # Exit 5: external dependency
     "validation_subprocess_failed": ExitCode.EXTERNAL_FAILURE,
     "external_tool_failed": ExitCode.EXTERNAL_FAILURE,
+    "link_audit_failed": ExitCode.DOMAIN_FAILURE,
+    "check_failed": ExitCode.DOMAIN_FAILURE,
 }
 
 

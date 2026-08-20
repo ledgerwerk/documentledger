@@ -34,7 +34,7 @@ documentledger --json next-action
 documentledger --json scan
 ```
 
-The first scan is a clean baseline. Later scans compare deterministic SHA-256 file and source-unit hashes and report changed/deleted sources, affected sections, unlinked changed sources, and unmapped changed units. An unchanged scan reuses its version and does not rewrite state.
+The first scan is a clean baseline. Later scans compare deterministic SHA-256 file and source-unit hashes and report changed/deleted sources, affected sections, unlinked changed sources, and unmapped changed units. An unchanged scan reuses its version and does not rewrite scan state. Every scan also reconciles existing document records with the live Markdown index: new sections are added, surviving metadata is refreshed, and removed sections with no links are pruned. A removed linked section is retained as an actionable orphan.
 
 <!-- docledger-section: inspect-document-and-source-inventory -->
 
@@ -86,8 +86,10 @@ Proposal files are deterministic suggestions. Review them before applying a batc
 
 ```bash
 documentledger document affected
-documentledger document build-context --affected --out /tmp/documentledger-context.md
+documentledger document build-context --affected --out -
 ```
+
+`--out -` streams raw Markdown directly to stdout without creating the default artifact or a file named `-`. Use `--out PATH` for an atomically written file. Do not combine raw streaming or `--print` with `--json`, because JSON mode emits exactly one machine-readable envelope.
 
 Edit affected sections, run configured validation commands, and inspect the resulting links and errors. Context is bounded by source lines, section lines, and total bytes and includes a truncation manifest when limits apply.
 
@@ -131,6 +133,8 @@ Use `documentledger storage where` to inspect resolved mounts and `documentledge
 ## Validate ledger state
 
 Run `documentledger --json doctor`, `documentledger --json link audit`, and `documentledger --json check` before committing documentation updates.
+
+`doctor` and `link audit` are read-only. If audit reports a linked missing section, move its links to a current section or remove them with `documentledger link remove-section --doc DOC --section SECTION_ID --source-unit SOURCE_ID`; after the final obsolete link is removed, the orphan record is pruned. Unlinked structural churn is repaired by the next `scan`.
 
 <!-- docledger-section: bootstrapping-a-new-repository -->
 

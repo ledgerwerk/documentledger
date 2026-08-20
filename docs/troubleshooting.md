@@ -32,11 +32,19 @@ Inspect the effective config with `documentledger config show` and validate it w
 
 Run `documentledger --json scan` once to create a baseline. A clean first scan is expected. Then use `documentledger document build-context --bootstrap`, review `link propose` output, apply reviewed maps, and audit links.
 
+## Build context writes an unexpected file
+
+Use `documentledger document build-context --affected --out -` for raw stdout. Do not use `/dev/stdout` or `/dev/fd/1`: context files use Ledgercore's atomic regular-file writer, so special stream paths are rejected. Use `--out PATH` for an atomically written file. Raw stdout cannot be combined with `--json` or `--print` because those modes must emit one valid JSON document.
+
 <!-- docledger-section: troubleshooting-stale -->
 
 ## Check reports stale sections
 
 Run `documentledger document affected`, inspect bounded context, update the affected sections, run validation, and use section-level `documentledger document mark-fresh`. `--all` means all configured documents; use `--affected` for only affected documents. Do not mark fresh before validation or weaken validation settings merely to pass.
+
+## Audit reports a missing section
+
+After a `scan`, a missing section with no links is obsolete bookkeeping and is pruned automatically. A missing section with links is a retained linked orphan. Move those links to a current section with `link add-section`, or remove an obsolete edge with `link remove-section --section SECTION_ID --source-unit SOURCE_ID`; rerun `documentledger --json link audit` afterward. `doctor` and `link audit` report this state without mutating records.
 
 <!-- docledger-section: troubleshooting-index -->
 

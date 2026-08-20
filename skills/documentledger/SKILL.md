@@ -15,7 +15,9 @@ Use this skill when updating documentation in a repository that uses Documentled
 2. Run `documentledger storage where` when storage layout is unclear.
 3. Inspect `state`, `layout_source`, `recommended_command`, and reported `issues`.
 4. Run `documentledger --json doctor`.
-5. Stop on invalid roots, missing storage, schema errors, invalid bindings, or link corruption.
+5. Stop on linked missing sections, missing source units, invalid roots, missing storage,
+   schema errors, invalid bindings, or other link corruption. A later `scan` automatically
+   prunes obsolete unlinked section records caused by generated-document heading churn.
 
 <!-- docledger-section: skill-bootstrap -->
 
@@ -24,7 +26,8 @@ Use this skill when updating documentation in a repository that uses Documentled
 Use this when there is no baseline scan or usable documentation link graph.
 
 1. Run `documentledger --json scan`.
-2. Run `documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md`.
+2. Run `documentledger document build-context --bootstrap --out -` when the context should
+   be piped directly to another process. Use `--out PATH` when a durable file is needed.
 3. Inspect the saved context.
 4. Run `documentledger link propose --all-docs --out-dir /tmp/documentledger-maps`.
 5. Review and correct proposal files, including accepting top-level `sections: []` files as intentional no-op decisions.
@@ -41,13 +44,20 @@ Use this when there is no baseline scan or usable documentation link graph.
 
 1. Run `documentledger --json scan`.
 2. Run `documentledger --json document affected`.
-3. Run `documentledger document build-context --affected --out /tmp/documentledger-context.md`.
+3. Run `documentledger document build-context --affected --out -` when the context should
+   be streamed directly to an agent or another process. `--json` and raw Markdown streaming
+   are separate modes; do not combine `--json` with `--out -` or `--print`.
 4. Inspect affected sections and source-unit evidence.
 5. Update only affected sections unless consistency requires more.
 6. Run configured validation commands.
 7. Mark the changed section fresh with a required reason.
 8. Run `documentledger --json link audit` and `documentledger --json check`.
 9. Finish with `documentledger --json status`.
+
+During `scan`, current Markdown owns section existence and metadata. Harmless removed
+unlinked entries are reconciled automatically; a removed linked section remains an actionable
+orphan. Repair it by moving the edge to a current section with `link add-section`, or remove
+the obsolete edge with `link remove-section --section SECTION_ID`, then rerun `link audit`.
 
 <!-- docledger-section: skill-precision -->
 

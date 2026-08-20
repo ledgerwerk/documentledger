@@ -18,6 +18,14 @@ A source file is a configured file such as a Python module. A source unit is a s
 
 A link edge connects a document section to a source unit with coverage, impact, reason, and tracked hashes. Coverage describes how much of the source contract is represented; impact classifies whether changes affect behavior, API, configuration, or another documented concern. Broad file links are a fallback, not the preferred precision model.
 
+## Live sections and durable records
+
+The live Markdown index owns section existence and structural metadata. Durable document
+records own explicit link edges and freshness decisions. During `scan`, a newly added section
+is recorded with empty links, surviving section metadata is refreshed without changing its
+edges, and a removed unlinked section is disposable bookkeeping that may be pruned. A removed
+linked section is retained as an orphan until its links are moved or explicitly removed.
+
 <!-- docledger-section: concepts-freshness -->
 
 ## Freshness and affectedness

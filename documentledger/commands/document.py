@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 
 import typer
 from ledgercore.atomic import atomic_write_text
@@ -22,6 +23,42 @@ def _profile_events(ctx: typer.Context, operation: str, started_at: float) -> li
     if not state.json_output:
         return []
     return [{"event": "profile", "operation": operation, "elapsed_ms": round((perf_counter() - started_at) * 1000, 3)}]
+
+
+@dataclass(frozen=True)
+class ContextOutputTarget:
+    kind: Literal["stdout", "file", "artifact"]
+    path: Path | None = None
+
+
+def resolve_context_output_target(
+    *,
+    out: str | None,
+    json_output: bool,
+    print_output: bool,
+) -> Literal["stdout", "file", "artifact"]:
+    """Validate raw-output combinations without touching the workspace."""
+    if json_output and (out == "-" or print_output):
+        raise DocumentledgerError(
+            "stdout_json_conflict",
+            "Raw Markdown output cannot be combined with --json.",
+            [
+                "Omit --json when streaming Markdown with `--out -`.",
+                "Use `--out PATH` when JSON metadata is required.",
+            ],
+        )
+    if out in {"/dev/stdout", "/dev/fd/1", "/proc/self/fd/1"}:
+        raise DocumentledgerError(
+            "unsupported_output_target",
+            f"{out} is a special stream path and cannot be used as an atomic file target.",
+            [
+                "Use `--out -` to stream context to standard output.",
+                "Use `--out PATH` for an atomically written regular file.",
+            ],
+        )
+    if out == "-":
+        return "stdout"
+    return "file" if out else "artifact"
 
 
 def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:  # noqa: C901
@@ -157,6 +194,11 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
         selector_count = sum(bool(value) for value in (doc, all_docs, affected, bootstrap))
         if selector_count != 1:
             raise DocumentledgerError("invalid_selector", "Select exactly one primary mode: --affected, --doc, --all, or --bootstrap.")
+        output_kind = resolve_context_output_target(
+            out=out,
+            json_output=state.json_output,
+            print_output=print_output,
+        )
         selected = [normalize_repo_path(doc)] if doc else None
         mode = "bootstrap" if bootstrap else "affected" if affected else "all" if all_docs else "doc"
         rendered = render_context(
@@ -169,9 +211,20 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
             max_section_lines=max_section_lines,
             max_bytes=max_bytes,
         )
+        if output_kind == "stdout":
+            typer.echo(str(rendered["content"]))
+            emit_success(
+                ctx,
+                "document build-context",
+                {key: value for key, value in rendered.items() if key != "content"} | {"path": None, "output": "stdout"},
+                "",
+                _profile_events(ctx, "document build-context", started_at),
+            )
+            return
+
         artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
         if (
-            out is None
+            output_kind == "artifact"
             and artifacts_dir is not None
             and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
             and not artifacts_dir.exists()
@@ -184,7 +237,7 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
             ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
         output_path = (
             Path(out)
-            if out
+            if output_kind == "file"
             else (
                 artifacts_dir / "rendered" / "latest-context.md"
                 if artifacts_dir
@@ -193,9 +246,10 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_text(output_path, str(rendered["content"]))
-        if print_output and state.json_output:
-            typer.echo(rendered["content"])
-        result = {key: value for key, value in rendered.items() if key != "content"} | {"path": str(output_path)}
+        result = {key: value for key, value in rendered.items() if key != "content"} | {
+            "path": str(output_path),
+            "output": output_kind,
+        }
         human = str(rendered["content"]) if print_output else f"Saved context to {output_path}"
         emit_success(ctx, "document build-context", result, human, _profile_events(ctx, "document build-context", started_at))
 

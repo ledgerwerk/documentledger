@@ -455,12 +455,37 @@ def remove_section_link(workspace: Workspace, doc: str, section_ref: str, source
     record = load_doc_record(workspace, doc_path)
     if record is None:
         raise DocumentledgerError("doc_record_missing", f"No doc record exists for {doc_path}")
-    section_meta = find_section(workspace, doc_path, section_ref)
+    try:
+        section_meta = find_section(workspace, doc_path, section_ref)
+    except DocumentledgerError as exc:
+        if exc.code != "section_not_found":
+            raise
+        section_meta = next(
+            (
+                dict(section)
+                for section in (record.get("sections", []) or [])
+                if section_ref
+                in {
+                    str(section.get("section_id", "")),
+                    str(section.get("heading_slug", "")),
+                }
+            ),
+            None,
+        )
+        if section_meta is None:
+            raise
     before = str(record)
+    target_id = str(section_meta.get("section_id", ""))
     for section in record.get("sections", []) or []:
-        if str(section.get("section_id")) != str(section_meta.get("section_id")):
+        if str(section.get("section_id")) != target_id:
             continue
         section["links"] = [link for link in (section.get("links", []) or []) if str(link.get("source_id")) != source_unit]
+    live_ids = {str(section["section_id"]) for section in current_doc_sections(workspace, doc_path)}
+    record["sections"] = [
+        section
+        for section in (record.get("sections", []) or [])
+        if str(section.get("section_id")) in live_ids or section.get("links", []) or str(section.get("section_id")) != target_id
+    ]
     refresh_linked_sources(record)
     if str(record) != before:
         save_doc_record(workspace, record)
@@ -620,7 +645,7 @@ def import_mapping(workspace: Workspace, file_path: str, apply_changes: bool, re
 
 
 def audit_links(workspace: Workspace) -> dict[str, Any]:
-    issues: list[dict[str, str]] = []
+    issues: list[dict[str, Any]] = []
     inventory = current_source_inventory(workspace)
     for record in iter_doc_records(workspace):
         doc_path = str(record.get("doc_path", ""))
@@ -631,10 +656,23 @@ def audit_links(workspace: Workspace) -> dict[str, Any]:
             continue
         for section in record.get("sections", []) or []:
             section_id = str(section.get("section_id", ""))
-            if section_id not in sections:
-                issues.append({"code": "missing_section", "message": f"Missing section: {section_id}"})
+            links = list(section.get("links", []) or [])
+            if section_id not in sections and not section_id.endswith("::whole-doc") and links:
+                issues.append(
+                    {
+                        "code": "missing_section",
+                        "doc_path": doc_path,
+                        "section_id": section_id,
+                        "linked_edges": len(links),
+                        "message": f"Linked section no longer exists: {section_id}",
+                        "remediation": [
+                            "Move the links to a current section with `documentledger link add-section`.",
+                            "Remove obsolete links with `documentledger link remove-section`.",
+                        ],
+                    }
+                )
             seen_edges: set[tuple[str, str, str]] = set()
-            for link in section.get("links", []) or []:
+            for link in links:
                 source_id = str(link.get("source_id", ""))
                 key = edge_key(dict(link))
                 if key in seen_edges:

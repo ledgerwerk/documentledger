@@ -148,6 +148,13 @@ def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:  #
 
         state = get_state(ctx)
         result = audit_links(load_workspace(start=state.root))
+        if not result["ok"]:
+            raise DocumentledgerError(
+                "link_audit_failed",
+                f"Link audit found {len(result['issues'])} issue(s).",
+                ["Resolve the reported stale or missing links and rerun `documentledger --json link audit`."],
+                details={"issues": result["issues"]},
+            )
         emit_success(ctx, "link audit", result, "Link audit passed." if result["ok"] else "Link audit found issues.")
 
     @links_app.command("propose")

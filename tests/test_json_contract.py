@@ -4,7 +4,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from tests.conftest import invoke_json, invoke_json_may_fail
+from tests.conftest import invoke_json, invoke_json_may_fail, write_precision_sample
 
 
 def test_success_envelopes_parse(project: Path, runner: CliRunner) -> None:
@@ -44,3 +44,37 @@ def test_scan_and_status_json_contracts_use_versions(project: Path, runner: CliR
     assert "scan_id" not in scan["result"]
     assert status["result"]["last_scan_version"] == 1
     assert "last_scan_id" not in status["result"]
+
+
+def test_check_failure_is_one_error_envelope(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
+    invoke_json(runner, ["scan"])
+    invoke_json(
+        runner,
+        [
+            "link",
+            "add-section",
+            "--doc",
+            "docs/usage.md",
+            "--section",
+            "usage-validate-ledger-state",
+            "--source-unit",
+            "py:function:documentledger/cli.py::doctor",
+            "--coverage",
+            "cli-command",
+            "--impact",
+            "behavior",
+            "--reason",
+            "Documents doctor.",
+        ],
+    )
+    (project / "docs" / "usage.md").write_text("# Usage\n\n## Run a scan\n\nRun scan.\n", encoding="utf-8")
+    invoke_json(runner, ["scan"])
+
+    exit_code, data = invoke_json_may_fail(runner, ["check"])
+
+    assert exit_code == 1
+    assert data["ok"] is False
+    assert data["error"]["code"] == "check-failed"
+    assert data["error"]["details"]["issues"]

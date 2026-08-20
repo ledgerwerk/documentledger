@@ -337,9 +337,14 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
 
         result = {"ok": not issues, "issues": issues}
         human = "Check passed." if not issues else f"Check found {len(issues)} issue(s)."
-        emit_success(ctx, "check", result, human, _profile_events(ctx, "check", started_at))
         if issues:
-            raise typer.Exit(code=1)
+            raise DocumentledgerError(
+                "check_failed",
+                human,
+                ["Resolve the reported validation issues and rerun `documentledger check`."],
+                details={"issues": issues},
+            )
+        emit_success(ctx, "check", result, human, _profile_events(ctx, "check", started_at))
 
     @app.command("next-action")
     @handle_command_error("next-action")
@@ -383,6 +388,7 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
             "stale_docs": result_obj.stale_docs,
             "unlinked_changed_sources": result_obj.unlinked_changed_sources,
             "unmapped_changed_units": result_obj.unmapped_changed_units,
+            "reconciliation": result_obj.reconciliation,
         }
         human = (
             f"No tracked file changes since scan version {result_obj.version}"
