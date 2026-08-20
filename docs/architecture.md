@@ -13,8 +13,8 @@ Documentledger resolves the repository through ledgercore's schema-3 `.ledger/le
 Typer command modules register the canonical singular `document`, `source`, and `link` groups plus configuration, schema, storage, and migration groups. `COMMAND_INVENTORY` supplies stable summaries, effects, audience, workspace requirements, targeting, and aliases. The CLI reference generator traverses Click objects directly and checks catalog drift.
 
 <!-- docledger-section: cli-structure-and-errors -->
-
-## CLI state and result envelopes {#cli-structure-and-errors}
+(cli-structure-and-errors)=
+## CLI state and result envelopes
 
 Global options create a command state containing root, JSON, profile, and warnings. A centralized error wrapper preserves the real command path and renders either human output or a stable JSON envelope with `ok`, `command`, `result` or `error`, and `events`.
 
@@ -25,14 +25,14 @@ Global options create a command state containing root, JSON, profile, and warnin
 `documentledger.config` validates the exact version-2 TOML shape, rejects unknown fields, normalizes arrays of strings, and produces typed `ToolConfig` values. Project identity, UUID, and mounts remain ledgercore concerns.
 
 <!-- docledger-section: storage-model -->
-
-## Storage and atomic state transitions {#storage-model}
+(storage-model)=
+## Storage and atomic state transitions
 
 Storage writers validate schema constants, strip timestamp keys, increment integer state versions, and use atomic writes. Durable data includes `storage.yaml`, `scan.yaml`, `source-index.json`, and document records under `docs/*.yaml`. Rendered context and proposals use the resolved cache `artifacts` mount. Read-only commands validate state without repairing or rewriting it.
 
 <!-- docledger-section: scanning-algorithm -->
-
-## Scanning and source-unit identity {#scanning-algorithm}
+(scanning-algorithm)=
+## Scanning and source-unit identity
 
 The scanner collects configured roots, filters excluded directories and extensions, hashes files, and indexes Python modules, functions, classes, methods, and fallback units. Source-unit identity is semantic and repository-relative; hash dimensions distinguish exact content, signatures, decorators, bodies, docstrings, and public contract.
 

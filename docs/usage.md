@@ -50,8 +50,8 @@ documentledger source show SOURCE_ID
 Use stable section ids and source-unit ids for precise links. Cursor, selector, and path validation failures are reported before state changes.
 
 <!-- docledger-section: link-documentation-to-sources -->
-
-## Add broad and precise links {#link-documentation-to-sources}
+(link-documentation-to-sources)=
+## Add broad and precise links
 
 Prefer section-to-source-unit edges:
 

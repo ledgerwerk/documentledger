@@ -42,8 +42,8 @@ documentledger --json link import-map --directory /tmp/documentledger-maps --che
 An empty top-level `sections: []` file is a valid reviewed no-op for a document. Empty `links: []` inside a named section remains invalid unless an explicit clearing operation is requested.
 
 <!-- docledger-section: setup-sequence -->
-
-## Coverage and final gates {#setup-sequence}
+(setup-sequence)=
+## Coverage and final gates
 
 ```bash
 documentledger --json link audit

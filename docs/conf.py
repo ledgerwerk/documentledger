@@ -73,6 +73,7 @@ nitpick_ignore = [
     ("py:class", "ledgercore.cli.errors.ExitCode"),
     ("py:class", "ledgercore.errors.LedgerCoreError"),
     ("py:class", "pathlib.Path"),
+    ("py:class", "pathlib._local.Path"),
     ("py:class", "collections.abc.Mapping"),
     ("py:data", "typing.Any"),
     ("py:data", "typing.Literal"),
