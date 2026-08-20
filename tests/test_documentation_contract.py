@@ -10,6 +10,11 @@ from pathlib import Path
 
 import pytest
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
+    import tomli as tomllib  # type: ignore[no-redef]
+
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 
@@ -31,8 +36,6 @@ def _requirement_pairs(path: Path) -> set[tuple[str, str]]:
 
 
 def test_documentation_requirements_match_project_extra() -> None:
-    import tomllib
-
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     project_requirements = set(project["project"]["optional-dependencies"]["docs"])
     assert _requirement_pairs(DOCS / "requirements.txt") == {
