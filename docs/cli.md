@@ -8,14 +8,14 @@ This is the authoritative canonical command reference. It is generated from `COM
 
 Global options may appear before the command path:
 
-| Option | Effect |
-| --- | --- |
-| `--root PATH` | Resolve the project from PATH instead of the current directory. |
-| `--json` | Emit the stable JSON envelope. |
-| `--profile` | Include diagnostic operation events in JSON output. |
-| `--version` | Show the installed version. |
-| `--install-completion` | Install shell completion. |
-| `--show-completion` | Print shell completion. |
+| Option                 | Effect                                                          |
+| ---------------------- | --------------------------------------------------------------- |
+| `--root PATH`          | Resolve the project from PATH instead of the current directory. |
+| `--json`               | Emit the stable JSON envelope.                                  |
+| `--profile`            | Include diagnostic operation events in JSON output.             |
+| `--version`            | Show the installed version.                                     |
+| `--install-completion` | Install shell completion.                                       |
+| `--show-completion`    | Print shell completion.                                         |
 
 ## Canonical commands
 
@@ -37,11 +37,11 @@ documentledger init
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--project-name` | no | `` | `str` |
-| `--documentledger-dir` | no | `'.ledger'` | `str` |
-| `--hidden-config` | no | `` | `boolean` |
+| Parameter              | Required | Default     | Type      |
+| ---------------------- | -------- | ----------- | --------- |
+| `--project-name`       | no       | ``          | `str`     |
+| `--documentledger-dir` | no       | `'.ledger'` | `str`     |
+| `--hidden-config`      | no       | ``          | `boolean` |
 
 ### JSON result and errors
 
@@ -311,9 +311,9 @@ documentledger help
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `command_path` | no | `[]` | `str` |
+| Parameter      | Required | Default | Type  |
+| -------------- | -------- | ------- | ----- |
+| `command_path` | no       | `[]`    | `str` |
 
 ### JSON result and errors
 
@@ -433,9 +433,9 @@ documentledger schema show
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `name` | yes | `` | `str` |
+| Parameter | Required | Default | Type  |
+| --------- | -------- | ------- | ----- |
+| `name`    | yes      | ``      | `str` |
 
 ### JSON result and errors
 
@@ -465,9 +465,9 @@ documentledger schema values
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `name` | no | `` | `str` |
+| Parameter | Required | Default | Type  |
+| --------- | -------- | ------- | ----- |
+| `name`    | no       | ``      | `str` |
 
 ### JSON result and errors
 
@@ -527,12 +527,12 @@ documentledger document sections
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | no | `` | `str` |
-| `--all` | no | `` | `boolean` |
-| `--ids-only` | no | `` | `boolean` |
-| `--outline` | no | `` | `boolean` |
+| Parameter    | Required | Default | Type      |
+| ------------ | -------- | ------- | --------- |
+| `--doc`      | no       | ``      | `str`     |
+| `--all`      | no       | ``      | `boolean` |
+| `--ids-only` | no       | ``      | `boolean` |
+| `--outline`  | no       | ``      | `boolean` |
 
 ### JSON result and errors
 
@@ -562,9 +562,9 @@ documentledger document affected
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | no | `` | `str` |
+| Parameter | Required | Default | Type  |
+| --------- | -------- | ------- | ----- |
+| `--doc`   | no       | ``      | `str` |
 
 ### JSON result and errors
 
@@ -624,19 +624,19 @@ documentledger document build-context
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | no | `` | `str` |
-| `--section` | no | `` | `str` |
-| `--all` | no | `` | `boolean` |
-| `--affected` | no | `` | `boolean` |
-| `--bootstrap` | no | `` | `boolean` |
-| `--include-unlinked` | no | `` | `boolean` |
-| `--out` | no | `` | `str` |
-| `--print` | no | `` | `boolean` |
-| `--max-source-lines` | no | `40` | `int` |
-| `--max-section-lines` | no | `80` | `int` |
-| `--max-bytes` | no | `250000` | `int` |
+| Parameter             | Required | Default  | Type      |
+| --------------------- | -------- | -------- | --------- |
+| `--doc`               | no       | ``       | `str`     |
+| `--section`           | no       | ``       | `str`     |
+| `--all`               | no       | ``       | `boolean` |
+| `--affected`          | no       | ``       | `boolean` |
+| `--bootstrap`         | no       | ``       | `boolean` |
+| `--include-unlinked`  | no       | ``       | `boolean` |
+| `--out`               | no       | ``       | `str`     |
+| `--print`             | no       | ``       | `boolean` |
+| `--max-source-lines`  | no       | `40`     | `int`     |
+| `--max-section-lines` | no       | `80`     | `int`     |
+| `--max-bytes`         | no       | `250000` | `int`     |
 
 ### JSON result and errors
 
@@ -666,14 +666,14 @@ documentledger document mark-fresh
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | no | `` | `str` |
-| `--section` | no | `` | `str` |
-| `--all` | no | `` | `boolean` |
-| `--affected` | no | `` | `boolean` |
-| `--allow-unlinked` | no | `` | `boolean` |
-| `--reason` | yes | `` | `str` |
+| Parameter          | Required | Default | Type      |
+| ------------------ | -------- | ------- | --------- |
+| `--doc`            | no       | ``      | `str`     |
+| `--section`        | no       | ``      | `str`     |
+| `--all`            | no       | ``      | `boolean` |
+| `--affected`       | no       | ``      | `boolean` |
+| `--allow-unlinked` | no       | ``      | `boolean` |
+| `--reason`         | yes      | ``      | `str`     |
 
 ### JSON result and errors
 
@@ -703,17 +703,17 @@ documentledger source list
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--kind` | no | `` | `str` |
-| `--path` | no | `` | `str` |
-| `--path-prefix` | no | `` | `str` |
-| `--qualname` | no | `` | `str` |
-| `--query` | no | `` | `str` |
-| `--ids-only` | no | `` | `boolean` |
-| `--include-hashes` | no | `` | `boolean` |
-| `--limit` | no | `100` | `int` |
-| `--cursor` | no | `` | `str` |
+| Parameter          | Required | Default | Type      |
+| ------------------ | -------- | ------- | --------- |
+| `--kind`           | no       | ``      | `str`     |
+| `--path`           | no       | ``      | `str`     |
+| `--path-prefix`    | no       | ``      | `str`     |
+| `--qualname`       | no       | ``      | `str`     |
+| `--query`          | no       | ``      | `str`     |
+| `--ids-only`       | no       | ``      | `boolean` |
+| `--include-hashes` | no       | ``      | `boolean` |
+| `--limit`          | no       | `100`   | `int`     |
+| `--cursor`         | no       | ``      | `str`     |
 
 ### JSON result and errors
 
@@ -743,9 +743,9 @@ documentledger source show
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `source_id` | yes | `` | `str` |
+| Parameter   | Required | Default | Type  |
+| ----------- | -------- | ------- | ----- |
+| `source_id` | yes      | ``      | `str` |
 
 ### JSON result and errors
 
@@ -805,11 +805,11 @@ documentledger link add
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | yes | `` | `str` |
-| `--source` | yes | `` | `str` |
-| `--reason` | no | `` | `str` |
+| Parameter  | Required | Default | Type  |
+| ---------- | -------- | ------- | ----- |
+| `--doc`    | yes      | ``      | `str` |
+| `--source` | yes      | ``      | `str` |
+| `--reason` | no       | ``      | `str` |
 
 ### JSON result and errors
 
@@ -839,10 +839,10 @@ documentledger link remove
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | yes | `` | `str` |
-| `--source` | yes | `` | `str` |
+| Parameter  | Required | Default | Type  |
+| ---------- | -------- | ------- | ----- |
+| `--doc`    | yes      | ``      | `str` |
+| `--source` | yes      | ``      | `str` |
 
 ### JSON result and errors
 
@@ -872,14 +872,14 @@ documentledger link add-section
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | yes | `` | `str` |
-| `--section` | yes | `` | `str` |
-| `--source-unit` | yes | `` | `str` |
-| `--coverage` | yes | `` | `str` |
-| `--impact` | yes | `` | `str` |
-| `--reason` | yes | `` | `str` |
+| Parameter       | Required | Default | Type  |
+| --------------- | -------- | ------- | ----- |
+| `--doc`         | yes      | ``      | `str` |
+| `--section`     | yes      | ``      | `str` |
+| `--source-unit` | yes      | ``      | `str` |
+| `--coverage`    | yes      | ``      | `str` |
+| `--impact`      | yes      | ``      | `str` |
+| `--reason`      | yes      | ``      | `str` |
 
 ### JSON result and errors
 
@@ -909,11 +909,11 @@ documentledger link remove-section
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--doc` | yes | `` | `str` |
-| `--section` | yes | `` | `str` |
-| `--source-unit` | yes | `` | `str` |
+| Parameter       | Required | Default | Type  |
+| --------------- | -------- | ------- | ----- |
+| `--doc`         | yes      | ``      | `str` |
+| `--section`     | yes      | ``      | `str` |
+| `--source-unit` | yes      | ``      | `str` |
 
 ### JSON result and errors
 
@@ -943,14 +943,14 @@ documentledger link import-map
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--file` | no | `` | `str` |
-| `--directory` | no | `` | `str` |
-| `--validate` | no | `` | `boolean` |
-| `--apply` | no | `` | `boolean` |
-| `--check-and-apply` | no | `` | `boolean` |
-| `--replace-section` | no | `` | `boolean` |
+| Parameter           | Required | Default | Type      |
+| ------------------- | -------- | ------- | --------- |
+| `--file`            | no       | ``      | `str`     |
+| `--directory`       | no       | ``      | `str`     |
+| `--validate`        | no       | ``      | `boolean` |
+| `--apply`           | no       | ``      | `boolean` |
+| `--check-and-apply` | no       | ``      | `boolean` |
+| `--replace-section` | no       | ``      | `boolean` |
 
 ### JSON result and errors
 
@@ -1010,11 +1010,11 @@ documentledger link propose
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--all-docs` | no | `` | `boolean` |
-| `--out-dir, --out` | no | `` | `str` |
-| `--include-tests` | no | `` | `boolean` |
+| Parameter          | Required | Default | Type      |
+| ------------------ | -------- | ------- | --------- |
+| `--all-docs`       | no       | ``      | `boolean` |
+| `--out-dir, --out` | no       | ``      | `str`     |
+| `--include-tests`  | no       | ``      | `boolean` |
 
 ### JSON result and errors
 
@@ -1074,9 +1074,9 @@ documentledger storage validate
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--strict` | no | `` | `boolean` |
+| Parameter  | Required | Default | Type      |
+| ---------- | -------- | ------- | --------- |
+| `--strict` | no       | ``      | `boolean` |
 
 ### JSON result and errors
 
@@ -1136,14 +1136,14 @@ documentledger migrate plan
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `migration_name` | no | `'storage-layout'` | `str` |
-| `--output` | no | `` | `str` |
-| `--adopt-project-uuid` | no | `` | `boolean` |
-| `--repair-missing-source-index` | no | `` | `boolean` |
-| `--retain-unknown` | no | `` | `boolean` |
-| `--reject-unknown` | no | `` | `boolean` |
+| Parameter                       | Required | Default            | Type      |
+| ------------------------------- | -------- | ------------------ | --------- |
+| `migration_name`                | no       | `'storage-layout'` | `str`     |
+| `--output`                      | no       | ``                 | `str`     |
+| `--adopt-project-uuid`          | no       | ``                 | `boolean` |
+| `--repair-missing-source-index` | no       | ``                 | `boolean` |
+| `--retain-unknown`              | no       | ``                 | `boolean` |
+| `--reject-unknown`              | no       | ``                 | `boolean` |
 
 ### JSON result and errors
 
@@ -1173,13 +1173,13 @@ documentledger migrate apply
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `migration_name` | no | `'storage-layout'` | `str` |
-| `--plan-file` | no | `` | `str` |
-| `--dry-run` | no | `` | `boolean` |
-| `--adopt-project-uuid` | no | `` | `boolean` |
-| `--repair-missing-source-index` | no | `` | `boolean` |
+| Parameter                       | Required | Default            | Type      |
+| ------------------------------- | -------- | ------------------ | --------- |
+| `migration_name`                | no       | `'storage-layout'` | `str`     |
+| `--plan-file`                   | no       | ``                 | `str`     |
+| `--dry-run`                     | no       | ``                 | `boolean` |
+| `--adopt-project-uuid`          | no       | ``                 | `boolean` |
+| `--repair-missing-source-index` | no       | ``                 | `boolean` |
 
 ### JSON result and errors
 
@@ -1209,10 +1209,10 @@ documentledger migrate recover
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `--journal` | yes | `` | `str` |
-| `--policy` | no | `'auto'` | `str` |
+| Parameter   | Required | Default  | Type  |
+| ----------- | -------- | -------- | ----- |
+| `--journal` | yes      | ``       | `str` |
+| `--policy`  | no       | `'auto'` | `str` |
 
 ### JSON result and errors
 
@@ -1242,14 +1242,14 @@ documentledger migrate cleanup
 
 ### Arguments and options
 
-| Parameter | Required | Default | Type |
-| --- | --- | --- | --- |
-| `migration_name` | no | `'storage-layout'` | `str` |
-| `--journal` | no | `` | `str` |
-| `--dry-run` | no | `` | `boolean` |
-| `--yes` | no | `` | `boolean` |
-| `--discard-derived` | no | `` | `boolean` |
-| `--remove-external-source` | no | `` | `boolean` |
+| Parameter                  | Required | Default            | Type      |
+| -------------------------- | -------- | ------------------ | --------- |
+| `migration_name`           | no       | `'storage-layout'` | `str`     |
+| `--journal`                | no       | ``                 | `str`     |
+| `--dry-run`                | no       | ``                 | `boolean` |
+| `--yes`                    | no       | ``                 | `boolean` |
+| `--discard-derived`        | no       | ``                 | `boolean` |
+| `--remove-external-source` | no       | ``                 | `boolean` |
 
 ### JSON result and errors
 
@@ -1265,17 +1265,17 @@ documentledger migrate cleanup
 
 Compatibility interfaces are documented separately and are not canonical inventory entries:
 
-| Compatibility path | Use instead |
-| --- | --- |
-| `docledger` executable | `documentledger` |
-| `docs ...` | `document ...` |
-| `sources ...` | `source ...` |
-| `links ...` | `link ...` |
-| root `mark-fresh` | `document mark-fresh` |
-| `storage verify` | `storage validate` |
-| `storage migrate` | `migrate plan` or `migrate apply` |
-| `storage recover` | `migrate recover` |
-| `storage cleanup-legacy` | `migrate cleanup` |
+| Compatibility path       | Use instead                       |
+| ------------------------ | --------------------------------- |
+| `docledger` executable   | `documentledger`                  |
+| `docs ...`               | `document ...`                    |
+| `sources ...`            | `source ...`                      |
+| `links ...`              | `link ...`                        |
+| root `mark-fresh`        | `document mark-fresh`             |
+| `storage verify`         | `storage validate`                |
+| `storage migrate`        | `migrate plan` or `migrate apply` |
+| `storage recover`        | `migrate recover`                 |
+| `storage cleanup-legacy` | `migrate cleanup`                 |
 
 :::{deprecated} 0.6
 These wrappers remain for compatibility and may emit deprecation warnings. New automation must use canonical command paths.
