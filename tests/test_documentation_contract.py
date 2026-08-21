@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import importlib
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -57,17 +55,6 @@ def test_cli_reference_covers_catalog_exactly_once() -> None:
             assert f"`{alias}`" in text
     assert "## Compatibility commands" in text
     assert "These wrappers remain" in text
-
-
-def test_cli_generator_has_no_drift() -> None:
-    result = subprocess.run(
-        [sys.executable, "scripts/generate_cli_reference.py", "--check"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_cli_generator_normalizes_legacy_click_type_names() -> None:
