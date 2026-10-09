@@ -1,0 +1,95 @@
+schema: releaseledger.entry-batch.v1
+operation: create
+schema_version: 1
+object_type: release_entry_batch
+release_version: v0.2.2
+git_base_ref: 9b64a669deec648259b86052992068e658e14fff
+git_base_sha: 9b64a669deec648259b86052992068e658e14fff
+git_head_ref: 30f8246d777f423dc2042718500984da3cea9cf8
+git_head_sha: 30f8246d777f423dc2042718500984da3cea9cf8
+include_merges: nontrivial
+entries:
+  - kind: internal
+    summary: Changed generated CLI reference tables to compact Markdown formatting
+    status: accepted
+    internal: true
+    source_refs:
+      - git:5f5290885cbc7b407a391d7b5e086b1001e91434
+    paths:
+      - docs/cli.md
+    sources:
+      - git:5f5290885cbc7b407a391d7b5e086b1001e91434
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: internal
+    summary: Changed generated CLI reference tables back to the pre-commit-compatible formatting
+    status: accepted
+    internal: true
+    source_refs:
+      - git:7a012c2bfc048aa147f1a29c9c7181e8bcb61264
+    paths:
+      - docs/cli.md
+    sources:
+      - git:7a012c2bfc048aa147f1a29c9c7181e8bcb61264
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: internal
+    summary: Removed an obsolete CLI reference generator drift test
+    status: accepted
+    internal: true
+    source_refs:
+      - git:73cbd79efa9f63d4b2c083699ae3b3677963d03c
+    paths:
+      - tests/test_documentation_contract.py
+    sources:
+      - git:73cbd79efa9f63d4b2c083699ae3b3677963d03c
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: added
+    summary: Added scan-bound proposal manifests and reviewed import workflows for documentation mappings
+    status: accepted
+    source_refs:
+      - git:30f8246d777f423dc2042718500984da3cea9cf8
+    paths:
+      - documentledger/proposal_manifest.py
+      - documentledger/links.py
+      - documentledger/cli.py
+    sources:
+      - git:30f8246d777f423dc2042718500984da3cea9cf8
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: added
+    summary: Added paginated document build-context output with resumable cursors and completeness metadata
+    status: accepted
+    paths:
+      - documentledger/render.py
+      - documentledger/cli.py
+    sources:
+      - git:30f8246d777f423dc2042718500984da3cea9cf8
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: changed
+    summary: Improved the documentation completion workflow with source-root discovery and current-content validation checks
+    status: accepted
+    paths:
+      - documentledger/project.py
+      - documentledger/verification.py
+      - documentledger/commands/root.py
+      - docs/cli.md
+      - skills/documentledger/SKILL.md
+    sources:
+      - git:30f8246d777f423dc2042718500984da3cea9cf8
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"

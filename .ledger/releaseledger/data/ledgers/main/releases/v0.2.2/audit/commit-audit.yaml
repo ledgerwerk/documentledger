@@ -1,0 +1,150 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.2.2
+git_base_ref: v0.2.1
+git_base_sha: 9b64a669deec648259b86052992068e658e14fff
+git_head_ref: HEAD
+git_head_sha: 30f8246d777f423dc2042718500984da3cea9cf8
+git_range: 9b64a669deec648259b86052992068e658e14fff..30f8246d777f423dc2042718500984da3cea9cf8
+commit_count: 4
+rows:
+  - sha: 5f5290885cbc7b407a391d7b5e086b1001e91434
+    source_ref: git:5f5290885cbc7b407a391d7b5e086b1001e91434
+    short_sha: 5f52908
+    changed_paths:
+      - docs/cli.md
+    stats:
+      files_changed: 1
+      insertions: 142
+      deletions: 142
+    inspected: true
+    inspected_paths:
+      - docs/cli.md
+    observed_behavior:
+      The generated CLI reference tables were normalized to compact
+      Markdown table syntax; this was documentation formatting only and was later superseded
+      by the following formatting commit.
+    public_impact: internal
+    decision: internal
+    stale: false
+    evidence_subject: "fix: doc"
+    target_entry_id: entry-0001
+    notes: Net effect is internal generated-document formatting churn.
+  - sha: 7a012c2bfc048aa147f1a29c9c7181e8bcb61264
+    source_ref: git:7a012c2bfc048aa147f1a29c9c7181e8bcb61264
+    short_sha: 7a012c2
+    changed_paths:
+      - docs/cli.md
+    stats:
+      files_changed: 1
+      insertions: 142
+      deletions: 142
+    inspected: true
+    inspected_paths:
+      - docs/cli.md
+    observed_behavior:
+      Pre-commit formatting restored the padded Markdown table layout
+      in the generated CLI reference; no product behavior changed.
+    public_impact: internal
+    decision: internal
+    stale: false
+    evidence_subject: "chore: pre-commit"
+    target_entry_id: entry-0002
+    notes: Formatting-only follow-up to the preceding generated-doc change.
+  - sha: 73cbd79efa9f63d4b2c083699ae3b3677963d03c
+    source_ref: git:73cbd79efa9f63d4b2c083699ae3b3677963d03c
+    short_sha: 73cbd79
+    changed_paths:
+      - tests/test_documentation_contract.py
+    stats:
+      files_changed: 1
+      insertions: 0
+      deletions: 13
+    inspected: true
+    inspected_paths:
+      - tests/test_documentation_contract.py
+    observed_behavior:
+      Removed an obsolete subprocess-based CLI reference generator
+      drift test while retaining the remaining documentation contract checks.
+    public_impact: internal
+    decision: internal
+    stale: false
+    evidence_subject: "chore: remove test"
+    target_entry_id: entry-0003
+    notes: Test-maintenance change with no user-facing behavior.
+  - sha: 30f8246d777f423dc2042718500984da3cea9cf8
+    source_ref: git:30f8246d777f423dc2042718500984da3cea9cf8
+    short_sha: 30f8246
+    changed_paths:
+      - docs/architecture.md
+      - docs/bootstrap.md
+      - docs/cli.md
+      - docs/conf.py
+      - docs/usage.md
+      - documentledger/cli.py
+      - documentledger/command_catalog.py
+      - documentledger/commands/config.py
+      - documentledger/commands/document.py
+      - documentledger/commands/link.py
+      - documentledger/commands/root.py
+      - documentledger/commands/schema.py
+      - documentledger/freshness.py
+      - documentledger/links.py
+      - documentledger/models.py
+      - documentledger/output.py
+      - documentledger/project.py
+      - documentledger/proposal_manifest.py
+      - documentledger/render.py
+      - documentledger/storage.py
+      - documentledger/verification.py
+      - skills/documentledger/SKILL.md
+      - tests/conftest.py
+      - tests/integration/test_audioexport_style_sphinx_bootstrap.py
+      - tests/test_bootstrap_workflow.py
+      - tests/test_build_context_output.py
+      - tests/test_build_context_selectors.py
+      - tests/test_init.py
+      - tests/test_link_proposal_output.py
+      - tests/test_links_batch.py
+      - tests/test_proposal_manifest.py
+      - tests/test_skill_files.py
+      - tests/test_skill_workflow_contract.py
+      - tests/test_verification.py
+      - tests/test_workflow_extras.py
+    stats:
+      files_changed: 35
+      insertions: 3693
+      deletions: 443
+    inspected: true
+    inspected_paths:
+      - documentledger/cli.py
+      - documentledger/commands/root.py
+      - documentledger/project.py
+      - documentledger/proposal_manifest.py
+      - documentledger/render.py
+      - documentledger/verification.py
+      - documentledger/output.py
+      - documentledger/links.py
+      - docs/architecture.md
+      - docs/bootstrap.md
+      - docs/cli.md
+      - docs/conf.py
+      - docs/usage.md
+      - skills/documentledger/SKILL.md
+      - tests
+    observed_behavior:
+      Added scan-bound proposal manifests with reviewed import selection,
+      resumable paginated build-context output, automatic source-root discovery, structured
+      output errors, and current-content documentation validation and completion checks;
+      expanded tests and documentation cover the workflow.
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: improve workflow"
+    target_entry_id: entry-0004
+    notes:
+      Reviewed implementation, documentation, and regression coverage across the
+      changed paths.
