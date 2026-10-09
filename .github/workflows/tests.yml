@@ -16,7 +16,7 @@ jobs:
     - name: Install packages
       run: |
         pip install pytest
-        pip install -e .
+        pip install -e ".[docs]"
     - name: Run tests
       if: runner.os != 'Windows'
       run: python -m pytest
