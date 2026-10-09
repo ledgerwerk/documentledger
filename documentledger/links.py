@@ -4,15 +4,24 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+from ledgercore.errors import AtomicWriteError
 from ledgercore.yamlio import write_yaml as core_write_yaml
 
 from documentledger.doc_index import doc_sections_for_file, whole_doc_section
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
 from documentledger.models import Workspace
-from documentledger.scanner import collect_files
+from documentledger.output import raise_output_write_error, write_output_file
+from documentledger.proposal_manifest import (
+    PROPOSAL_MANIFEST_NAME,
+    PROPOSAL_MANIFEST_SCHEMA,
+    existing_owned_filenames,
+    proposal_filename,
+    require_current_scan,
+)
+from documentledger.scanner import collect_files, file_hash
 from documentledger.source_index import file_unit_id, source_inventory
 from documentledger.storage import (
     iter_doc_records,
@@ -21,6 +30,7 @@ from documentledger.storage import (
     read_yaml,
     save_doc_record,
     save_doc_records_batch,
+    state_version,
 )
 
 VALID_COVERAGE = {
@@ -213,10 +223,12 @@ def propose_mappings(
     all_docs: bool,
     out_dir: str | None,
     include_tests: bool = False,
+    replace_owned_proposals: bool = False,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Generate proposal files for the canonical and compatibility commands."""
+    """Generate deterministic, scan-bound proposals and an ownership manifest."""
     if not all_docs:
         raise DocumentledgerError("invalid_selector", "Use --all-docs for proposal generation.")
+    scan = require_current_scan(workspace)
     docs = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
     inventory = current_source_inventory(workspace)
     artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
@@ -226,6 +238,7 @@ def propose_mappings(
     if (
         out_dir is None
         and artifacts_dir is not None
+        and workspace.paths is not None
         and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
         and not artifacts_dir.exists()
     ):
@@ -234,41 +247,163 @@ def propose_mappings(
         from documentledger.project import resolve_canonical_project
 
         canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
-        ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    written_files: list[str] = []
+        try:
+            ledgercore.initialize_storage_binding(cast(Any, canonical.layout).mounts["artifacts"], require_empty=True)
+        except (OSError, AtomicWriteError) as exc:
+            raise_output_write_error(
+                output_dir / PROPOSAL_MANIFEST_NAME,
+                command="link propose",
+                cause=exc,
+                managed_artifact=True,
+            )
+
+    manifest_path = output_dir / PROPOSAL_MANIFEST_NAME
+    owned_names = existing_owned_filenames(output_dir)
+    has_manifest = manifest_path.exists() or manifest_path.is_symlink()
+    if has_manifest and not replace_owned_proposals:
+        raise DocumentledgerError(
+            "proposal_manifest_exists",
+            f"A proposal batch already exists in {output_dir}.",
+            ["Use --replace-owned-proposals to replace files owned by its manifest, or choose a new --out-dir."],
+        )
+
+    targets = {doc_path: output_dir / proposal_filename(doc_path) for doc_path in docs}
+    targets_by_name: dict[str, str] = {}
+    for doc_path, target in targets.items():
+        previous = targets_by_name.get(target.name)
+        if previous is not None and previous != doc_path:
+            raise DocumentledgerError(
+                "proposal_filename_collision",
+                f"Different documents resolve to the same proposal target: {previous} and {doc_path}.",
+                ["Choose a different output directory and report the collision; no proposal files were written."],
+                details={"filename": target.name, "documents": sorted([previous, doc_path])},
+            )
+        targets_by_name[target.name] = doc_path
+        if target.is_symlink():
+            raise DocumentledgerError(
+                "proposal_output_conflict",
+                f"Proposal output is a symlink and will not be replaced: {target}.",
+                ["Choose a different proposal output directory."],
+            )
+        if target.exists() and target.name not in owned_names:
+            raise DocumentledgerError(
+                "proposal_output_conflict",
+                f"Proposal output would overwrite a file not owned by this manifest: {target}.",
+                ["Choose a different proposal output directory; unowned files are never overwritten."],
+            )
+
+    previous_yaml_names = {path.name for path in output_dir.glob("*.yaml")} if output_dir.exists() else set()
+    unowned_before = previous_yaml_names - owned_names - {PROPOSAL_MANIFEST_NAME}
+    scan_source_hashes = {str(path): str(value) for path, value in dict(scan.get("source_hashes", {})).items()}
+    scan_doc_hashes = {str(path): str(value) for path, value in dict(scan.get("doc_hashes", {})).items()}
+    proposal_payloads: list[tuple[str, Path, dict[str, Any], list[dict[str, Any]], dict[str, str]]] = []
     proposed_sections = 0
     proposed_edges = 0
     rejected = {"excluded_test_units": 0, "generic_matches_rejected": 0, "low_confidence_rejected": 0}
+    documents_without_candidates: list[str] = []
     events: list[dict[str, Any]] = []
+
     for doc_path in docs:
         sections_payload: list[dict[str, Any]] = []
+        linked_source_paths: set[str] = set()
         for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
             links, stats = _proposal_links_for_section(section.text, inventory, include_tests=include_tests)
             for key, value in stats.items():
                 rejected[key] += value
             if not links:
                 continue
+            for link in links:
+                unit = inventory.get(str(link["source_unit"]), {})
+                source_path = str(unit.get("path", ""))
+                if source_path:
+                    linked_source_paths.add(source_path)
             sections_payload.append({"section": section.heading_slug, "links": links})
             proposed_sections += 1
             proposed_edges += len(links)
         if not sections_payload:
-            continue
-        target = output_dir / f"{Path(doc_path).stem}.yaml"
-        core_write_yaml(
+            documents_without_candidates.append(doc_path)
+        proposal_payload = {
+            "schema": "documentledger.mapping_proposal.v1",
+            "doc_path": doc_path,
+            "sections": sections_payload,
+        }
+        missing_source_hashes = sorted(linked_source_paths - set(scan_source_hashes))
+        if missing_source_hashes:
+            raise DocumentledgerError(
+                "proposal_scan_stale",
+                "A proposed source path is missing from the latest scan snapshot.",
+                ["Run `documentledger scan` before generating mapping proposals."],
+                details={"source_paths": missing_source_hashes},
+            )
+        source_hashes = {path: scan_source_hashes[path] for path in sorted(linked_source_paths)}
+        proposal_payloads.append((doc_path, targets[doc_path], proposal_payload, sections_payload, source_hashes))
+
+    if set(docs) != (set(docs) & set(scan_doc_hashes)):
+        raise DocumentledgerError(
+            "proposal_scan_stale",
+            "The current documentation inventory does not match the latest scan.",
+            ["Run `documentledger scan` before generating mapping proposals."],
+        )
+
+    for _, target, proposal_payload, sections_payload, _ in proposal_payloads:
+        write_output_file(
             target,
-            {"schema": "documentledger.mapping_proposal.v1", "doc_path": doc_path, "sections": sections_payload},
-            sort_keys=False,
+            lambda path, payload=proposal_payload: core_write_yaml(path, payload, sort_keys=False),
+            command="link propose",
+            managed_artifact=out_dir is None,
+        )
+        events.append({"event": "proposal_written", "file": str(target), "sections": len(sections_payload)})
+
+    manifest_documents: list[dict[str, Any]] = []
+    written_files: list[str] = []
+    for doc_path, target, _, sections_payload, source_hashes in proposal_payloads:
+        outcome = "proposed" if sections_payload else "no_candidates"
+        manifest_documents.append(
+            {
+                "doc_path": doc_path,
+                "doc_hash": scan_doc_hashes[doc_path],
+                "source_hashes": source_hashes,
+                "filename": target.name,
+                "proposal_hash": file_hash(target),
+                "reviewed": False,
+                "reviewed_hash": "",
+                "outcome": outcome,
+            }
         )
         written_files.append(str(target))
-        events.append({"event": "proposal_written", "file": str(target), "sections": len(sections_payload)})
+    manifest = {
+        "schema": PROPOSAL_MANIFEST_SCHEMA,
+        "scan_version": int(scan.get("version", 0)),
+        "source_index_hash": str(scan.get("source_index_hash") or ""),
+        "source_hashes": scan_source_hashes,
+        "doc_hashes": scan_doc_hashes,
+        "documents": manifest_documents,
+    }
+    write_output_file(
+        manifest_path,
+        lambda path: core_write_yaml(path, manifest, sort_keys=False),
+        command="link propose",
+        managed_artifact=out_dir is None,
+    )
+    events.append({"event": "proposal_manifest_written", "file": str(manifest_path), "documents": len(manifest_documents)})
+    preserved_unowned = sorted(unowned_before | (owned_names - set(targets_by_name)))
     return (
         {
             "documents": len(docs),
+            "documents_considered": len(docs),
+            "documents_proposed": len(docs) - len(documents_without_candidates),
+            "documents_without_candidates": documents_without_candidates,
             "proposal_files": written_files,
+            "proposal_files_written": len(written_files),
             "proposed_sections": proposed_sections,
             "proposed_edges": proposed_edges,
             "rejected_candidates": rejected,
+            "collisions": 0,
+            "conflicts": 0,
+            "review_required": bool(docs),
+            "manifest": str(manifest_path),
+            "unowned_files_preserved": preserved_unowned,
+            "unowned_file_count": len(preserved_unowned),
         },
         events,
     )
@@ -609,9 +744,7 @@ def apply_mapping_batch(
         refresh_linked_sources(record)
         if record != original:
             changed_records.append(record)
-    state_version = (
-        save_doc_records_batch(workspace, changed_records) if changed_records else int(workspace.metadata.get("state_version", 0))
-    )
+    current_state_version = save_doc_records_batch(workspace, changed_records) if changed_records else state_version(workspace)
     return {
         "mapping_files": len(prepared.mapping_paths),
         "empty_mapping_files": prepared.empty_mapping_count,
@@ -622,7 +755,7 @@ def apply_mapping_batch(
         "unchanged_edges": unchanged_edges,
         "removed_edges": removed_edges,
         "changed_documents": len(changed_records),
-        "state_version": state_version,
+        "state_version": current_state_version,
     }
 
 
@@ -638,7 +771,7 @@ def import_mapping(workspace: Workspace, file_path: str, apply_changes: bool, re
             "sections": prepared.section_count,
             "planned_edges": prepared.planned_edges,
             "changed_documents": 0,
-            "state_version": int(workspace.metadata.get("state_version", 0)),
+            "state_version": state_version(workspace),
         }
     )
     return result | {"applied": apply_changes}

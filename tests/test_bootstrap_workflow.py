@@ -12,6 +12,7 @@ def test_documented_bootstrap_workflow_is_executable(project: Path, runner) -> N
     demo.mkdir()
     tests.mkdir()
     docs.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname = "demo"\n', encoding="utf-8")
     (demo / "__init__.py").write_text("\n", encoding="utf-8")
     (demo / "service.py").write_text(
         "class Service:\n    def run(self, value: str) -> str:\n        return value\n",
@@ -62,8 +63,11 @@ def test_documented_bootstrap_workflow_is_executable(project: Path, runner) -> N
         "schema: documentledger.mapping_proposal.v1\ndoc_path: docs/architecture.md\nsections: []\n",
         encoding="utf-8",
     )
+    review = invoke_json(runner, ["link", "import-map", "--directory", str(maps), "--review"])
+    assert review["result"]["reviewed_files"] == len(load_yaml(maps / "proposal-manifest.yaml")["documents"])
     applied = invoke_json(runner, ["link", "import-map", "--directory", str(maps), "--check-and-apply"])
-    assert applied["result"]["empty_mapping_files"] == 1
+    assert applied["result"]["empty_mapping_files"] >= 1
+    assert applied["result"]["unowned_mapping_files"] == ["reviewed-noop.yaml"]
     assert invoke_json(runner, ["link", "audit"])["result"]["ok"] is True
     coverage = invoke_json(runner, ["coverage"])["result"]
     assert coverage["documents"]["total"] == 3

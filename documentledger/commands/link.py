@@ -97,28 +97,52 @@ def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:
         validate: bool = typer.Option(False, "--validate"),
         apply: bool = typer.Option(False, "--apply"),
         check_and_apply: bool = typer.Option(False, "--check-and-apply"),
+        review: bool = typer.Option(False, "--review"),
         replace_section: bool = typer.Option(False, "--replace-section"),
     ) -> None:
         from documentledger.links import apply_mapping_batch, prepare_mapping_batch
+        from documentledger.proposal_manifest import (
+            require_reviewed_manifest_file,
+            review_proposal_mappings,
+            reviewed_proposal_paths,
+        )
 
         started_at = perf_counter()
         file_path = file_path or []
-        mode_count = sum(bool(value) for value in (validate, apply, check_and_apply))
+        mode_count = sum(bool(value) for value in (validate, apply, check_and_apply, review))
         if mode_count != 1:
-            raise DocumentledgerError("invalid_selector", "Choose exactly one of --validate, --apply, or --check-and-apply.")
+            raise DocumentledgerError("invalid_selector", "Choose exactly one of --validate, --apply, --check-and-apply, or --review.")
+        if review and replace_section:
+            raise DocumentledgerError("invalid_selector", "--replace-section applies only when applying a reviewed mapping.")
         mapping_paths = [Path(path) for path in file_path]
-        if directory is not None:
-            mapping_paths.extend(sorted(Path(directory).glob("*.yaml")))
-        if not mapping_paths:
-            raise DocumentledgerError("invalid_mapping", "Provide at least one --file or a --directory.")
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        prepared = prepare_mapping_batch(workspace, mapping_paths)
+        if review:
+            result = review_proposal_mappings(
+                workspace,
+                directory=Path(directory) if directory is not None else None,
+                mapping_paths=mapping_paths,
+            )
+            emit_success(ctx, "link import-map", result, "Proposal mappings reviewed.", _profile_events(ctx, "link import-map", started_at))
+            return
+
+        manifest_info: dict[str, Any] = {"unowned_mapping_files": [], "unreviewed_documents": [], "reviewed_documents": []}
+        if directory is not None:
+            reviewed_paths, manifest_info = reviewed_proposal_paths(workspace, Path(directory))
+            mapping_paths.extend(reviewed_paths)
+        if not mapping_paths:
+            raise DocumentledgerError("invalid_mapping", "Provide at least one --file or a --directory.")
+        unique_paths = list(dict.fromkeys(mapping_paths))
+        for mapping_path in unique_paths:
+            require_reviewed_manifest_file(workspace, mapping_path)
+        prepared = prepare_mapping_batch(workspace, unique_paths)
         empty_paths = set(prepared.empty_mapping_paths)
-        events = [
+        events: list[dict[str, Any]] = [
             {"event": "mapping_skipped_empty" if path in empty_paths else "mapping_validated", "file": path}
             for path in prepared.mapping_paths
         ]
+        if manifest_info["unowned_mapping_files"]:
+            events.append({"event": "unowned_mapping_files_ignored", "files": manifest_info["unowned_mapping_files"]})
         if validate:
             result = {
                 "mapping_files": len(prepared.mapping_paths),
@@ -127,10 +151,11 @@ def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:
                 "sections": prepared.section_count,
                 "planned_edges": prepared.planned_edges,
                 "applied": False,
+                **manifest_info,
             }
             emit_success(ctx, "link import-map", result, "Mapping validated.", events + _profile_events(ctx, "link import-map", started_at))
             return
-        result = apply_mapping_batch(workspace, prepared, replace_sections=replace_section) | {"applied": True}
+        result = apply_mapping_batch(workspace, prepared, replace_sections=replace_section) | {"applied": True, **manifest_info}
         for doc_path in sorted(prepared.documents):
             events.append({"event": "document_saved", "doc": doc_path})
         emit_success(
@@ -164,13 +189,20 @@ def register_link_commands(app: typer.Typer, links_app: typer.Typer) -> None:
         all_docs: bool = typer.Option(False, "--all-docs"),
         out_dir: str | None = typer.Option(None, "--out-dir", "--out"),
         include_tests: bool = typer.Option(False, "--include-tests"),
+        replace_owned_proposals: bool = typer.Option(False, "--replace-owned-proposals"),
     ) -> None:
         from documentledger.links import propose_mappings
 
         started_at = perf_counter()
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        result, events = propose_mappings(workspace, all_docs=all_docs, out_dir=out_dir, include_tests=include_tests)
+        result, events = propose_mappings(
+            workspace,
+            all_docs=all_docs,
+            out_dir=out_dir,
+            include_tests=include_tests,
+            replace_owned_proposals=replace_owned_proposals,
+        )
         emit_success(
             ctx,
             "link propose",

@@ -28,6 +28,7 @@ _SCHEMAS: dict[str, dict[str, Any]] = {
             "last_scan_unlinked_changed_source_count",
             "last_scan_source_index_file",
             "last_scan_source_index_hash",
+            "validation_attestation",
         ],
     },
     "scan": {

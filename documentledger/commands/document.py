@@ -5,14 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import typer
 from ledgercore.atomic import atomic_write_text
+from ledgercore.errors import AtomicWriteError
 
 from documentledger.cli_support import emit_success, get_state, handle_command_error
 from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
+from documentledger.output import raise_output_write_error, write_output_file
 from documentledger.storage import (
     load_workspace,
 )
@@ -183,6 +185,9 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
         max_source_lines: int = typer.Option(40, "--max-source-lines"),
         max_section_lines: int = typer.Option(80, "--max-section-lines"),
         max_bytes: int = typer.Option(250_000, "--max-bytes"),
+        cursor: str | None = typer.Option(None, "--cursor"),
+        page_size: int = typer.Option(40, "--page-size"),
+        strict: bool = typer.Option(False, "--strict"),
     ) -> None:
         from documentledger.render import render_context
 
@@ -210,7 +215,19 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
             max_source_lines=max_source_lines,
             max_section_lines=max_section_lines,
             max_bytes=max_bytes,
+            cursor=cursor,
+            page_size=page_size,
         )
+        if strict and bool(rendered["truncated"]):
+            raise DocumentledgerError(
+                "context_incomplete",
+                "The requested context export is incomplete.",
+                [
+                    "Continue with the returned `next_cursor`, increase --max-bytes or --page-size, and retry.",
+                    "Remove --strict only when an explicitly incomplete page is acceptable.",
+                ],
+                details={key: rendered[key] for key in ("truncated", "omitted", "total_units", "emitted_units", "next_cursor")},
+            )
         if output_kind == "stdout":
             typer.echo(str(rendered["content"]))
             emit_success(
@@ -234,7 +251,15 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
             from documentledger.project import resolve_canonical_project
 
             canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
-            ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
+            try:
+                ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
+            except (OSError, AtomicWriteError) as exc:
+                raise_output_write_error(
+                    artifacts_dir / "rendered" / "latest-context.md",
+                    command="document build-context",
+                    cause=exc,
+                    managed_artifact=True,
+                )
         output_path = (
             Path(out)
             if output_kind == "file"
@@ -244,14 +269,42 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
                 else workspace.config.storage_dir / "rendered" / "latest-context.md"
             )
         )
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_text(output_path, str(rendered["content"]))
+        write_output_file(
+            output_path,
+            lambda path: atomic_write_text(path, str(rendered["content"])),
+            command="document build-context",
+            managed_artifact=output_kind == "artifact",
+        )
         result = {key: value for key, value in rendered.items() if key != "content"} | {
             "path": str(output_path),
             "output": output_kind,
         }
         human = str(rendered["content"]) if print_output else f"Saved context to {output_path}"
         emit_success(ctx, "document build-context", result, human, _profile_events(ctx, "document build-context", started_at))
+
+    @docs_app.command("validate")
+    @handle_command_error("document validate")
+    def document_validate(
+        ctx: typer.Context,
+        required_pages: Annotated[list[str] | None, typer.Option("--required-page")] = None,
+        navigation_targets: Annotated[list[str] | None, typer.Option("--navigation-target")] = None,
+    ) -> None:
+        """Run configured documentation validation and record a hash-bound attestation."""
+        state = get_state(ctx)
+        workspace = load_workspace(start=state.root)
+        from documentledger.verification import run_validation
+
+        result = run_validation(
+            workspace,
+            required_pages=required_pages or None,
+            navigation_targets=navigation_targets or None,
+        )
+        human = (
+            "Documentation validation passed."
+            if result["passed"]
+            else "Documentation validation is not configured; completion remains incomplete."
+        )
+        emit_success(ctx, "document validate", result, human)
 
     @docs_app.command("mark-fresh")
     @handle_command_error("document mark-fresh")

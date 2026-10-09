@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -21,13 +22,18 @@ def runner() -> CliRunner:
 @pytest.fixture
 def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "documentledger").mkdir()
-    (tmp_path / "documentledger" / "cli.py").write_text("print('hello')\n", encoding="utf-8")
+    package = tmp_path / "documentledger"
+    package.mkdir()
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    (package / "cli.py").write_text(
+        "def doctor(ctx):\n    pass\n\ndef scan(ctx):\n    pass\n",
+        encoding="utf-8",
+    )
     (tmp_path / "README.md").write_text("# docs\n", encoding="utf-8")
     return tmp_path
 
 
-def invoke_json(runner: CliRunner, args: list[str], root: Path | None = None) -> dict[str, object]:
+def invoke_json(runner: CliRunner, args: list[str], root: Path | None = None) -> dict[str, Any]:
     cmd = ["--json"]
     if root is not None:
         cmd.extend(["--root", str(root)])
@@ -37,7 +43,7 @@ def invoke_json(runner: CliRunner, args: list[str], root: Path | None = None) ->
     return json.loads(result.output)
 
 
-def invoke_json_may_fail(runner: CliRunner, args: list[str], root: Path | None = None) -> tuple[int, dict[str, object]]:
+def invoke_json_may_fail(runner: CliRunner, args: list[str], root: Path | None = None) -> tuple[int, dict[str, Any]]:
     """Invoke a command that may fail, returning exit code and parsed output."""
     cmd = ["--json"]
     if root is not None:
@@ -51,19 +57,19 @@ def invoke_json_may_fail(runner: CliRunner, args: list[str], root: Path | None =
     return result.exit_code, data
 
 
-def load_yaml(path: Path) -> dict[str, object]:
+def load_yaml(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     assert isinstance(data, dict)
     return data
 
 
-def load_json(path: Path) -> dict[str, object]:
+def load_json(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8") or "{}")
     assert isinstance(data, dict)
     return data
 
 
-def dump_yaml(path: Path, payload: dict[str, object]) -> None:
+def dump_yaml(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
 

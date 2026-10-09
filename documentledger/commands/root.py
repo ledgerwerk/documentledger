@@ -28,10 +28,10 @@ def _profile_events(ctx: typer.Context, operation: str, started_at: float) -> li
     return [{"event": "profile", "operation": operation, "elapsed_ms": round((perf_counter() - started_at) * 1000, 3)}]
 
 
-def _scan_diagnostics(workspace: Any) -> list[dict[str, str]]:
+def _scan_diagnostics(workspace: Any) -> list[dict[str, Any]]:
     from documentledger.scanner import collect_files
 
-    issues: list[dict[str, str]] = []
+    issues: list[dict[str, Any]] = []
     source_roots = list(workspace.config.source_roots)
     source_counts: dict[str, int] = {}
     tests_count = 0
@@ -49,14 +49,36 @@ def _scan_diagnostics(workspace: Any) -> list[dict[str, str]]:
             tests_count += len(files)
         else:
             production_count += len(files)
-    project_root = workspace.config.project_name.replace("-", "_")
-    if (workspace.config.root / project_root).exists() and project_root not in source_roots:
-        issues.append(
-            {
-                "code": "package_root_not_configured",
-                "message": f"Configured source roots do not include the project package root: {project_root}",
-            }
-        )
+    try:
+        from documentledger.project import discover_source_roots
+
+        discovery = discover_source_roots(workspace.config.root, project_name=workspace.config.project_name)
+    except DocumentledgerError as exc:
+        if exc.code == "source_root_ambiguous" and production_count > 0:
+            discovery = None
+        else:
+            issues.append({"code": exc.code, "message": exc.message, "remediation": exc.remediation})
+            discovery = None
+    if discovery is not None and discovery.production_roots:
+        configured_production_roots = [root_text for root_text in source_roots if not Path(root_text).name.casefold().startswith("test")]
+        missing_roots = [
+            expected
+            for expected in discovery.production_roots
+            if not any(
+                configured == "." or expected == configured or expected.startswith(configured.rstrip("/") + "/")
+                for configured in configured_production_roots
+            )
+        ]
+        if missing_roots:
+            expected_roots = list(discovery.production_roots) + list(discovery.test_roots)
+            roots_literal = ", ".join(f'"{root}"' for root in expected_roots)
+            issues.append(
+                {
+                    "code": "package_root_not_configured",
+                    "message": f"Configured source roots omit the detected production package root(s): {', '.join(missing_roots)}.",
+                    "remediation": f"Set [scan].source_roots to [{roots_literal}] after reviewing the detected Python roots.",
+                }
+            )
     if production_count == 0 and tests_count > 0:
         issues.append(
             {
@@ -110,6 +132,44 @@ def _display_path(root: Path, path: Path) -> str:
         return Path(relpath(path_resolved, root_resolved)).as_posix()
 
 
+def _doctor_issues(workspace: Any) -> list[dict[str, Any]]:
+    from documentledger.identity import normalize_repo_path
+    from documentledger.links import audit_links
+
+    issues: list[dict[str, Any]] = list(_scan_diagnostics(workspace))
+    if workspace.metadata.get("schema_version") != STORAGE_SCHEMA_VERSION:
+        issues.append({"code": "schema_mismatch", "message": f"storage.yaml schema_version is not {STORAGE_SCHEMA_VERSION}"})
+    for record in iter_doc_records(workspace):
+        doc_path = str(record.get("doc_path", ""))
+        try:
+            normalize_repo_path(doc_path)
+        except DocumentledgerError as exc:
+            issues.append({"code": exc.code, "message": exc.message})
+        if not (workspace.config.root / doc_path).exists():
+            issues.append({"code": "missing_doc", "message": f"Missing doc file: {doc_path}"})
+    if coerce_int(workspace.metadata.get("last_scan_version"), 0) > 0 and latest_scan(workspace) is None:
+        issues.append({"code": "scan_missing", "message": "storage metadata references a latest scan, but scan.yaml is missing."})
+    issues.extend(list(audit_links(workspace).get("issues", [])))
+    return issues
+
+
+def _readiness_fields(
+    workspace: Any,
+    health_issues: list[dict[str, Any]],
+    *,
+    required_pages: list[str] | None = None,
+    navigation_targets: list[str] | None = None,
+) -> dict[str, Any]:
+    from documentledger.verification import completion_status
+
+    return completion_status(
+        workspace,
+        required_pages=required_pages,
+        navigation_targets=navigation_targets,
+        health_issues=health_issues,
+    )
+
+
 def _status_result(workspace: Any | None) -> dict[str, Any]:
     if workspace is None:
         return {
@@ -124,6 +184,10 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
             "recommended_command": "documentledger init",
             "recommended_reason": "No Documentledger workspace exists yet.",
             "remediation": ["Run `documentledger init` from the project root."],
+            "health": {"state": "uninitialized", "issues": []},
+            "mapping": {"state": "not_initialized"},
+            "documentation": {"state": "incomplete", "validation_state": "not_run"},
+            "completion": {"ready": False, "blocking_reasons": ["workspace_not_initialized"]},
         }
     config_rel = _display_path(workspace.config.root, workspace.config.path)
     storage_rel = _display_path(workspace.config.root, workspace.config.storage_dir)
@@ -145,6 +209,10 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
             "recommended_command": "documentledger init",
             "recommended_reason": "The config exists but storage metadata is missing.",
             "remediation": ["Run `documentledger init` from the project root to create storage metadata."],
+            "health": {"state": "uninitialized", "issues": []},
+            "mapping": {"state": "not_initialized"},
+            "documentation": {"state": "incomplete", "validation_state": "not_run"},
+            "completion": {"ready": False, "blocking_reasons": ["storage_not_initialized"]},
         }
     issues = _scan_diagnostics(workspace)
     state, reason, command = _status_classification(workspace)
@@ -182,6 +250,7 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
         },
         "issues": issues,
     }
+    result.update(_readiness_fields(workspace, _doctor_issues(workspace)))
     if paths is not None:
         result.update(
             {
@@ -202,6 +271,10 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
     def init(
         ctx: typer.Context,
         project_name: str | None = typer.Option(None, "--project-name"),
+        source_roots: Annotated[
+            list[str] | None,
+            typer.Option("--source-root", help="Explicit source root; repeat for multiple roots."),
+        ] = None,
         documentledger_dir: str = typer.Option(".ledger", "--documentledger-dir"),
         hidden_config: bool = typer.Option(False, "--hidden-config"),
     ) -> None:
@@ -214,8 +287,10 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
         state = get_state(ctx)
         from documentledger.project import init_canonical_project
 
-        workspace = init_canonical_project(state.root, project_name)
+        workspace = init_canonical_project(state.root, project_name, source_roots=source_roots)
         result = _status_result(workspace)
+        if workspace.source_root_discovery is not None:
+            result["source_root_discovery"] = workspace.source_root_discovery
         emit_success(ctx, "init", result, f"Initialized Documentledger for {workspace.config.project_name}")
 
     @app.command()
@@ -265,37 +340,31 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
 
     @app.command()
     @handle_command_error("doctor")
-    def doctor(ctx: typer.Context) -> None:
-        from documentledger.links import audit_links
-
+    def doctor(ctx: typer.Context, strict: bool = typer.Option(False, "--strict")) -> None:
         started_at = perf_counter()
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        issues: list[dict[str, str]] = list(_scan_diagnostics(workspace))
-        if workspace.metadata.get("schema_version") != STORAGE_SCHEMA_VERSION:
-            issues.append({"code": "schema_mismatch", "message": f"storage.yaml schema_version is not {STORAGE_SCHEMA_VERSION}"})
-        from documentledger.identity import normalize_repo_path
-
-        for record in iter_doc_records(workspace):
-            doc_path = str(record.get("doc_path", ""))
-            try:
-                normalize_repo_path(doc_path)
-            except DocumentledgerError as exc:
-                issues.append({"code": exc.code, "message": exc.message})
-            if not (workspace.config.root / doc_path).exists():
-                issues.append({"code": "missing_doc", "message": f"Missing doc file: {doc_path}"})
-        if coerce_int(workspace.metadata.get("last_scan_version"), 0) > 0 and latest_scan(workspace) is None:
-            issues.append({"code": "scan_missing", "message": "storage metadata references a latest scan, but scan.yaml is missing."})
-        audit = audit_links(workspace)
-        issues.extend(list(audit.get("issues", [])))
+        issues = _doctor_issues(workspace)
         result = {"ok": not issues, "issues": issues}
+        if strict and issues:
+            raise DocumentledgerError(
+                "doctor_failed",
+                f"Doctor found {len(issues)} issue(s).",
+                ["Resolve the listed health issues and rerun `documentledger doctor --strict`."],
+                details={"issues": issues},
+            )
         emit_success(
             ctx, "doctor", result, "Doctor passed." if not issues else "Doctor found issues.", _profile_events(ctx, "doctor", started_at)
         )
 
     @app.command()
     @handle_command_error("check")
-    def check(ctx: typer.Context) -> None:
+    def check(
+        ctx: typer.Context,
+        complete: bool = typer.Option(False, "--complete"),
+        required_pages: Annotated[list[str] | None, typer.Option("--required-page")] = None,
+        navigation_targets: Annotated[list[str] | None, typer.Option("--navigation-target")] = None,
+    ) -> None:
         """Deterministic CI gate."""
         started_at = perf_counter()
         state = get_state(ctx)
@@ -334,14 +403,29 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
                 }
             )
 
-        result = {"ok": not issues, "issues": issues}
+        readiness: dict[str, Any] | None = None
+        if complete:
+            readiness = _readiness_fields(
+                workspace,
+                _doctor_issues(workspace),
+                required_pages=required_pages or None,
+                navigation_targets=navigation_targets or None,
+            )
+            if not readiness["completion"]["ready"]:
+                issues.append(
+                    {
+                        "code": "documentation_completion_incomplete",
+                        "message": "Documentation completion gate is blocked: " + ", ".join(readiness["completion"]["blocking_reasons"]),
+                    }
+                )
+        result = {"ok": not issues, "issues": issues} | ({"readiness": readiness} if readiness is not None else {})
         human = "Check passed." if not issues else f"Check found {len(issues)} issue(s)."
         if issues:
             raise DocumentledgerError(
                 "check_failed",
                 human,
                 ["Resolve the reported validation issues and rerun `documentledger check`."],
-                details={"issues": issues},
+                details={"issues": issues, **({"readiness": readiness} if readiness is not None else {})},
             )
         emit_success(ctx, "check", result, human, _profile_events(ctx, "check", started_at))
 
@@ -399,49 +483,14 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
     @app.command("coverage")
     @handle_command_error("coverage")
     def coverage(ctx: typer.Context) -> None:
-        from documentledger.doc_index import doc_sections_for_file
-        from documentledger.links import current_source_inventory
-        from documentledger.scanner import collect_files
-
         started_at = perf_counter()
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        docs = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
-        sections_total = 0
-        sections_linked = 0
-        for doc_path in docs:
-            sections_total += len(doc_sections_for_file(workspace.config.root / doc_path, doc_path))
-        linked_sources: set[str] = set()
-        linked_source_ids: set[str] = set()
-        doc_paths_with_records: set[str] = set()
-        for record in iter_doc_records(workspace):
-            doc_path = str(record.get("doc_path", ""))
-            doc_paths_with_records.add(doc_path)
-            for section in record.get("sections", []) or []:
-                if list(section.get("links", []) or []):
-                    sections_linked += 1
-                for link in section.get("links", []) or []:
-                    linked_sources.add(str(link.get("source_path", "")))
-                    linked_source_ids.add(str(link.get("source_id", "")))
-        inventory = current_source_inventory(workspace)
-        result = {
-            "documents": {
-                "total": len(docs),
-                "with_records": len(doc_paths_with_records),
-                "without_records": max(len(docs) - len(doc_paths_with_records), 0),
-            },
-            "sections": {"total": sections_total, "linked": sections_linked, "unlinked": max(sections_total - sections_linked, 0)},
-            "sources": {
-                "files": len({str(unit.get("path", "")) for unit in inventory.values()}),
-                "files_linked": len({path for path in linked_sources if path}),
-                "files_unlinked": max(
-                    len({str(unit.get("path", "")) for unit in inventory.values()}) - len({path for path in linked_sources if path}), 0
-                ),
-                "units": len(inventory),
-                "units_linked": len({source_id for source_id in linked_source_ids if source_id}),
-            },
-            "issues": [],
-        }
+        from documentledger.verification import coverage_metrics
+
+        result = coverage_metrics(workspace)
+        readiness = _readiness_fields(workspace, _doctor_issues(workspace))
+        result.update(readiness)
         emit_success(ctx, "coverage", result, "Coverage computed.", _profile_events(ctx, "coverage", started_at))
 
     @app.command("commands")

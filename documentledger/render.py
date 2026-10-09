@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
+from ledgercore.hashing import sha256_text
+
 from documentledger.doc_index import doc_sections_for_file
+from documentledger.errors import DocumentledgerError
 from documentledger.impact import resolve_affected_sections, stale_doc_details
 from documentledger.links import current_source_inventory
 from documentledger.models import Workspace
-from documentledger.storage import iter_doc_records, latest_scan, workspace_root
+from documentledger.storage import iter_doc_records, latest_scan, state_version, workspace_root
 
 
 def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
@@ -163,7 +168,330 @@ def bootstrap_source_records(workspace: Workspace) -> tuple[list[dict[str, Any]]
     return sorted(production, key=unit_key), sorted(tests, key=unit_key)
 
 
-def render_context(
+def _context_selector_hash(
+    mode: str,
+    docs: list[str] | None,
+    section_id: str | None,
+    include_unlinked: bool,
+    max_source_lines: int,
+    max_section_lines: int,
+) -> str:
+    selector = {
+        "mode": mode,
+        "docs": sorted(docs or []),
+        "section_id": section_id,
+        "include_unlinked": include_unlinked,
+        "max_source_lines": max_source_lines,
+        "max_section_lines": max_section_lines,
+    }
+    return sha256_text(json.dumps(selector, sort_keys=True, separators=(",", ":")))[:16]
+
+
+def _context_manifest_hash(workspace: Workspace, specs: list[dict[str, Any]], extra_paths: list[str]) -> str:
+    root = workspace_root(workspace)
+    paths = set(extra_paths)
+    units: list[dict[str, Any]] = []
+    for spec in specs:
+        descriptor: dict[str, Any] = {"unit_id": str(spec.get("unit_id", "")), "unit_type": spec.get("unit_type", "")}
+        if spec["unit_type"] == "source":
+            unit = spec["source_unit"]
+            source_path = str(unit.get("path", ""))
+            paths.add(source_path)
+            descriptor.update(
+                {
+                    "role": spec.get("role"),
+                    "path": source_path,
+                    "line_span": unit.get("line_span"),
+                    "signature": unit.get("signature"),
+                }
+            )
+        elif spec["unit_type"] == "section":
+            item = spec["section"]
+            paths.add(str(item.get("doc_path", "")))
+            source_paths = [str(unit.get("source_path", "")) for unit in item.get("changed_units", []) or []]
+            paths.update(source_paths)
+            descriptor.update({"doc_path": item.get("doc_path"), "section_id": item.get("section_id"), "sources": source_paths})
+        elif spec["unit_type"] == "unlinked-source":
+            paths.add(str(spec.get("source_path", "")))
+        units.append(descriptor)
+
+    file_hashes: dict[str, str] = {}
+    for relative_path in sorted(path for path in paths if path):
+        target = root / relative_path
+        try:
+            digest = hashlib.sha256()
+            with target.open("rb") as source_file:
+                while chunk := source_file.read(65_536):
+                    digest.update(chunk)
+            file_hashes[relative_path] = digest.hexdigest()
+        except OSError:
+            file_hashes[relative_path] = "missing-or-unreadable"
+    manifest = {"units": units, "files": file_hashes}
+    return sha256_text(json.dumps(manifest, sort_keys=True, separators=(",", ":")))[:16]
+
+
+def _context_cursor(
+    scan_version: int,
+    state_version_value: int,
+    source_index_hash: str,
+    selector_hash: str,
+    manifest_hash: str,
+    offset: int,
+) -> str:
+    return f"dlctx1:{scan_version}:{state_version_value}:{source_index_hash[:16] or '-'}:{selector_hash}:{manifest_hash}:{offset}"
+
+
+def _context_offset(
+    cursor: str | None,
+    *,
+    scan_version: int,
+    state_version_value: int,
+    source_index_hash: str,
+    selector_hash: str,
+    manifest_hash: str,
+) -> int:
+    if not cursor:
+        return 0
+    parts = cursor.split(":")
+    if len(parts) != 7 or parts[0] != "dlctx1":
+        raise DocumentledgerError(
+            "invalid_context_cursor",
+            "The context continuation cursor is malformed or unsupported.",
+            ["Copy the exact `next_cursor` from the preceding context result."],
+        )
+    try:
+        cursor_scan = int(parts[1])
+        cursor_state = int(parts[2])
+        offset = int(parts[6])
+    except ValueError as exc:
+        raise DocumentledgerError("invalid_context_cursor", "The context continuation cursor contains invalid numbers.") from exc
+    expected_index_hash = source_index_hash[:16] or "-"
+    if (
+        cursor_scan != scan_version
+        or cursor_state != state_version_value
+        or parts[3] != expected_index_hash
+        or parts[4] != selector_hash
+        or parts[5] != manifest_hash
+    ):
+        raise DocumentledgerError(
+            "context_cursor_stale",
+            "The context cursor does not match the current scan, state, selector, or evidence manifest.",
+            ["Start a new context export or restore the matching scan and selectors."],
+            details={"cursor_scan_version": cursor_scan, "current_scan_version": scan_version},
+        )
+    if offset < 0:
+        raise DocumentledgerError("invalid_context_cursor", "The context continuation cursor has a negative offset.")
+    return offset
+
+
+def _source_context_lines(workspace: Workspace, unit: dict[str, Any], role: str, max_source_lines: int) -> list[str]:
+    source_id = str(unit.get("source_id", ""))
+    source_path = str(unit.get("path", ""))
+    span = list(unit.get("line_span", [0, 0]))
+    lines = [
+        f"### {source_id}",
+        f"- role: {role.lower()}",
+        f"- path: {source_path}",
+        f"- kind: {unit.get('kind', '')}",
+        f"- signature: `{unit.get('signature', '')}`",
+        f"- lines: {span[0]}-{span[1]}",
+        "",
+        "```python",
+        source_snippet(workspace_root(workspace), source_path, span, max_lines=max_source_lines),
+        "```",
+        "",
+    ]
+    return lines
+
+
+def _section_context_lines(workspace: Workspace, item: dict[str, Any], max_source_lines: int, max_section_lines: int) -> list[str]:
+    doc_path = str(item["doc_path"])
+    heading_path = " / ".join(item.get("heading_path", []) or []) or str(item["section_id"])
+    block = [
+        f"### {doc_path} :: {heading_path}",
+        "",
+        f"Section id: {item['section_id']}",
+        f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
+        f"Action: {item['action']}",
+        "",
+        "Linked source units:",
+        "",
+    ]
+    for unit in item.get("changed_units", []) or []:
+        block.extend(
+            [
+                f"- {unit['source_id']}",
+                f"  - path: {unit['source_path']}",
+                f"  - status: {'missing' if unit.get('missing') else 'live'}",
+                *([f"  - kind: {unit['kind']}", f"  - signature: `{unit['signature']}`"] if not unit.get("missing") else []),
+                f"  - lines: {unit['line_span'][0]}-{unit['line_span'][1]}",
+                f"  - changed: {', '.join(unit.get('changed_hashes', []) or ['file_hash'])}",
+                f"  - reason: {unit['reason'] or 'No recorded reason.'}",
+                "",
+                "  Current relevant source:",
+                "",
+            ]
+        )
+        snippet = source_snippet(
+            workspace_root(workspace),
+            str(unit["source_path"]),
+            list(unit.get("line_span", [0, 0])),
+            max_lines=max_source_lines,
+        )
+        block.extend(f"  {line}" for line in trim_lines(snippet, max_lines=max_source_lines))
+        block.append("")
+    block.extend(["Current section text:", ""])
+    block.extend(trim_lines(str(item.get("text", "")).strip("\n"), max_lines=max_section_lines))
+    block.append("")
+    return block
+
+
+def _context_document(
+    *,
+    mode: str,
+    scan_version: int,
+    state_version_value: int,
+    source_index_hash: str,
+    manifest_hash: str,
+    cursor: str | None,
+    page_size: int,
+    total_units: int,
+    selected_units: list[dict[str, Any]],
+    omitted: list[str],
+    next_cursor: str | None,
+    body: list[str],
+) -> str:
+    truncated = bool(omitted)
+    status = "INCOMPLETE" if truncated else "COMPLETE"
+    next_label = next_cursor or "none"
+    checksums = [{"unit_id": str(unit["unit_id"]), "sha256": str(unit["checksum"])} for unit in selected_units]
+    front_matter = [
+        "---",
+        "documentledger_schema: documentledger.context.v5",
+        f"scan_version: {scan_version}",
+        f"state_version: {state_version_value}",
+        f"mode: {mode}",
+        f"source_index_hash: {json.dumps(source_index_hash)}",
+        f"manifest_hash: {json.dumps(manifest_hash)}",
+        f"cursor: {json.dumps(cursor or '')}",
+        f"page_size: {page_size}",
+        f"truncated: {str(truncated).lower()}",
+        f"omitted: {json.dumps(omitted, ensure_ascii=False, separators=(',', ':'))}",
+        f"total_units: {total_units}",
+        f"emitted_units: {len(selected_units)}",
+        f"emitted_unit_ids: {json.dumps([str(unit['unit_id']) for unit in selected_units], ensure_ascii=False, separators=(',', ':'))}",
+        f"unit_checksums: {json.dumps(checksums, ensure_ascii=False, separators=(',', ':'))}",
+        f"next_cursor: {json.dumps(next_cursor or '')}",
+        "---",
+        "",
+    ]
+    banner = f"<!-- DOCUMENTLEDGER CONTEXT: {status}; scan={scan_version}; units={len(selected_units)}/{total_units}; next={next_label} -->"
+    return "\n".join([banner, *front_matter, *body]).rstrip() + "\n"
+
+
+def _bootstrap_context_body(
+    selected_units: list[dict[str, Any]],
+    *,
+    bootstrap_docs: list[str],
+    bootstrap_sources: list[str],
+    total_source_units: int,
+) -> list[str]:
+    body = ["# Documentation update context", "", "## Repository documentation outline", ""]
+    body.extend([f"- {doc}" for doc in bootstrap_docs] or ["- None"])
+    body.extend(
+        [
+            "",
+            "## Unlinked source inventory",
+            "",
+            f"- {len(bootstrap_sources)} unlinked source file(s) in the current scan.",
+            "",
+            "## Production source outline",
+            "",
+        ]
+    )
+    for spec in selected_units:
+        if spec["role"] == "Production":
+            unit = spec["source_unit"]
+            body.append(f"- {spec['unit_id']} — `{unit.get('signature', '')}`")
+    body.extend(["", "## Test source outline", ""])
+    for spec in selected_units:
+        if spec["role"] == "Test":
+            unit = spec["source_unit"]
+            body.append(f"- {spec['unit_id']} — `{unit.get('signature', '')}`")
+    body.extend(["", "## High-value source evidence", ""])
+    for spec in selected_units:
+        body.extend(spec["lines"])
+    cli_units = [spec for spec in selected_units if spec["unit_type"] == "source" and "/cli" in str(spec["source_unit"].get("path", ""))]
+    body.extend(["## CLI command inventory", ""])
+    body.extend([f"- {spec['unit_id']} — `{spec['source_unit'].get('signature', '')}`" for spec in cli_units] or ["- None detected"])
+    body.extend(
+        [
+            "",
+            "## Bootstrap counts",
+            "",
+            f"- documents: {len(bootstrap_docs)}",
+            f"- source units: {total_source_units}",
+            f"- source units emitted on this page: {len(selected_units)}",
+            f"- unlinked source files: {len(bootstrap_sources)}",
+            "",
+        ]
+    )
+    return body
+
+
+def _selected_context_body(
+    mode: str,
+    selected_units: list[dict[str, Any]],
+    *,
+    has_specs: bool,
+    include_unlinked: bool,
+    has_unlinked_sources: bool,
+    unlinked_changed: list[str],
+    validation_commands: list[str],
+) -> list[str]:
+    heading = {
+        "affected": "## Affected documentation sections",
+        "all": "## Linked documentation sections",
+        "doc": "## Selected documentation sections",
+    }[mode]
+    body = ["# Documentation update context", "", heading, ""]
+    if not has_specs:
+        body.extend(["No sections matched the selector.", ""])
+    has_unlinked_heading = False
+    for spec in selected_units:
+        if spec["unit_type"] == "section":
+            body.extend(spec["lines"])
+        else:
+            if not has_unlinked_heading:
+                body.extend(["## Unlinked sources (bootstrap)", ""])
+                has_unlinked_heading = True
+            body.extend(spec["lines"])
+    if include_unlinked and not has_unlinked_sources and not has_unlinked_heading:
+        body.extend(["## Unlinked sources (bootstrap)", "", "- None", ""])
+    body.extend(["## Unlinked changed sources", "", *([f"- {source}" for source in unlinked_changed] or ["- None"]), ""])
+    body.extend(
+        [
+            "## Validation commands",
+            "",
+            *([f"- `{command}`" for command in validation_commands] or ["- None configured"]),
+            "",
+            "## Agent rules",
+            "",
+            "- Inspect affected or selected source units before editing docs.",
+            "- Rewrite only the selected sections unless broader consistency requires more.",
+            "- Do not invent behavior.",
+            "- Run the configured validation commands when they exist.",
+            (
+                '- Run `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs updated after scan version '
+                'VERSION."` only after docs are updated and validated.'
+            ),
+            "",
+        ]
+    )
+    return body
+
+
+def render_context(  # noqa: C901
     workspace: Workspace,
     *,
     mode: str,
@@ -173,9 +501,25 @@ def render_context(
     max_source_lines: int = 40,
     max_section_lines: int = 80,
     max_bytes: int = 250_000,
+    cursor: str | None = None,
+    page_size: int = 40,
 ) -> dict[str, Any]:
+    if page_size < 1 or page_size > 100:
+        raise DocumentledgerError("invalid_page_size", "Context page size must be between 1 and 100.")
     scan = latest_scan(workspace)
     scan_version = int(scan.get("version", 0)) if scan else 0
+    state_version_value = state_version(workspace)
+    source_index_hash = str((scan or {}).get("source_index_hash", ""))
+    selector_hash = _context_selector_hash(
+        mode,
+        docs,
+        section_id,
+        include_unlinked,
+        max_source_lines,
+        max_section_lines,
+    )
+    bootstrap_sources, bootstrap_docs = bootstrap_inventory(workspace, scan)
+
     if mode == "affected":
         selected_sections = resolve_affected_sections(workspace, scan=scan, docs=docs, section_id=section_id)
         for item in selected_sections:
@@ -189,223 +533,163 @@ def render_context(
     elif mode == "bootstrap":
         selected_sections = []
     else:
-        raise ValueError(f"Unsupported render mode: {mode}")
+        raise DocumentledgerError("invalid_context_mode", f"Unsupported render mode: {mode}")
 
     if mode != "bootstrap":
         enrich_linked_source_units(workspace, selected_sections)
 
     unlinked_changed = list(scan.get("unlinked_changed_sources", []) or []) if scan else []
-    bootstrap_sources, bootstrap_docs = bootstrap_inventory(workspace, scan)
-    lines = [
-        "---",
-        "documentledger_schema: documentledger.context.v5",
-        f"scan_version: {scan_version}",
-        f"state_version: {workspace.metadata.get('state_version', 0)}",
-        f"mode: {mode}",
-        "---",
-        "",
-        "# Documentation update context",
-        "",
-    ]
-    omitted: list[str] = []
-    source_unit_count = 0
-    truncated = False
-
-    def append_block(block_id: str, block_lines: list[str]) -> None:
-        nonlocal truncated
-        candidate = "\n".join([*lines, *block_lines])
-        if max_bytes > 0 and len(candidate.encode("utf-8")) > max_bytes:
-            truncated = True
-            omitted.append(block_id)
-            return
-        lines.extend(block_lines)
-
+    source_unit_count = sum(len(item.get("changed_units", []) or []) for item in selected_sections)
+    specs: list[dict[str, Any]] = []
     if mode == "bootstrap":
         production_units, test_units = bootstrap_source_records(workspace)
         source_unit_count = len(production_units) + len(test_units)
-        append_block(
-            "bootstrap-docs",
-            [
-                "## Repository documentation outline",
-                "",
-                *(
-                    line
-                    for doc in bootstrap_docs
-                    for line in [
-                        f"### {doc}",
-                        *[
-                            f"- {' / '.join(section.heading_path) or section.heading_slug} ({section.section_id})"
-                            for section in doc_sections_for_file(workspace_root(workspace) / doc, doc)
-                        ],
-                        "",
-                    ]
-                ),
-            ],
-        )
-        append_block(
-            "bootstrap-sources",
-            [
-                "## Unlinked source inventory",
-                "",
-                *([f"- {source}" for source in bootstrap_sources] or ["- None"]),
-                "",
-                "Create or update relevant docs, then add links with `documentledger link add` or `documentledger link add-section`.",
-                "",
-            ],
-        )
         for role, units in (("Production", production_units), ("Test", test_units)):
-            outline_lines = [f"## {role} source outline", ""]
-            by_path: dict[str, list[dict[str, Any]]] = {}
             for unit in units:
-                by_path.setdefault(str(unit.get("path", "")), []).append(unit)
-            for path, path_units in sorted(by_path.items()):
-                outline_lines.append(f"### {path}")
-                for unit in path_units:
-                    span = list(unit.get("line_span", [0, 0]))
-                    outline_lines.append(
-                        f"- {unit.get('source_id', '')} — {unit.get('kind', '')} {unit.get('qualname', '')} "
-                        f"`{unit.get('signature', '')}` (lines {span[0]}-{span[1]})"
-                    )
-                outline_lines.append("")
-            append_block(f"bootstrap-{role.lower()}-outline", outline_lines or [f"## {role} source outline", "", "- None", ""])
-
-        evidence_units = [
-            unit
-            for unit in production_units
-            if str(unit.get("kind", "")) in {"class", "function", "method"}
-            and not str(unit.get("qualname", "")).split(".")[-1].startswith("_")
-        ][:40]
-        evidence_lines = ["## High-value source evidence", ""]
-        for unit in evidence_units:
-            span = list(unit.get("line_span", [0, 0]))
-            evidence_lines.extend(
-                [
-                    f"### {unit.get('source_id', '')}",
-                    f"- path: {unit.get('path', '')}",
-                    f"- kind: {unit.get('kind', '')}",
-                    f"- signature: `{unit.get('signature', '')}`",
-                    f"- lines: {span[0]}-{span[1]}",
-                    "",
-                    "```python",
-                    source_snippet(workspace_root(workspace), str(unit.get("path", "")), span, max_lines=max_source_lines),
-                    "```",
-                    "",
-                ]
-            )
-        append_block("bootstrap-source-evidence", evidence_lines or ["## High-value source evidence", "", "- None", ""])
-        cli_units = [unit for unit in production_units if "/cli" in str(unit.get("path", ""))]
-        append_block(
-            "bootstrap-cli-inventory",
-            [
-                "## CLI command inventory",
-                "",
-                *(f"- {unit.get('source_id', '')} — `{unit.get('signature', '')}`" for unit in cli_units or ["- None detected"]),
-                "",
-            ],
-        )
-        append_block(
-            "bootstrap-counts",
-            [
-                "## Bootstrap counts",
-                "",
-                f"- source files: {len({str(unit.get('path', '')) for unit in production_units + test_units})}",
-                f"- source units: {source_unit_count}",
-                f"- production units rendered as evidence: {len(evidence_units)}",
-                f"- test units omitted from evidence: {len(test_units)}",
-                "",
-            ],
-        )
+                source_id = str(unit.get("source_id", ""))
+                if not source_id:
+                    continue
+                specs.append({"unit_id": source_id, "unit_type": "source", "role": role, "source_unit": unit})
     else:
-        heading = {
-            "affected": "## Affected documentation sections",
-            "all": "## Linked documentation sections",
-            "doc": "## Selected documentation sections",
-        }[mode]
-        append_block("section-heading", [heading, ""])
-        if not selected_sections:
-            append_block("no-sections", ["No sections matched the selector.", ""])
         for item in selected_sections:
-            doc_path = str(item["doc_path"])
-            heading_path = " / ".join(item.get("heading_path", []) or []) or str(item["section_id"])
-            block = [
-                f"### {doc_path} :: {heading_path}",
-                "",
-                f"Section id: {item['section_id']}",
-                f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
-                f"Action: {item['action']}",
-                "",
-                "Linked source units:",
-                "",
-            ]
-            for unit in item.get("changed_units", []) or []:
-                source_unit_count += 1
-                block.extend(
-                    [
-                        f"- {unit['source_id']}",
-                        f"  - path: {unit['source_path']}",
-                        f"  - status: {'missing' if unit.get('missing') else 'live'}",
-                        *([f"  - kind: {unit['kind']}", f"  - signature: `{unit['signature']}`"] if not unit.get("missing") else []),
-                        f"  - lines: {unit['line_span'][0]}-{unit['line_span'][1]}",
-                        f"  - changed: {', '.join(unit.get('changed_hashes', []) or ['file_hash'])}",
-                        f"  - reason: {unit['reason'] or 'No recorded reason.'}",
-                        "",
-                        "  Current relevant source:",
-                        "",
-                    ]
-                )
-                snippet = source_snippet(
-                    workspace_root(workspace),
-                    str(unit["source_path"]),
-                    list(unit.get("line_span", [0, 0])),
-                    max_lines=max_source_lines,
-                )
-                block.extend(f"  {line}" for line in trim_lines(snippet, max_lines=max_source_lines))
-                block.append("")
-            block.extend(["Current section text:", ""])
-            block.extend(trim_lines(str(item.get("text", "")).strip("\n"), max_lines=max_section_lines))
-            block.append("")
-            append_block(f"section:{item['doc_path']}::{item['section_id']}", block)
+            specs.append(
+                {
+                    "unit_id": f"section:{item['doc_path']}::{item['section_id']}",
+                    "unit_type": "section",
+                    "section": item,
+                }
+            )
+        if include_unlinked:
+            for source_path in bootstrap_sources:
+                specs.append({"unit_id": f"unlinked-source:{source_path}", "unit_type": "unlinked-source", "source_path": source_path})
 
-    append_block(
-        "unlinked-changed", ["## Unlinked changed sources", "", *([f"- {source}" for source in unlinked_changed] or ["- None"]), ""]
+    manifest_hash = _context_manifest_hash(workspace, specs, [*bootstrap_sources, *bootstrap_docs])
+    request_offset = _context_offset(
+        cursor,
+        scan_version=scan_version,
+        state_version_value=state_version_value,
+        source_index_hash=source_index_hash,
+        selector_hash=selector_hash,
+        manifest_hash=manifest_hash,
     )
-    if include_unlinked:
-        append_block(
-            "include-unlinked",
-            ["## Unlinked sources (bootstrap)", "", *([f"- {source}" for source in bootstrap_sources] or ["- None"]), ""],
+    if request_offset > len(specs) or (request_offset == len(specs) and specs):
+        raise DocumentledgerError("invalid_context_cursor", "The context cursor points beyond the available evidence units.")
+    candidate_specs = specs[request_offset : request_offset + page_size]
+    rendered_candidates: list[dict[str, Any]] = []
+    for spec in candidate_specs:
+        if spec["unit_type"] == "source":
+            lines = _source_context_lines(workspace, spec["source_unit"], str(spec["role"]), max_source_lines)
+        elif spec["unit_type"] == "section":
+            lines = _section_context_lines(workspace, spec["section"], max_source_lines, max_section_lines)
+        else:
+            lines = [f"- {spec['source_path']}", ""]
+        rendered_candidates.append(spec | {"lines": lines, "checksum": sha256_text("\n".join(lines))})
+
+    chosen: dict[str, Any] | None = None
+    metadata_only_bytes = 0
+    for emitted_count in range(len(rendered_candidates), -1, -1):
+        selected_units = rendered_candidates[:emitted_count]
+        omitted = [str(spec["unit_id"]) for spec in specs[request_offset + emitted_count :]]
+        next_cursor = (
+            _context_cursor(
+                scan_version,
+                state_version_value,
+                source_index_hash,
+                selector_hash,
+                manifest_hash,
+                request_offset + emitted_count,
+            )
+            if omitted
+            else None
         )
-    append_block(
-        "validation",
-        [
-            "## Validation commands",
-            "",
-            *([f"- `{command}`" for command in workspace.config.validation_commands] or ["- None configured"]),
-            "",
-            "## Agent rules",
-            "",
-            "- Inspect affected or selected source units before editing docs.",
-            "- Rewrite only the selected sections unless broader consistency requires more.",
-            "- Do not invent behavior.",
-            "- Run the configured validation commands when they exist.",
-            (
-                '- Run `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs '
-                'updated after scan version VERSION."` only after docs are updated and validated.'
+        content = _context_document(
+            mode=mode,
+            scan_version=scan_version,
+            state_version_value=state_version_value,
+            source_index_hash=source_index_hash,
+            manifest_hash=manifest_hash,
+            cursor=cursor,
+            page_size=page_size,
+            total_units=len(specs),
+            selected_units=selected_units,
+            omitted=omitted,
+            next_cursor=next_cursor,
+            body=(
+                _bootstrap_context_body(
+                    selected_units,
+                    bootstrap_docs=bootstrap_docs,
+                    bootstrap_sources=bootstrap_sources,
+                    total_source_units=source_unit_count,
+                )
+                if mode == "bootstrap"
+                else _selected_context_body(
+                    mode,
+                    selected_units,
+                    has_specs=bool(selected_sections),
+                    include_unlinked=include_unlinked,
+                    has_unlinked_sources=bool(bootstrap_sources),
+                    unlinked_changed=unlinked_changed,
+                    validation_commands=list(workspace.config.validation_commands),
+                )
             ),
-            "",
-        ],
-    )
-    if truncated:
-        append_block("truncation-manifest", ["## Truncation", "", *[f"- omitted: {item}" for item in omitted], ""])
-    content = "\n".join(lines)
+        )
+        content_bytes = len(content.encode("utf-8"))
+        if emitted_count == 0:
+            metadata_only_bytes = content_bytes
+        if max_bytes <= 0 or content_bytes <= max_bytes:
+            chosen = {
+                "content": content,
+                "truncated": bool(omitted),
+                "omitted": omitted,
+                "next_cursor": next_cursor,
+                "selected_units": selected_units,
+            }
+            break
+    if chosen is None:
+        raise DocumentledgerError(
+            "context_metadata_exceeds_limit",
+            "The context completeness manifest does not fit within --max-bytes.",
+            ["Increase --max-bytes or use a smaller --page-size; no incomplete output was written."],
+            details={
+                "max_bytes": max_bytes,
+                "minimum_required_bytes": metadata_only_bytes,
+                "total_units": len(specs),
+                "emitted_units": 0,
+                "omitted": [str(spec["unit_id"]) for spec in specs[request_offset:]],
+                "next_cursor": _context_cursor(
+                    scan_version,
+                    state_version_value,
+                    source_index_hash,
+                    selector_hash,
+                    manifest_hash,
+                    request_offset,
+                )
+                if request_offset < len(specs)
+                else None,
+            },
+        )
+
+    content = str(chosen["content"])
+    selected_units = list(chosen["selected_units"])
+    total_documents = len({str(item["doc_path"]) for item in selected_sections}) if selected_sections else len(bootstrap_docs)
     return {
         "content": content,
         "mode": mode,
-        "documents": len({str(item["doc_path"]) for item in selected_sections})
-        if selected_sections
-        else (len(bootstrap_docs) if mode == "bootstrap" else 0),
+        "documents": total_documents,
         "sections": len(selected_sections),
         "source_units": source_unit_count,
         "bytes": len(content.encode("utf-8")),
-        "truncated": truncated,
-        "omitted": omitted,
+        "truncated": bool(chosen["truncated"]),
+        "omitted": list(chosen["omitted"]),
+        "total_units": len(specs),
+        "emitted_units": len(selected_units),
+        "emitted_unit_ids": [str(unit["unit_id"]) for unit in selected_units],
+        "unit_checksums": [{"unit_id": str(unit["unit_id"]), "sha256": str(unit["checksum"])} for unit in selected_units],
+        "next_cursor": chosen["next_cursor"],
+        "cursor": cursor,
+        "page_size": page_size,
+        "scan_version": scan_version,
+        "state_version": state_version_value,
+        "source_index_hash": source_index_hash,
+        "manifest_hash": manifest_hash,
     }

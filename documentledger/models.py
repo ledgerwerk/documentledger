@@ -70,6 +70,8 @@ class Workspace:
     project_name: str | None = None
     project_uuid: str | None = None
 
+    source_root_discovery: dict[str, object] | None = None
+
 
 @dataclass(frozen=True)
 class SourceUnit:

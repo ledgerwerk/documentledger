@@ -63,9 +63,9 @@ def test_link_propose_accepts_out_alias_with_same_behavior(project: Path, runner
 
 
 def test_link_proposals_use_code_evidence_and_exclude_test_helpers(project: Path, runner) -> None:
-    invoke_json(runner, ["init"])
     (project / "tests").mkdir()
     (project / "tests" / "test_helpers.py").write_text("def build():\n    pass\n", encoding="utf-8")
+    invoke_json(runner, ["init"])
     (project / "documentledger" / "dictionary.py").write_text(
         "class Dictionary:\n    def supports(self, key: str) -> bool:\n        return bool(key)\n",
         encoding="utf-8",

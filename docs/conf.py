@@ -66,6 +66,7 @@ nitpicky = True
 # Keep this list deliberately narrow.  The documentation should surface
 # unresolved references rather than hiding broad warning classes.
 nitpick_ignore = [
+    # Keep the stdlib typing-alias exceptions explicit; do not suppress warning categories.
     ("py:class", "typer.models.Context"),
     ("py:class", "ledgercore.cli.model.CommonCLIState"),
     ("py:class", "ledgercore.cli.errors.CLIError"),
@@ -77,6 +78,8 @@ nitpick_ignore = [
     ("py:class", "collections.abc.Mapping"),
     ("py:data", "typing.Any"),
     ("py:data", "typing.Literal"),
+    ("py:data", "typing.Optional"),
+    ("py:data", "typing.Union"),
     ("py:data", "Ellipsis"),
     ("py:exc", "AssertionError with details if drift is detected."),
 ]

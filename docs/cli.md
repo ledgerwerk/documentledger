@@ -40,6 +40,7 @@ documentledger init
 | Parameter              | Required | Default     | Type      |
 | ---------------------- | -------- | ----------- | --------- |
 | `--project-name`       | no       | ``          | `str`     |
+| `--source-root`        | no       | ``          | `str`     |
 | `--documentledger-dir` | no       | `'.ledger'` | `str`     |
 | `--hidden-config`      | no       | ``          | `boolean` |
 
@@ -131,7 +132,9 @@ documentledger doctor
 
 ### Arguments and options
 
-- None.
+| Parameter  | Required | Default | Type      |
+| ---------- | -------- | ------- | --------- |
+| `--strict` | no       | ``      | `boolean` |
 
 ### JSON result and errors
 
@@ -161,7 +164,11 @@ documentledger check
 
 ### Arguments and options
 
-- None.
+| Parameter             | Required | Default | Type      |
+| --------------------- | -------- | ------- | --------- |
+| `--complete`          | no       | ``      | `boolean` |
+| `--required-page`     | no       | ``      | `str`     |
+| `--navigation-target` | no       | ``      | `str`     |
 
 ### JSON result and errors
 
@@ -373,7 +380,9 @@ documentledger config validate
 
 ### Arguments and options
 
-- None.
+| Parameter  | Required | Default | Type      |
+| ---------- | -------- | ------- | --------- |
+| `--strict` | no       | ``      | `boolean` |
 
 ### JSON result and errors
 
@@ -637,6 +646,9 @@ documentledger document build-context
 | `--max-source-lines`  | no       | `40`     | `int`     |
 | `--max-section-lines` | no       | `80`     | `int`     |
 | `--max-bytes`         | no       | `250000` | `int`     |
+| `--cursor`            | no       | ``       | `str`     |
+| `--page-size`         | no       | `40`     | `int`     |
+| `--strict`            | no       | ``       | `boolean` |
 
 ### JSON result and errors
 
@@ -646,6 +658,39 @@ With `--json`, the command returns `ok`, `command`, a command-specific `result`,
 
 ```bash
 documentledger document build-context
+```
+
+## document validate
+
+Run configured validation and record a current-content attestation.
+
+- **Effect:** `workspace-write`
+- **Audience:** `agent`
+- **Workspace required:** `yes`
+- **Targeting:** `validation-command`
+- **Compatibility aliases:** None
+
+### Syntax
+
+```bash
+documentledger document validate
+```
+
+### Arguments and options
+
+| Parameter             | Required | Default | Type  |
+| --------------------- | -------- | ------- | ----- |
+| `--required-page`     | no       | ``      | `str` |
+| `--navigation-target` | no       | ``      | `str` |
+
+### JSON result and errors
+
+With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+### Example
+
+```bash
+documentledger document validate
 ```
 
 ## document mark-fresh
@@ -950,6 +995,7 @@ documentledger link import-map
 | `--validate`        | no       | ``      | `boolean` |
 | `--apply`           | no       | ``      | `boolean` |
 | `--check-and-apply` | no       | ``      | `boolean` |
+| `--review`          | no       | ``      | `boolean` |
 | `--replace-section` | no       | ``      | `boolean` |
 
 ### JSON result and errors
@@ -1010,11 +1056,12 @@ documentledger link propose
 
 ### Arguments and options
 
-| Parameter          | Required | Default | Type      |
-| ------------------ | -------- | ------- | --------- |
-| `--all-docs`       | no       | ``      | `boolean` |
-| `--out-dir, --out` | no       | ``      | `str`     |
-| `--include-tests`  | no       | ``      | `boolean` |
+| Parameter                   | Required | Default | Type      |
+| --------------------------- | -------- | ------- | --------- |
+| `--all-docs`                | no       | ``      | `boolean` |
+| `--out-dir, --out`          | no       | ``      | `str`     |
+| `--include-tests`           | no       | ``      | `boolean` |
+| `--replace-owned-proposals` | no       | ``      | `boolean` |
 
 ### JSON result and errors
 

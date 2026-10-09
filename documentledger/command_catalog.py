@@ -153,6 +153,13 @@ _COMMANDS: tuple[CommandMetadata, ...] = (
         aliases=("docs build-context",),
     ),
     CommandMetadata(
+        path="document validate",
+        summary="Run configured validation and record a current-content attestation.",
+        audience="agent",
+        effect="workspace-write",
+        targeting="validation-command",
+    ),
+    CommandMetadata(
         path="document mark-fresh",
         summary="Mark documentation sections as fresh.",
         audience="agent",

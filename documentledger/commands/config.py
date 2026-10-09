@@ -7,6 +7,7 @@ from typing import Any
 import typer
 
 from documentledger.cli_support import emit_success, get_state, handle_command_error
+from documentledger.errors import DocumentledgerError
 from documentledger.storage import load_workspace
 
 
@@ -40,7 +41,7 @@ def register_config_commands(app: typer.Typer, config_app: typer.Typer) -> None:
 
     @config_app.command("validate")
     @handle_command_error("config validate")
-    def config_validate(ctx: typer.Context) -> None:
+    def config_validate(ctx: typer.Context, strict: bool = typer.Option(False, "--strict")) -> None:
         """Validate the effective tool config without changing files."""
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
@@ -56,5 +57,12 @@ def register_config_commands(app: typer.Typer, config_app: typer.Typer) -> None:
             if not path.exists():
                 issues.append({"code": "missing_doc_root", "message": f"Doc root does not exist: {root_text}"})
         result = {"ok": not issues, "issues": issues}
+        if strict and issues:
+            raise DocumentledgerError(
+                "config_validation_failed",
+                f"Config validation found {len(issues)} issue(s).",
+                ["Correct the listed configuration issues and rerun `documentledger config validate --strict`."],
+                details={"issues": issues},
+            )
         human = "Config validation passed." if not issues else f"Config validation found {len(issues)} issue(s)."
         emit_success(ctx, "config validate", result, human)

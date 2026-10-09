@@ -32,8 +32,14 @@ def test_import_map_directory_applies_batch_once(project: Path, runner) -> None:
         source_unit="py:function:documentledger/cli.py::doctor",
         reason="Documents doctor.",
     )
-    validate = invoke_json(runner, ["links", "import-map", "--directory", str(maps), "--validate"])["result"]
-    apply = invoke_json(runner, ["links", "import-map", "--directory", str(maps), "--check-and-apply"])["result"]
+    validate = invoke_json(
+        runner,
+        ["links", "import-map", "--file", str(maps / "scan.yaml"), "--file", str(maps / "doctor.yaml"), "--validate"],
+    )["result"]
+    apply = invoke_json(
+        runner,
+        ["links", "import-map", "--file", str(maps / "scan.yaml"), "--file", str(maps / "doctor.yaml"), "--check-and-apply"],
+    )["result"]
     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     assert validate["planned_edges"] == 2
     assert apply["planned_edges"] == 2
@@ -80,7 +86,10 @@ def test_import_map_mixed_empty_and_reviewed_files_preserves_empty_noop(project:
         "schema: documentledger.mapping_proposal.v1\ndoc_path: README.md\nsections: []\n",
         encoding="utf-8",
     )
-    result = invoke_json(runner, ["link", "import-map", "--directory", str(maps), "--check-and-apply"])["result"]
+    result = invoke_json(
+        runner,
+        ["link", "import-map", "--file", str(maps / "scan.yaml"), "--file", str(maps / "index.yaml"), "--check-and-apply"],
+    )["result"]
     assert result["empty_mapping_files"] == 1
     assert result["documents"] == 1
     assert result["added_edges"] == 1

@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import uuid4
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 import ledgercore
 from ledgercore.errors import LedgerCoreError
@@ -19,11 +25,226 @@ DATA_MOUNT = "data"
 ARTIFACTS_MOUNT = "artifacts"
 
 
-def default_tool_config() -> ToolConfig:
+_SOURCE_DISCOVERY_EXCLUDED = {
+    ".git",
+    ".ledger",
+    ".venv",
+    "venv",
+    "env",
+    "build",
+    "dist",
+    "docs",
+    "scripts",
+    "tests",
+    "__pycache__",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class SourceRootDiscovery:
+    roots: tuple[str, ...]
+    production_roots: tuple[str, ...]
+    test_roots: tuple[str, ...]
+    source_file_counts: dict[str, int]
+    confidence: str
+    reason: str
+    project_package: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "source_roots": list(self.roots),
+            "production_roots": list(self.production_roots),
+            "test_roots": list(self.test_roots),
+            "source_file_counts": dict(self.source_file_counts),
+            "confidence": self.confidence,
+            "reason": self.reason,
+            "project_package": self.project_package,
+        }
+
+
+def _python_file_count(path: Path) -> int:
+    if path.is_file():
+        return int(path.suffix == ".py")
+    if not path.is_dir():
+        return 0
+    return sum(1 for source in path.rglob("*.py") if not any(part in _SOURCE_DISCOVERY_EXCLUDED for part in source.relative_to(path).parts))
+
+
+def _relative_source_root(root: Path, value: str) -> str:
+    normalized = value.replace("\\", "/")
+    relative = PurePosixPath(normalized)
+    candidate = (root / Path(*relative.parts)).resolve()
+    try:
+        candidate.relative_to(root.resolve())
+    except ValueError as exc:
+        raise DocumentledgerError(
+            "source_root_invalid",
+            f"Source root must remain inside the project: {value}",
+            ["Use a project-relative --source-root path."],
+        ) from exc
+    if relative.is_absolute() or ".." in relative.parts:
+        raise DocumentledgerError(
+            "source_root_invalid",
+            f"Source root must remain inside the project: {value}",
+            ["Use a project-relative --source-root path."],
+        )
+    normalized_path = relative.as_posix()
+    if normalized_path in {"", "."}:
+        normalized_path = "."
+    if _python_file_count(candidate) == 0:
+        raise DocumentledgerError(
+            "source_root_empty",
+            f"Source root does not exist or contains no Python files: {value}",
+            ["Choose an existing source root containing at least one .py file."],
+            details={"source_root": normalized_path, "python_file_count": 0},
+        )
+    return normalized_path
+
+
+def _metadata_package_roots(root: Path, project_name: str | None) -> tuple[set[str], str | None]:
+    pyproject_path = root / "pyproject.toml"
+    try:
+        pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8")) if pyproject_path.is_file() else {}
+    except (OSError, ValueError) as exc:
+        raise DocumentledgerError("invalid_pyproject", f"Cannot read project metadata in {pyproject_path}: {exc}") from exc
+
+    project_table = pyproject.get("project", {})
+    package_name = str(project_table.get("name") or project_name or root.name)
+    import_name = re.sub(r"[-_.]+", "_", package_name)
+    roots: set[str] = set()
+    for base in (".", "src"):
+        candidate = (Path(base) / import_name).as_posix()
+        if _python_file_count(root / candidate):
+            roots.add(candidate)
+
+    tool_table = pyproject.get("tool", {})
+    setuptools = tool_table.get("setuptools", {})
+    package_find = setuptools.get("packages", {}).get("find", {})
+    where_values = package_find.get("where", ["."])
+    includes = package_find.get("include", [])
+    for where in where_values:
+        for pattern in includes:
+            prefix = str(pattern).split("*")[0].rstrip(".")
+            if not prefix:
+                continue
+            candidate = (Path(str(where)) / Path(*prefix.split("."))).as_posix()
+            if _python_file_count(root / candidate):
+                roots.add(candidate)
+
+    poetry_packages = tool_table.get("poetry", {}).get("packages", [])
+    for package in poetry_packages:
+        include = str(package.get("include") or "")
+        if not include:
+            continue
+        base = str(package.get("from") or ".")
+        candidate = (Path(base) / include).as_posix()
+        if _python_file_count(root / candidate):
+            roots.add(candidate)
+    return roots, package_name
+
+
+def _conventional_package_roots(root: Path) -> set[str]:
+    roots: set[str] = set()
+    for parent in (root, root / "src"):
+        if not parent.is_dir():
+            continue
+        for candidate in sorted(parent.iterdir()):
+            if (
+                candidate.is_dir()
+                and candidate.name not in _SOURCE_DISCOVERY_EXCLUDED
+                and (candidate / "__init__.py").is_file()
+                and _python_file_count(candidate) > 0
+            ):
+                roots.add(candidate.relative_to(root).as_posix())
+    return roots
+
+
+def discover_source_roots(
+    root: Path,
+    *,
+    project_name: str | None = None,
+    source_roots: tuple[str, ...] | list[str] | None = None,
+) -> SourceRootDiscovery:
+    """Read-only discovery of production and optional test source roots."""
+    root = root.resolve()
+    test_count = _python_file_count(root / "tests")
+    test_roots = ("tests",) if test_count else ()
+    package_roots, package_name = _metadata_package_roots(root, project_name)
+
+    if source_roots is not None:
+        selected = tuple(dict.fromkeys(_relative_source_root(root, value) for value in source_roots))
+        production = tuple(path for path in selected if Path(path).name.casefold() not in {"test", "tests"})
+        tests = tuple(path for path in selected if Path(path).name.casefold() in {"test", "tests"})
+        counts = {path: _python_file_count(root / path) for path in selected}
+        return SourceRootDiscovery(
+            roots=selected,
+            production_roots=production,
+            test_roots=tests,
+            source_file_counts=counts,
+            confidence="explicit",
+            reason="Source roots were explicitly selected by the caller.",
+            project_package=package_name,
+        )
+
+    if len(package_roots) > 1:
+        raise DocumentledgerError(
+            "source_root_ambiguous",
+            f"Project metadata resolves to multiple Python package roots: {', '.join(sorted(package_roots))}.",
+            ["Select the intended roots explicitly with repeatable `documentledger init --source-root PATH` options."],
+            details={"candidates": sorted(package_roots)},
+        )
+    if package_roots:
+        production_roots = tuple(sorted(package_roots))
+        confidence = "high"
+        reason = f"Matched package metadata for {package_name!r} to an existing Python package root."
+    else:
+        conventional = _conventional_package_roots(root)
+        if len(conventional) > 1:
+            raise DocumentledgerError(
+                "source_root_ambiguous",
+                f"Multiple conventional Python package roots were found: {', '.join(sorted(conventional))}.",
+                ["Select the intended roots explicitly with repeatable `documentledger init --source-root PATH` options."],
+                details={"candidates": sorted(conventional)},
+            )
+        if conventional:
+            production_roots = tuple(sorted(conventional))
+            confidence = "medium"
+            reason = "Found one conventional Python package directory."
+        else:
+            module_files = sorted(
+                source.name
+                for source in root.glob("*.py")
+                if source.name not in {"setup.py", "conftest.py", "sitecustomize.py", "__init__.py"}
+            )
+            if len(module_files) > 1:
+                raise DocumentledgerError(
+                    "source_root_ambiguous",
+                    f"Multiple top-level Python modules were found: {', '.join(module_files)}.",
+                    ["Select the intended roots explicitly with repeatable `documentledger init --source-root PATH` options."],
+                    details={"candidates": module_files},
+                )
+            production_roots = tuple(module_files)
+            confidence = "medium" if module_files else "none"
+            reason = "Found one top-level Python module." if module_files else "No production Python package or module was discovered."
+
+    roots = production_roots + test_roots
+    counts = {path: _python_file_count(root / path) for path in roots}
+    return SourceRootDiscovery(
+        roots=roots,
+        production_roots=production_roots,
+        test_roots=test_roots,
+        source_file_counts=counts,
+        confidence=confidence,
+        reason=reason,
+        project_package=package_name,
+    )
+
+
+def default_tool_config(source_roots: tuple[str, ...] = ()) -> ToolConfig:
     return ToolConfig(
         config_version=2,
         ledger_code="dl",
-        source_roots=("documentledger", "tests"),
+        source_roots=source_roots,
         doc_roots=("docs", "README.md"),
         source_extensions=(".py",),
         doc_extensions=(".md", ".rst"),
@@ -166,7 +387,11 @@ def initialize_canonical_bindings(layout: object) -> None:
     ledgercore.initialize_storage_binding(layout.mounts[ARTIFACTS_MOUNT], require_empty=True)  # type: ignore[attr-defined]
 
 
-def init_canonical_project(root: Path | None = None, project_name: str | None = None) -> Workspace:
+def init_canonical_project(
+    root: Path | None = None,
+    project_name: str | None = None,
+    source_roots: tuple[str, ...] | list[str] | None = None,
+) -> Workspace:
     """Create a fresh canonical project and its empty schema-3 stores."""
     root = (root or Path.cwd()).resolve()
     manifest_path = root / ".ledger" / "ledger.toml"
@@ -208,6 +433,11 @@ def init_canonical_project(root: Path | None = None, project_name: str | None = 
                 )
             },
         )
+    discovery = discover_source_roots(
+        root,
+        project_name=manifest.project_name or project_name,
+        source_roots=source_roots,
+    )
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     ledgercore.write_ledger_manifest(manifest_path, manifest, preserve_comments=True)
     loaded = ledgercore.load_ledger_project(root)
@@ -215,7 +445,7 @@ def init_canonical_project(root: Path | None = None, project_name: str | None = 
     ledgercore.initialize_config_binding(layout)
     ledgercore.initialize_storage_binding(layout.mounts[DATA_MOUNT], require_empty=True)
     assert layout.tool_config_path is not None
-    write_tool_config_v2(layout.tool_config_path, default_tool_config())
+    write_tool_config_v2(layout.tool_config_path, default_tool_config(discovery.roots))
     data_dir = layout.mounts[DATA_MOUNT].path
     metadata = {
         "schema_version": 5,
@@ -235,4 +465,6 @@ def init_canonical_project(root: Path | None = None, project_name: str | None = 
     from documentledger.storage import write_yaml
 
     write_yaml(data_dir / "storage.yaml", metadata)
-    return canonical_workspace(root, require_data=True)
+    workspace = canonical_workspace(root, require_data=True)
+    workspace.source_root_discovery = discovery.to_dict()
+    return workspace

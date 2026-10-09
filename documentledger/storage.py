@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -50,7 +51,7 @@ def workspace_data_dir(workspace: Workspace) -> Path:
 DEFAULT_CONFIG = {
     "ledger": {"code": "dl", "name": "documentledger"},
     "scan": {
-        "source_roots": ["documentledger", "tests"],
+        "source_roots": [],
         "doc_roots": ["docs", "README.md"],
         "source_extensions": [".py"],
         "doc_extensions": [".md", ".rst"],
@@ -146,6 +147,7 @@ def default_metadata(project_uuid: str) -> dict[str, Any]:
         "last_scan_unlinked_changed_source_count": 0,
         "last_scan_source_index_file": SOURCE_INDEX_FILENAME,
         "last_scan_source_index_hash": "",
+        "validation_attestation": None,
     }
 
 
@@ -229,18 +231,26 @@ def load_workspace(start: Path | None = None, *, required: bool = True) -> Works
     return Workspace(config=config, metadata=metadata)
 
 
-def init_workspace(project_name: str | None, documentledger_dir: str = DEFAULT_STORAGE_DIR, hidden_config: bool = False) -> Workspace:
+def init_workspace(
+    project_name: str | None,
+    documentledger_dir: str = DEFAULT_STORAGE_DIR,
+    hidden_config: bool = False,
+    source_roots: tuple[str, ...] | list[str] | None = None,
+) -> Workspace:
     root = Path.cwd().resolve()
     config_path = root / (".documentledger.toml" if hidden_config else "documentledger.toml")
     if any((root / name).exists() for name in CONFIG_NAMES):
         raise DocumentledgerError("already_initialized", "Documentledger is already initialized.")
     project_uuid = str(uuid.uuid4())
     name = project_name or root.name
+    from documentledger.project import discover_source_roots
+
+    discovery = discover_source_roots(root, project_name=name, source_roots=source_roots)
     config_text = (
         '[ledger]\ncode = "dl"\nname = "documentledger"\n\n'
         f'[project]\nname = "{name}"\nuuid = "{project_uuid}"\n\n'
         f'[storage]\ndocumentledger_dir = "{documentledger_dir}"\n\n'
-        '[scan]\nsource_roots = ["documentledger", "tests"]\n'
+        f"[scan]\nsource_roots = {json.dumps(list(discovery.roots))}\n"
         'doc_roots = ["docs", "README.md"]\nsource_extensions = [".py"]\n'
         'doc_extensions = [".md", ".rst"]\n\n[validation]\ncommands = []\n\n'
         "[policy]\nrequire_doc_frontmatter = false\n"
@@ -371,6 +381,7 @@ def normalize_doc_record(
         "last_fresh_scan_version": coerce_int(normalized.get("last_fresh_scan_version"), 0),
         "last_fresh_hash": str(normalized.get("last_fresh_hash") or ""),
         "notes": str(normalized.get("notes") or ""),
+        "coverage_resolution": dict(normalized.get("coverage_resolution", {}) or {}) or None,
         "version": coerce_int(normalized.get("version"), 0),
     }
 

@@ -104,6 +104,15 @@ def _refresh_record(
     refreshed["last_fresh_scan_version"] = scan_version
     refreshed["last_fresh_hash"] = file_hash(workspace.config.root / str(record["doc_path"]))
     refreshed["notes"] = reason if refreshed.get("linked_sources") else f"{reason} (intentionally unlinked)"
+    if refreshed.get("linked_sources"):
+        refreshed["coverage_resolution"] = None
+    else:
+        refreshed["coverage_resolution"] = {
+            "state": "intentionally_unlinked",
+            "reason": reason.strip(),
+            "scan_version": scan_version,
+            "content_hash": refreshed["last_fresh_hash"],
+        }
     return refreshed, updated_sections
 
 

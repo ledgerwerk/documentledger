@@ -7,7 +7,9 @@ and defines the root callback with global options.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 import typer
 from ledgercore.cli import CLIWarning, CommonCLIState
@@ -112,6 +114,76 @@ def _register_aliases() -> None:
     _register_sources_aliases()
     _register_links_aliases()
     _register_mark_fresh_alias()
+
+
+def _emit_context_output(ctx, workspace, rendered, out: str | None, print_output: bool, state) -> None:
+    """Share canonical output and error behavior with the legacy docs alias."""
+    from ledgercore.atomic import atomic_write_text
+    from ledgercore.errors import AtomicWriteError
+
+    from documentledger.cli_support import emit_success
+    from documentledger.commands.document import resolve_context_output_target
+    from documentledger.output import raise_output_write_error, write_output_file
+
+    output_kind = resolve_context_output_target(
+        out=out,
+        json_output=state.json_output,
+        print_output=print_output,
+    )
+    if output_kind == "stdout":
+        typer.echo(str(rendered["content"]))
+        result = {key: value for key, value in rendered.items() if key != "content"} | {
+            "path": None,
+            "output": "stdout",
+        }
+        emit_success(ctx, "document build-context", result, "")
+        return
+
+    artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
+    if (
+        output_kind == "artifact"
+        and artifacts_dir is not None
+        and workspace.paths is not None
+        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
+        and not artifacts_dir.exists()
+    ):
+        import ledgercore
+
+        from documentledger.project import resolve_canonical_project
+
+        canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
+        try:
+            ledgercore.initialize_storage_binding(cast(Any, canonical.layout).mounts["artifacts"], require_empty=True)
+        except (OSError, AtomicWriteError) as exc:
+            raise_output_write_error(
+                artifacts_dir / "rendered" / "latest-context.md",
+                command="document build-context",
+                cause=exc,
+                managed_artifact=True,
+            )
+    if output_kind == "file":
+        assert out is not None
+        output_path = Path(out)
+    else:
+        output_path = (
+            artifacts_dir / "rendered" / "latest-context.md"
+            if artifacts_dir
+            else workspace.config.storage_dir / "rendered" / "latest-context.md"
+        )
+    write_output_file(
+        output_path,
+        lambda path: atomic_write_text(path, str(rendered["content"])),
+        command="document build-context",
+        managed_artifact=output_kind == "artifact",
+    )
+    if print_output and state.json_output:
+        typer.echo(rendered["content"])
+    result = {key: value for key, value in rendered.items() if key != "content"} | {
+        "path": str(output_path),
+        "output": output_kind,
+    }
+    human_out = str(rendered["content"]) if print_output else f"Saved context to {output_path}"
+    emit_success(ctx, "document build-context", result, human_out)
 
 
 def _register_docs_aliases() -> None:
@@ -236,11 +308,10 @@ def _register_docs_aliases() -> None:
         max_source_lines: int = typer.Option(40, "--max-source-lines"),
         max_section_lines: int = typer.Option(80, "--max-section-lines"),
         max_bytes: int = typer.Option(250_000, "--max-bytes"),
+        cursor: str | None = typer.Option(None, "--cursor"),
+        page_size: int = typer.Option(40, "--page-size"),
+        strict: bool = typer.Option(False, "--strict"),
     ) -> None:
-        from pathlib import Path
-
-        from ledgercore.atomic import atomic_write_text
-
         from documentledger.identity import normalize_repo_path
         from documentledger.render import render_context
 
@@ -262,38 +333,20 @@ def _register_docs_aliases() -> None:
             max_source_lines=max_source_lines,
             max_section_lines=max_section_lines,
             max_bytes=max_bytes,
+            cursor=cursor,
+            page_size=page_size,
         )
-        artifacts_dir = getattr(getattr(workspace, "paths", None), "artifacts_dir", None)
-        if (
-            out is None
-            and artifacts_dir is not None
-            and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
-            and not artifacts_dir.exists()
-        ):
-            import ledgercore
-
-            from documentledger.project import resolve_canonical_project
-
-            canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
-            ledgercore.initialize_storage_binding(canonical.layout.mounts["artifacts"], require_empty=True)
-        output_path = (
-            Path(out)
-            if out
-            else (
-                artifacts_dir / "rendered" / "latest-context.md"
-                if artifacts_dir
-                else workspace.config.storage_dir / "rendered" / "latest-context.md"
+        if strict and bool(rendered["truncated"]):
+            raise DocumentledgerError(
+                "context_incomplete",
+                "The requested context export is incomplete.",
+                [
+                    "Continue with the returned `next_cursor`, increase --max-bytes or --page-size, and retry.",
+                    "Remove --strict only when an explicitly incomplete page is acceptable.",
+                ],
+                details={key: rendered[key] for key in ("truncated", "omitted", "total_units", "emitted_units", "next_cursor")},
             )
-        )
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_text(output_path, str(rendered["content"]))
-        if print_output and state.json_output:
-            import typer as t
-
-            t.echo(rendered["content"])
-        result = {key: value for key, value in rendered.items() if key != "content"} | {"path": str(output_path)}
-        human_out = str(rendered["content"]) if print_output else f"Saved context to {output_path}"
-        emit_success(ctx, "document build-context", result, human_out)
+        _emit_context_output(ctx, workspace, rendered, out, print_output, state)
 
 
 def _register_sources_aliases() -> None:
@@ -455,29 +508,53 @@ def _register_links_aliases() -> None:
         validate: bool = typer.Option(False, "--validate"),
         apply: bool = typer.Option(False, "--apply"),
         check_and_apply: bool = typer.Option(False, "--check-and-apply"),
+        review: bool = typer.Option(False, "--review"),
         replace_section: bool = typer.Option(False, "--replace-section"),
     ) -> None:
         from pathlib import Path
 
         from documentledger.links import apply_mapping_batch, prepare_mapping_batch
+        from documentledger.proposal_manifest import (
+            require_reviewed_manifest_file,
+            review_proposal_mappings,
+            reviewed_proposal_paths,
+        )
 
         file_path = file_path or []
-        mode_count = sum(bool(value) for value in (validate, apply, check_and_apply))
+        mode_count = sum(bool(value) for value in (validate, apply, check_and_apply, review))
         if mode_count != 1:
-            raise DocumentledgerError("invalid_selector", "Choose exactly one of --validate, --apply, or --check-and-apply.")
+            raise DocumentledgerError("invalid_selector", "Choose exactly one of --validate, --apply, --check-and-apply, or --review.")
+        if review and replace_section:
+            raise DocumentledgerError("invalid_selector", "--replace-section applies only when applying a reviewed mapping.")
         mapping_paths = [Path(path) for path in file_path]
-        if directory is not None:
-            mapping_paths.extend(sorted(Path(directory).glob("*.yaml")))
-        if not mapping_paths:
-            raise DocumentledgerError("invalid_mapping", "Provide at least one --file or a --directory.")
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        prepared = prepare_mapping_batch(workspace, mapping_paths)
+        if review:
+            result = review_proposal_mappings(
+                workspace,
+                directory=Path(directory) if directory is not None else None,
+                mapping_paths=mapping_paths,
+            )
+            emit_success(ctx, "link import-map", result, "Proposal mappings reviewed.")
+            return
+
+        manifest_info: dict[str, Any] = {"unowned_mapping_files": [], "unreviewed_documents": [], "reviewed_documents": []}
+        if directory is not None:
+            reviewed_paths, manifest_info = reviewed_proposal_paths(workspace, Path(directory))
+            mapping_paths.extend(reviewed_paths)
+        if not mapping_paths:
+            raise DocumentledgerError("invalid_mapping", "Provide at least one --file or a --directory.")
+        unique_paths = list(dict.fromkeys(mapping_paths))
+        for mapping_path in unique_paths:
+            require_reviewed_manifest_file(workspace, mapping_path)
+        prepared = prepare_mapping_batch(workspace, unique_paths)
         empty_paths = set(prepared.empty_mapping_paths)
-        events = [
+        events: list[dict[str, Any]] = [
             {"event": "mapping_skipped_empty" if path in empty_paths else "mapping_validated", "file": path}
             for path in prepared.mapping_paths
         ]
+        if manifest_info["unowned_mapping_files"]:
+            events.append({"event": "unowned_mapping_files_ignored", "files": manifest_info["unowned_mapping_files"]})
         if validate:
             result = {
                 "mapping_files": len(prepared.mapping_paths),
@@ -486,10 +563,11 @@ def _register_links_aliases() -> None:
                 "sections": prepared.section_count,
                 "planned_edges": prepared.planned_edges,
                 "applied": False,
+                **manifest_info,
             }
             emit_success(ctx, "link import-map", result, "Mapping validated.", events)
             return
-        result = apply_mapping_batch(workspace, prepared, replace_sections=replace_section) | {"applied": True}
+        result = apply_mapping_batch(workspace, prepared, replace_sections=replace_section) | {"applied": True, **manifest_info}
         for doc_path in sorted(prepared.documents):
             events.append({"event": "document_saved", "doc": doc_path})
         emit_success(ctx, "link import-map", result, "Mapping applied." if apply else "Mapping validated and applied.", events)
@@ -512,8 +590,18 @@ def _register_links_aliases() -> None:
         all_docs: bool = typer.Option(False, "--all-docs"),
         out_dir: str | None = typer.Option(None, "--out-dir", "--out"),
         include_tests: bool = typer.Option(False, "--include-tests"),
+        replace_owned_proposals: bool = typer.Option(False, "--replace-owned-proposals"),
     ) -> None:
-        _handle_links_propose(ctx, all_docs, out_dir, include_tests, get_state, emit_success, load_workspace)
+        _handle_links_propose(
+            ctx,
+            all_docs,
+            out_dir,
+            include_tests,
+            replace_owned_proposals,
+            get_state,
+            emit_success,
+            load_workspace,
+        )
 
 
 def _handle_links_propose(
@@ -521,16 +609,23 @@ def _handle_links_propose(
     all_docs: bool,
     out_dir: str | None,
     include_tests: bool,
-    get_state: object,
-    emit_success: object,
-    load_workspace: object,
+    replace_owned_proposals: bool,
+    get_state: Callable[..., Any],
+    emit_success: Callable[..., Any],
+    load_workspace: Callable[..., Any],
 ) -> None:
     """Compatibility adapter for the canonical proposal service."""
     from documentledger.links import propose_mappings
 
     state = get_state(ctx)  # type: ignore[operator]
     workspace = load_workspace(start=state.root)  # type: ignore[operator]
-    result, events = propose_mappings(workspace, all_docs=all_docs, out_dir=out_dir, include_tests=include_tests)
+    result, events = propose_mappings(
+        workspace,
+        all_docs=all_docs,
+        out_dir=out_dir,
+        include_tests=include_tests,
+        replace_owned_proposals=replace_owned_proposals,
+    )
     emit_success(ctx, "link propose", result, f"Wrote {len(result['proposal_files'])} proposal files.", events)  # type: ignore[operator]
 
 
