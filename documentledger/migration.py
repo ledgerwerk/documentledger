@@ -156,6 +156,7 @@ def plan_migration(start: Path | None = None, *, adopt_project_uuid: bool = Fals
         doc_extensions=tuple(legacy.config.doc_extensions),
         validation_commands=tuple(legacy.config.validation_commands),
         require_doc_frontmatter=legacy.config.require_doc_frontmatter,
+        mapping_review_roles=tuple(legacy.config.mapping_review_roles),
     )
     seed = {
         "source_config": sha256_bytes(legacy.config_path.read_bytes()),

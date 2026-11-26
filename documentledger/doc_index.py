@@ -37,6 +37,8 @@ def whole_doc_section(doc_path: str, text: str) -> DocSection:
         heading_slug="whole-doc",
         line_span=(1, max(len(lines), 1)),
         section_hash=sha256_text(content),
+        body_hash=sha256_text(content),
+        body_length=len(content),
         summary="Whole document.",
         text=content,
     )
@@ -129,6 +131,7 @@ def markdown_sections(doc_path: str, text: str) -> list[DocSection]:
         start_line = int(heading["line"])
         next_line = int(headings[index + 1]["line"]) - 1 if index + 1 < len(headings) else len(lines)
         content = "\n".join(lines[start_line - 1 : next_line]).strip("\n")
+        body_content = "\n".join(lines[start_line:next_line]).strip("\n")
         title = str(heading["title"])
         slug = str(heading["slug"])
         marker = str(heading["marker"]) if heading["marker"] is not None else None
@@ -140,6 +143,8 @@ def markdown_sections(doc_path: str, text: str) -> list[DocSection]:
                 heading_slug=marker or slug,
                 line_span=(start_line, max(start_line, next_line)),
                 section_hash=sha256_text(content),
+                body_hash=sha256_text(body_content),
+                body_length=len(body_content.strip()),
                 summary=summarize_section(title, content),
                 text=content,
             )

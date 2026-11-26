@@ -40,7 +40,7 @@ Use `documentledger document build-context --affected --out -` for raw stdout. D
 
 ## Check reports stale sections
 
-Run `documentledger document affected`, inspect bounded context, update the affected sections, run validation, and use section-level `documentledger document mark-fresh`. `--all` means all configured documents; use `--affected` for only affected documents. Do not mark fresh before validation or weaken validation settings merely to pass.
+Run `documentledger review`, inspect bounded context, resolve ambiguous mappings, update affected sections, and run `documentledger finish`. Finish audits links and runs configured validation before recording freshness. For bootstrap or manual control, use `document affected`, `document build-context`, and section-level `document mark-fresh`; `--all` means all configured docs and `--affected` selects affected docs. Do not record freshness before validation or weaken validation settings merely to pass.
 
 ## Audit reports a missing section
 

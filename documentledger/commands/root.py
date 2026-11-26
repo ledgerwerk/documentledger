@@ -90,11 +90,12 @@ def _scan_diagnostics(workspace: Any) -> list[dict[str, Any]]:
 
 
 def _status_classification(workspace: Any) -> tuple[str, str, str]:
+    from documentledger.impact import relevant_unmapped_changed_units
     from documentledger.storage import iter_doc_records
 
     last_scan_version = coerce_int(workspace.metadata.get("last_scan_version"), 0)
     affected_count = coerce_int(workspace.metadata.get("last_scan_affected_section_count"), 0)
-    unlinked_changed = coerce_int(workspace.metadata.get("last_scan_unlinked_changed_source_count"), 0)
+    relevant_unmapped = relevant_unmapped_changed_units(workspace, latest_scan(workspace))
     linked_sections = sum(
         1 for record in iter_doc_records(workspace) for section in (record.get("sections", []) or []) if section.get("links")
     )
@@ -104,19 +105,19 @@ def _status_classification(workspace: Any) -> tuple[str, str, str]:
         return (
             "bootstrap_required",
             "A baseline scan exists but no documentation links exist.",
-            "documentledger document build-context --bootstrap",
+            "documentledger review",
         )
     if affected_count > 0:
         return (
             "incremental_affected",
             "Linked documentation sections are affected by the latest source changes.",
-            "documentledger document build-context --affected",
+            "documentledger review",
         )
-    if unlinked_changed > 0:
+    if relevant_unmapped:
         return (
             "mapping_incomplete",
-            "Changed source files are not fully linked to documentation.",
-            "documentledger link propose --all-docs",
+            "Relevant changed source units are not mapped to documentation.",
+            "documentledger review",
         )
     return ("incremental_clean", "No affected linked sections remain after the latest scan.", "documentledger scan")
 
@@ -217,12 +218,15 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
     issues = _scan_diagnostics(workspace)
     state, reason, command = _status_classification(workspace)
     affected_count = coerce_int(workspace.metadata.get("last_scan_affected_section_count"), 0)
-    unlinked_changed = coerce_int(workspace.metadata.get("last_scan_unlinked_changed_source_count"), 0)
+    from documentledger.impact import ignored_changed_unit_counts, relevant_unmapped_changed_units
+
+    relevant_unmapped = relevant_unmapped_changed_units(workspace, latest_scan(workspace))
+    ignored_counts = ignored_changed_unit_counts(workspace, latest_scan(workspace))
     linked_sections = sum(
         1 for record in iter_doc_records(workspace) for section in (record.get("sections", []) or []) if section.get("links")
     )
     freshness_state = "clean" if affected_count == 0 else "affected"
-    coverage_review_required = linked_sections <= 0 or unlinked_changed > 0
+    coverage_review_required = linked_sections <= 0 or bool(relevant_unmapped)
     result = {
         "initialized": True,
         "state": state,
@@ -242,8 +246,10 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
         "recommended_command": command,
         "recommended_reason": reason,
         "freshness_state": freshness_state,
-        "mapping_state": "review_required" if coverage_review_required else "not_stale",
+        "mapping_state": "bootstrap_required" if linked_sections <= 0 else "review_required" if relevant_unmapped else "complete",
         "coverage_review_required": coverage_review_required,
+        "relevant_unmapped_changed_unit_count": len(relevant_unmapped),
+        "ignored_change_counts": ignored_counts,
         "coverage": {
             "documents_with_records": len(iter_doc_records(workspace)),
             "sections_linked": linked_sections,
@@ -480,6 +486,70 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
         )
         emit_success(ctx, "scan", result, human, _profile_events(ctx, "scan", started_at))
 
+    @app.command()
+    @handle_command_error("review")
+    def review(
+        ctx: typer.Context,
+        doc: str | None = typer.Option(None, "--doc", help="Limit review to one documentation path."),
+        details: bool = typer.Option(False, "--details", help="Include complete review arrays in JSON output."),
+    ) -> None:
+        started_at = perf_counter()
+        state = get_state(ctx)
+        workspace = load_workspace(start=state.root)
+        from documentledger.review import build_review_plan, review_human_summary
+
+        plan = build_review_plan(workspace, doc_path=doc)
+        emit_success(
+            ctx,
+            "review",
+            plan.to_record(details=details),
+            review_human_summary(plan),
+            _profile_events(ctx, "review", started_at),
+        )
+
+    @app.command()
+    @handle_command_error("finish")
+    def finish(
+        ctx: typer.Context,
+        reviewed_no_change: Annotated[
+            list[str] | None,
+            typer.Option("--reviewed-no-change", help="DOC#SECTION=REASON for an unchanged reviewed section."),
+        ] = None,
+        generated_verified: Annotated[
+            list[str] | None,
+            typer.Option("--generated-verified", help="DOC#SECTION=REASON for verified generated-reference evidence."),
+        ] = None,
+    ) -> None:
+        started_at = perf_counter()
+        state = get_state(ctx)
+        workspace = load_workspace(start=state.root)
+        from documentledger.finish import finish_review
+        from documentledger.models import ReviewDecision
+
+        decisions: list[ReviewDecision] = []
+        for disposition, entries in (
+            ("reviewed-no-change", reviewed_no_change or []),
+            ("generated-verified", generated_verified or []),
+        ):
+            for entry in entries:
+                selector, separator, reason = entry.partition("=")
+                doc_path, marker, section_id = selector.partition("#")
+                if not separator or not marker or not doc_path or not section_id or not reason.strip():
+                    raise DocumentledgerError(
+                        "decision_invalid",
+                        f"Invalid --{disposition} value {entry!r}. Expected DOC#SECTION=REASON.",
+                    )
+                decisions.append(ReviewDecision(doc_path, section_id, disposition, reason.strip()))
+
+        result = finish_review(workspace, tuple(decisions)).to_record()
+        emit_success(
+            ctx,
+            "finish",
+            result,
+            f"Finish passed at scan {result['scan_version']}; recorded {len(result['freshness'])} section disposition(s).",
+            _profile_events(ctx, "finish", started_at),
+        )
+
     @app.command("coverage")
     @handle_command_error("coverage")
     def coverage(ctx: typer.Context) -> None:
@@ -492,6 +562,14 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
         readiness = _readiness_fields(workspace, _doctor_issues(workspace))
         result.update(readiness)
         emit_success(ctx, "coverage", result, "Coverage computed.", _profile_events(ctx, "coverage", started_at))
+
+    @app.command()
+    @handle_command_error("capabilities")
+    def capabilities(ctx: typer.Context) -> None:
+        from documentledger.capabilities import capability_record
+
+        result = capability_record()
+        emit_success(ctx, "capabilities", result, "Documentledger capabilities reported.")
 
     @app.command("commands")
     @handle_command_error("commands")

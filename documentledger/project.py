@@ -250,6 +250,7 @@ def default_tool_config(source_roots: tuple[str, ...] = ()) -> ToolConfig:
         doc_extensions=(".md", ".rst"),
         validation_commands=(),
         require_doc_frontmatter=False,
+        mapping_review_roles=("production",),
     )
 
 
@@ -370,6 +371,7 @@ def canonical_workspace(start: Path | None = None, *, require_data: bool = False
         doc_extensions=list(project.config.doc_extensions),
         validation_commands=list(project.config.validation_commands),
         require_doc_frontmatter=project.config.require_doc_frontmatter,
+        mapping_review_roles=list(project.config.mapping_review_roles),
     )
     return Workspace(
         config=compatibility_config,

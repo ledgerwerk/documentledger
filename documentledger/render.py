@@ -12,7 +12,8 @@ from documentledger.errors import DocumentledgerError
 from documentledger.impact import resolve_affected_sections, stale_doc_details
 from documentledger.links import current_source_inventory
 from documentledger.models import Workspace
-from documentledger.storage import iter_doc_records, latest_scan, state_version, workspace_root
+from documentledger.source_roles import classify_source_role
+from documentledger.storage import iter_doc_records, latest_scan, workspace_root
 
 
 def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
@@ -43,6 +44,11 @@ def trim_lines(text: str, *, max_lines: int) -> list[str]:
     if max_lines > 0:
         lines = lines[:max_lines]
     return lines or ["(empty)"]
+
+
+def review_action_lines(section: dict[str, Any]) -> list[str]:
+    action = str(section.get("review_action", ""))
+    return [f"Review action: {action}"] if action else []
 
 
 def linked_sections(workspace: Workspace, docs: list[str] | None = None, section_id: str | None = None) -> list[dict[str, Any]]:
@@ -152,9 +158,7 @@ def bootstrap_inventory(workspace: Workspace, scan: dict[str, Any] | None) -> tu
 
 
 def source_role(source_path: str) -> str:
-    normalized = source_path.replace("\\", "/")
-    parts = normalized.split("/")
-    return "test" if "tests" in parts or normalized.startswith("test") or Path(normalized).name.startswith("test_") else "production"
+    return classify_source_role(source_path)
 
 
 def bootstrap_source_records(workspace: Workspace) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -552,16 +556,47 @@ def render_context(  # noqa: C901
                 specs.append({"unit_id": source_id, "unit_type": "source", "role": role, "source_unit": unit})
     else:
         for item in selected_sections:
-            specs.append(
-                {
-                    "unit_id": f"section:{item['doc_path']}::{item['section_id']}",
-                    "unit_type": "section",
-                    "section": item,
-                }
-            )
-        if include_unlinked:
-            for source_path in bootstrap_sources:
-                specs.append({"unit_id": f"unlinked-source:{source_path}", "unit_type": "unlinked-source", "source_path": source_path})
+            doc_path = str(item["doc_path"])
+            heading_path = " / ".join(item.get("heading_path", []) or []) or str(item["section_id"])
+            block = [
+                f"### {doc_path} :: {heading_path}",
+                "",
+                f"Section id: {item['section_id']}",
+                f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
+                f"Action: {item['action']}",
+                *review_action_lines(item),
+                "",
+                "Linked source units:",
+                "",
+            ]
+            for unit in item.get("changed_units", []) or []:
+                source_unit_count += 1
+                block.extend(
+                    [
+                        f"- {unit['source_id']}",
+                        f"  - path: {unit['source_path']}",
+                        f"  - status: {'missing' if unit.get('missing') else 'live'}",
+                        *([f"  - kind: {unit['kind']}", f"  - signature: `{unit['signature']}`"] if not unit.get("missing") else []),
+                        f"  - lines: {unit['line_span'][0]}-{unit['line_span'][1]}",
+                        f"  - changed: {', '.join(unit.get('changed_hashes', []) or ['file_hash'])}",
+                        f"  - reason: {unit['reason'] or 'No recorded reason.'}",
+                        "",
+                        "  Current relevant source:",
+                        "",
+                    ]
+                )
+                snippet = source_snippet(
+                    workspace_root(workspace),
+                    str(unit["source_path"]),
+                    list(unit.get("line_span", [0, 0])),
+                    max_lines=max_source_lines,
+                )
+                block.extend(f"  {line}" for line in trim_lines(snippet, max_lines=max_source_lines))
+                block.append("")
+            block.extend(["Current section text:", ""])
+            block.extend(trim_lines(str(item.get("text", "")).strip("\n"), max_lines=max_section_lines))
+            block.append("")
+            append_block(f"section:{item['doc_path']}::{item['section_id']}", block)
 
     manifest_hash = _context_manifest_hash(workspace, specs, [*bootstrap_sources, *bootstrap_docs])
     request_offset = _context_offset(

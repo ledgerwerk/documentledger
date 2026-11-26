@@ -11,13 +11,14 @@ from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
 from documentledger.impact import resolve_affected_sections
 from documentledger.links import current_source_inventory
+from documentledger.models import FreshnessResolution
 from documentledger.scanner import collect_files, file_hash
-from documentledger.storage import latest_scan, load_doc_record, save_doc_records_batch
+from documentledger.storage import DOC_RECORD_SCHEMA, latest_scan, load_doc_record, save_doc_records_batch
 
 
 def _new_doc_record(workspace: Any, doc_path: str) -> dict[str, Any]:
     return {
-        "schema": "documentledger.doc_record.v4",
+        "schema": DOC_RECORD_SCHEMA,
         "doc_path": doc_path,
         "linked_sources": [],
         "sections": [section.to_record() | {"links": []} for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path)],
@@ -93,6 +94,7 @@ def _refresh_record(
             selected["line_span"] = [current_section.line_span[0], current_section.line_span[1]]
             selected["section_hash"] = current_section.section_hash
             selected["summary"] = current_section.summary
+        selected.pop("pending_section_hash", None)
         for link in selected.get("links", []) or []:
             source_id = str(link.get("source_id", ""))
             if source_id not in inventory:
@@ -114,6 +116,47 @@ def _refresh_record(
             "content_hash": refreshed["last_fresh_hash"],
         }
     return refreshed, updated_sections
+
+
+def record_freshness_resolutions(workspace: Any, resolutions: tuple[FreshnessResolution, ...]) -> None:
+    if not resolutions:
+        return
+    scan_record = latest_scan(workspace)
+    if scan_record is None:
+        raise DocumentledgerError("scan_missing", "Freshness resolution requires a latest source scan.")
+
+    grouped: dict[str, list[FreshnessResolution]] = {}
+    for resolution in resolutions:
+        grouped.setdefault(resolution.doc_path, []).append(resolution)
+
+    inventory = current_source_inventory(workspace)
+    records: list[dict[str, Any]] = []
+    for doc_path, doc_resolutions in sorted(grouped.items()):
+        record = load_doc_record(workspace, doc_path)
+        if record is None:
+            raise DocumentledgerError("doc_record_missing", f"No document record exists for {doc_path}.")
+        selected_ids = {item.section_id for item in doc_resolutions}
+        selected = [section for section in (record.get("sections", []) or []) if str(section.get("section_id", "")) in selected_ids]
+        if {str(section.get("section_id", "")) for section in selected} != selected_ids:
+            raise DocumentledgerError("section_not_found", f"A freshness section no longer exists in {doc_path}.")
+        reason = "Documentledger finish passed link audit and configured validation."
+        refreshed, _ = _refresh_record(workspace, record, selected, inventory, int(scan_record["version"]), reason)
+        refreshed_sections = {str(section.get("section_id", "")): section for section in refreshed.get("sections", []) or []}
+        for resolution in doc_resolutions:
+            section = refreshed_sections[resolution.section_id]
+            if resolution.disposition != "updated" and not resolution.reason.strip():
+                raise DocumentledgerError("reason_required", f"{resolution.disposition} requires a non-empty reason.")
+            section["freshness"] = {
+                "source_scan_version": resolution.scan_version,
+                "section_hash": str(section.get("section_hash", "")),
+                "disposition": resolution.disposition,
+                "reason": resolution.reason,
+            }
+        records.append(refreshed)
+
+    workspace.metadata["last_scan_affected_section_count"] = 0
+    workspace.metadata["last_scan_stale_doc_count"] = 0
+    save_doc_records_batch(workspace, records)
 
 
 def mark_fresh(
@@ -168,6 +211,25 @@ def mark_fresh(
             allow_unlinked=allow_unlinked,
         )
         refreshed, section_ids = _refresh_record(workspace, record, selected_sections, inventory, int(scan_record["version"]), reason)
+        old_sections = {str(item.get("section_id", "")): item for item in record.get("sections", []) or []}
+        selected_ids = {str(item.get("section_id", "")) for item in selected_sections}
+        for refreshed_section in refreshed.get("sections", []) or []:
+            section_id = str(refreshed_section.get("section_id", ""))
+            if section_id not in selected_ids:
+                continue
+            old_section = old_sections.get(section_id, {})
+            previous_freshness = dict(old_section.get("freshness", {}) or {})
+            baseline_hash = str(
+                old_section.get("pending_section_hash") or previous_freshness.get("section_hash") or old_section.get("section_hash", "")
+            )
+            section_hash = str(refreshed_section.get("section_hash", ""))
+            disposition = "updated" if baseline_hash != section_hash else "reviewed-no-change"
+            refreshed_section["freshness"] = {
+                "source_scan_version": int(scan_record["version"]),
+                "section_hash": section_hash,
+                "disposition": disposition,
+                "reason": reason,
+            }
         updated_sections.extend(section_ids)
         if json.dumps(record, sort_keys=True) != json.dumps(refreshed, sort_keys=True):
             changed_records.append(refreshed)

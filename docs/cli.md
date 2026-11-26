@@ -240,6 +240,60 @@ With `--json`, the command returns `ok`, `command`, a command-specific `result`,
 documentledger scan
 ```
 
+## review
+
+Review changed source, affected documentation, and safe exact mappings.
+
+- **Effect:** `workspace-write`
+- **Audience:** `agent`
+- **Workspace required:** `yes`
+- **Targeting:** `none`
+- **Compatibility aliases:** None
+
+### Syntax
+
+```bash
+documentledger review
+documentledger review --doc docs/api.md
+documentledger review --details
+```
+
+### Arguments and options
+
+- `--doc PATH`: Limit review to one documentation path.
+- `--details`: Include complete review arrays in JSON output.
+
+### JSON result and errors
+
+With `--json`, returns `documentledger.review.v1` with bounded affected sections, relevant unmapped changes, mapping candidates, ignored counts, and a next action. `--details` disables array limits.
+
+## finish
+
+Audit links, run configured validation, and record section freshness dispositions.
+
+- **Effect:** `workspace-write`
+- **Audience:** `agent`
+- **Workspace required:** `yes`
+- **Targeting:** `none`
+- **Compatibility aliases:** None
+
+### Syntax
+
+```bash
+documentledger finish
+documentledger finish --reviewed-no-change docs/usage.md#usage-run-scan="Claims remain accurate."
+documentledger finish --generated-verified docs/api.md#api-client="Generated reference verified."
+```
+
+### Arguments and options
+
+- `--reviewed-no-change DOC#SECTION=REASON`: Record an explicit no-change review for an affected section.
+- `--generated-verified DOC#SECTION=REASON`: Verify an affected generated-reference section.
+
+### JSON result and errors
+
+With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and configured validation results. Freshness is written only after mappings are resolved, the link audit passes, and all configured validation commands succeed. Changed sections are recorded as `updated`; unchanged sections require an explicit decision.
+
 ## coverage
 
 Compute documentation coverage metrics.
@@ -269,6 +323,31 @@ With `--json`, the command returns `ok`, `command`, a command-specific `result`,
 ```bash
 documentledger coverage
 ```
+
+## capabilities
+
+Report versioned features and the canonical command surface.
+
+- **Effect:** `read`
+- **Audience:** `agent`
+- **Workspace required:** `no`
+- **Targeting:** `none`
+- **Compatibility aliases:** None
+
+### Syntax
+
+```bash
+documentledger capabilities
+documentledger --json capabilities
+```
+
+### Arguments and options
+
+- None.
+
+### JSON result
+
+Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, capability identifiers, and canonical command paths.
 
 ## commands
 

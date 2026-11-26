@@ -4,9 +4,20 @@ from typing import Any
 
 from documentledger.models import Workspace
 from documentledger.source_index import file_unit_id
+from documentledger.source_roles import classify_source_role, mapping_review_roles
 from documentledger.storage import iter_doc_records, latest_scan
 
 GENERATED_COVERAGE = {"api-autodoc", "generated-reference"}
+
+PUBLIC_CHANGE_HASHES = {"decorator_hash", "docstring_hash", "file_hash", "public_contract_hash", "signature_hash"}
+
+
+def review_action_for(changed_links: list[dict[str, Any]]) -> str:
+    if changed_links and all(link["coverage"] in GENERATED_COVERAGE for link in changed_links):
+        return "generated_verify"
+    if any(link.get("change_type") == "deleted" or set(link.get("changed_hashes", [])) & PUBLIC_CHANGE_HASHES for link in changed_links):
+        return "update_required"
+    return "review_required"
 
 
 def link_mismatches(
@@ -82,6 +93,7 @@ def resolve_affected_sections(
             action = (
                 "verify-generated-reference" if all(link["coverage"] in GENERATED_COVERAGE for link in changed_links) else "rewrite-section"
             )
+            review_action = review_action_for(changed_links)
             affected.append(
                 {
                     "doc_path": doc_path,
@@ -92,6 +104,7 @@ def resolve_affected_sections(
                     "section_hash": str(section.get("section_hash", "")),
                     "summary": str(section.get("summary", "")),
                     "action": action,
+                    "review_action": review_action,
                     "changed_units": changed_links,
                 }
             )
@@ -113,6 +126,7 @@ def stale_doc_details(workspace: Workspace, scan: dict[str, Any] | None = None) 
                 "heading_path": item["heading_path"],
                 "line_span": item["line_span"],
                 "action": item["action"],
+                "review_action": item.get("review_action", ""),
             }
         )
         for unit in item.get("changed_units", []) or []:
@@ -147,8 +161,25 @@ def unmapped_changed_units(workspace: Workspace, scan: dict[str, Any] | None = N
         path = str(item.get("path", ""))
         if source_id in linked_source_ids or file_unit_id(path) in linked_source_ids:
             continue
-        unmapped.append(dict(item))
+        record = dict(item)
+        record["source_role"] = classify_source_role(record)
+        unmapped.append(record)
     return unmapped
+
+
+def relevant_unmapped_changed_units(workspace: Workspace, scan: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    review_roles = mapping_review_roles(workspace)
+    return [item for item in unmapped_changed_units(workspace, scan) if item["source_role"] in review_roles]
+
+
+def ignored_changed_unit_counts(workspace: Workspace, scan: dict[str, Any] | None = None) -> dict[str, int]:
+    review_roles = mapping_review_roles(workspace)
+    counts: dict[str, int] = {}
+    for item in unmapped_changed_units(workspace, scan):
+        role = str(item["source_role"])
+        if role not in review_roles:
+            counts[role] = counts.get(role, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def linked_source_map(workspace: Workspace) -> dict[str, list[str]]:

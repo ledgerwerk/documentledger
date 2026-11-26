@@ -70,6 +70,16 @@ def changed_source_paths(previous: dict[str, Any] | None, current_hashes: dict[s
     return changed, added, deleted
 
 
+def changed_doc_paths(previous: dict[str, Any] | None, current_hashes: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
+    if previous is None:
+        return [], [], []
+    old_hashes = dict(previous.get("doc_hashes", {}))
+    changed = sorted(path for path, value in current_hashes.items() if path in old_hashes and old_hashes.get(path) != value)
+    added = sorted(path for path in current_hashes if path not in old_hashes)
+    deleted = sorted(path for path in old_hashes if path not in current_hashes)
+    return changed, added, deleted
+
+
 def scan_state_changed(previous: dict[str, Any] | None, source_hashes: dict[str, str], doc_hashes: dict[str, str]) -> bool:
     if previous is None:
         return True
@@ -186,6 +196,7 @@ def run_scan(workspace: Workspace) -> ScanResult:
     previous = latest_scan(workspace) if previous_summary is not None else None
     changed, added, deleted = changed_source_paths(previous_summary, source_hashes)
     source_units: dict[str, dict[str, Any]]
+    changed_docs, added_docs, deleted_docs = changed_doc_paths(previous_summary, doc_hashes)
     if previous is None:
         source_units = source_inventory(workspace_root(workspace), source_paths)
     elif changed or added or deleted:
@@ -218,6 +229,9 @@ def run_scan(workspace: Workspace) -> ScanResult:
         "schema": "documentledger.scan.v5",
         "source_hashes": source_hashes,
         "doc_hashes": doc_hashes,
+        "changed_docs": changed_docs,
+        "added_docs": added_docs,
+        "deleted_docs": deleted_docs,
         "source_units": source_units,
         "changed_sources": sorted([*changed, *added]),
         "deleted_sources": deleted,

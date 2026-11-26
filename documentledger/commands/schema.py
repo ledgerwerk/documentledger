@@ -64,13 +64,15 @@ _SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "doc-record": {
         "name": "doc-record",
-        "schema_id": "documentledger.doc_record.v4",
+        "schema_id": "documentledger.doc_record.v5",
         "description": "Documentation record schema for tracked documents.",
         "fields": [
             "schema",
             "doc_path",
             "linked_sources",
             "sections",
+            "section.freshness",
+            "section.pending_section_hash",
             "last_fresh_scan_version",
             "last_fresh_hash",
             "notes",

@@ -13,7 +13,7 @@ The shared `.ledger/ledger.toml` uses schema version 3. Its Documentledger regis
 - `storage.yaml` stores schema metadata, project UUID, state version, and compact scan counts.
 - `scan.yaml` stores the current `documentledger.scan.v5` baseline and deltas.
 - `source-index.json` stores the deterministic source-unit inventory.
-- `docs/*.yaml` stores `documentledger.doc_record.v4` records and section links.
+- `docs/*.yaml` stores `documentledger.doc_record.v5` records and section links; v4 records remain readable and are normalized on write.
 - `artifacts` stores rendered context and link proposals as derived cache output.
 
 <!-- docledger-section: storage-invariants -->

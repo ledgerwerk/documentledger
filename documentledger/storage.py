@@ -29,7 +29,9 @@ DEFAULT_STORAGE_DIR = ".ledger"
 STORAGE_SCHEMA_VERSION = 5
 SCAN_SCHEMA = "documentledger.scan.v5"
 SOURCE_INDEX_SCHEMA = "documentledger.source_index.v1"
-DOC_RECORD_SCHEMA = "documentledger.doc_record.v4"
+DOC_RECORD_SCHEMA = "documentledger.doc_record.v5"
+FRESHNESS_DISPOSITIONS = {"updated", "reviewed-no-change", "generated-verified"}
+SUPPORTED_DOC_RECORD_SCHEMAS = frozenset({DOC_RECORD_SCHEMA, "documentledger.doc_record.v4"})
 SCAN_FILENAME = "scan.yaml"
 SOURCE_INDEX_FILENAME = "source-index.json"
 TIMESTAMP_KEYS = {f"{prefix}_at" for prefix in ("created", "updated", "generated")}
@@ -57,7 +59,7 @@ DEFAULT_CONFIG = {
         "doc_extensions": [".md", ".rst"],
     },
     "validation": {"commands": []},
-    "policy": {"require_doc_frontmatter": False},
+    "policy": {"require_doc_frontmatter": False, "mapping_review_roles": ["production"]},
 }
 
 
@@ -129,6 +131,7 @@ def load_config(path: Path) -> Config:
         doc_extensions=list(scan_data.get("doc_extensions", [".md", ".rst"])),
         validation_commands=list(validation_data.get("commands", [])),
         require_doc_frontmatter=bool(policy_data.get("require_doc_frontmatter", False)),
+        mapping_review_roles=list(policy_data.get("mapping_review_roles", ["production"])),
     )
 
 
@@ -338,6 +341,21 @@ def normalize_section_link(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_section_freshness(record: dict[str, Any]) -> dict[str, Any]:
+    disposition = str(record.get("disposition", ""))
+    if disposition not in FRESHNESS_DISPOSITIONS:
+        raise DocumentledgerError("invalid_freshness", f"Unknown section freshness disposition: {disposition!r}.")
+    reason = str(record.get("reason", ""))
+    if disposition != "updated" and not reason.strip():
+        raise DocumentledgerError("invalid_freshness", f"{disposition} freshness requires a non-empty reason.")
+    return {
+        "source_scan_version": coerce_int(record.get("source_scan_version"), 0),
+        "section_hash": str(record.get("section_hash", "")),
+        "disposition": disposition,
+        "reason": reason,
+    }
+
+
 def normalize_doc_record(
     workspace: Workspace,
     record: dict[str, Any],
@@ -366,9 +384,21 @@ def normalize_doc_record(
             "heading_slug": str(section.get("heading_slug") or "whole-doc"),
             "line_span": normalize_line_span(section.get("line_span")),
             "section_hash": str(section.get("section_hash") or ""),
+            "body_hash": str(section.get("body_hash") or ""),
+            "body_length": coerce_int(section.get("body_length"), 0),
             "summary": str(section.get("summary") or ""),
         }
         base["links"] = [normalize_section_link(link) for link in (section.get("links", []) or [])]
+        freshness_record = section.get("freshness")
+        if freshness_record is not None:
+            base["freshness"] = normalize_section_freshness(dict(freshness_record))
+        else:
+            base.pop("freshness", None)
+        pending_section_hash = str(section.get("pending_section_hash") or "")
+        if pending_section_hash:
+            base["pending_section_hash"] = pending_section_hash
+        else:
+            base.pop("pending_section_hash", None)
         sections.append(base)
     linked_sources = sorted(
         {link["source_path"] for section in sections for link in (section.get("links", []) or []) if str(link.get("source_path", ""))}
@@ -428,6 +458,9 @@ def normalize_scan_summary(record: dict[str, Any], *, source_unit_count: int | N
         "doc_file_count": coerce_int(normalized.get("doc_file_count"), len(doc_hashes)),
         "source_hashes": source_hashes,
         "doc_hashes": doc_hashes,
+        "changed_docs": sorted(str(value) for value in (normalized.get("changed_docs", []) or [])),
+        "added_docs": sorted(str(value) for value in (normalized.get("added_docs", []) or [])),
+        "deleted_docs": sorted(str(value) for value in (normalized.get("deleted_docs", []) or [])),
         "changed_sources": sorted(str(value) for value in (normalized.get("changed_sources", []) or [])),
         "deleted_sources": sorted(str(value) for value in (normalized.get("deleted_sources", []) or [])),
         "changed_units": [normalize_changed_unit(dict(item)) for item in (normalized.get("changed_units", []) or [])],
@@ -456,6 +489,9 @@ def build_scan_summary(scan: dict[str, Any], *, version: int, source_index_hash:
             "doc_file_count": len(dict(scan.get("doc_hashes", {}))),
             "source_hashes": dict(scan.get("source_hashes", {})),
             "doc_hashes": dict(scan.get("doc_hashes", {})),
+            "changed_docs": list(scan.get("changed_docs", []) or []),
+            "added_docs": list(scan.get("added_docs", []) or []),
+            "deleted_docs": list(scan.get("deleted_docs", []) or []),
             "changed_sources": list(scan.get("changed_sources", []) or []),
             "deleted_sources": list(scan.get("deleted_sources", []) or []),
             "changed_units": list(scan.get("changed_units", []) or []),

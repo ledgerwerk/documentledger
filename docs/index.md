@@ -48,13 +48,13 @@ changelog
 
 ## Documentation freshness workflow
 
-The supported workflow is:
+Use the capability-aware workflow:
 
-1. Run `documentledger --json status` to inspect the canonical workspace.
-2. Run `documentledger --json scan` to compare current source and documentation hashes with the latest baseline.
-3. Run `documentledger --json document affected` to find sections affected by linked source-unit changes.
-4. Run `documentledger document build-context --affected --out /tmp/documentledger-context.md` to render bounded update context.
-5. Inspect the affected sections and linked source evidence before editing.
-6. Update the affected sections, run configured validation commands, then mark them fresh with `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs updated after scan version VERSION."`.
+1. Run `documentledger --json capabilities` to discover advertised commands and features.
+2. Run `documentledger --json status` to inspect workspace state and the recommended action.
+3. Run `documentledger review` to scan current files and inspect affected documentation and relevant mapping candidates.
+4. Resolve ambiguous mappings and edit the affected sections with the bounded context you need.
+5. Run configured validation, then `documentledger finish`. Supply an explicit `--reviewed-no-change` or `--generated-verified` decision for affected sections whose text did not change.
+6. Check `documentledger --json status` and `documentledger --json check` before committing.
 
-Documentledger stores durable state in the resolved `data` mount under `.ledger/documentledger/`. Do not edit canonical `.ledger/` records directly.
+`finish` audits links and runs configured validation before writing freshness. If capabilities do not advertise both `review.v1` and `finish.v1`, or for bootstrap and manual control, use the lower-level `scan`, `document affected`, `document build-context`, link commands, and `document mark-fresh`. Documentledger stores durable state in the resolved `data` mount under `.ledger/documentledger/`. Do not edit canonical `.ledger/` records directly.

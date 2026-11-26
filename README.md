@@ -16,22 +16,24 @@ For development, install `python -m pip install -e ".[test,docs,dev]"`. Document
 
 ## Quickstart
 
+Initialize the project and inspect the capability contract before selecting a workflow:
+
 ```bash
 documentledger init --project-name example
+documentledger --json capabilities
 documentledger --json status
-documentledger --json scan
-documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md
-documentledger link propose --all-docs --out-dir /tmp/documentledger-maps
-documentledger --json link import-map --directory /tmp/documentledger-maps --check-and-apply
-documentledger --json link audit
-documentledger --json coverage
 ```
 
-After updating and validating an affected section:
+For incremental documentation updates, use the capability-aware review and finish path:
 
 ```bash
-documentledger document mark-fresh --doc docs/usage.md --section usage-scan --reason "Updated after scan version VERSION."
+documentledger review
+# edit the affected documentation sections
+documentledger finish
+documentledger --json status
 ```
+
+`review` scans current files, reports affected sections and relevant mapping work, and applies only safe exact mappings. `finish` audits links, runs configured validation commands, and records freshness only when all gates pass. For an unchanged section, provide a reason with `--reviewed-no-change DOC#SECTION=REASON`; use `--generated-verified DOC#SECTION=REASON` for verified generated references.
 
 ## Canonical storage
 
@@ -39,18 +41,20 @@ The shared authority is `.ledger/ledger.toml` schema 3. Documentledger's tool co
 
 ## Workflow
 
-1. Initialize the canonical project.
-2. Scan to establish or update the deterministic baseline.
-3. Inspect `document affected` and bounded `document build-context` output.
-4. Link sections to source units with `link add-section` or review deterministic proposals.
-5. Update affected documentation and run validation.
-6. Mark updated sections fresh, audit links, and run `documentledger --json check`.
+1. Initialize the canonical project and inspect `documentledger --json capabilities`.
+2. Use `documentledger review` for incremental changes. It scans, summarizes affected sections and relevant unmapped production changes, and links only deterministic exact candidates.
+3. Inspect `documentledger review --details` or bounded `documentledger document build-context --affected` when more evidence is needed. Resolve ambiguous mappings deliberately.
+4. Edit affected documentation and run the configured validation commands.
+5. Run `documentledger finish`, supplying an explicit no-change or generated-reference decision when needed. It writes freshness only after mapping review, link audit, and configured validation succeed.
+6. Inspect `documentledger --json status` and `documentledger --json check`.
+
+For bootstrapping or manual control, the lower-level `scan`, `document affected`, `document build-context`, `link propose`/`link import-map`, `link audit`, and `document mark-fresh` commands remain available. `document mark-fresh` is the explicit low-level freshness operation; use it only after reviewing mappings and completing validation.
 
 <!-- docledger-section: status -->
 
 ## Status
 
-`documentledger --json status` reports initialization, storage bindings, latest scan counts, and the recommended next action.
+`documentledger --json status` reports workspace initialization, storage bindings, scan counts, mapping/freshness state, and a recommended next action. The top-level `state` distinguishes `bootstrap_required`, `mapping_incomplete`, `incremental_affected`, and `incremental_clean`. The `freshness_state` is `affected` or `clean`; `mapping_state` is `bootstrap_required`, `review_required`, or `complete`. Test, private, and generated changes are excluded from mapping review by default unless `mapping_review_roles` opts them in.
 
 <!-- docledger-section: commands -->
 
@@ -72,7 +76,7 @@ Use `documentledger migrate status`, `migrate plan`, `migrate apply`, `migrate r
 
 ## Bootstrapping a new repository
 
-The first scan is a baseline; use `documentledger document build-context --bootstrap`, review deterministic link proposals and coverage (including intentional no-op mappings), then apply them before marking all configured documents fresh with `--allow-unlinked`.
+The first scan is a baseline. For bootstrap, use `documentledger document build-context --bootstrap`, review deterministic proposals and coverage (including intentional no-op mappings), then apply them. `document mark-fresh --all --allow-unlinked` remains an explicit low-level bootstrap operation when its broader scope is intentional; the normal incremental path uses `review` and `finish`.
 
 ## Documentation and development
 
@@ -87,7 +91,7 @@ Run tests with `python -m pytest -q` and compile checks with `python -m compilea
 
 ## Compatibility
 
-`docledger`, plural command groups, root `mark-fresh`, and legacy storage migration wrappers remain temporary compatibility interfaces. New automation must use `documentledger` and canonical singular command paths.
+`docledger`, plural command groups, root `mark-fresh`, and legacy storage migration wrappers remain compatibility interfaces. New automation should probe `documentledger --json capabilities` and use canonical singular command paths. `document mark-fresh` remains available for explicit low-level workflows; prefer `review` and `finish` when their capabilities are advertised.
 
 ## License
 

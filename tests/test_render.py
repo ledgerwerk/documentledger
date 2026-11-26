@@ -91,6 +91,7 @@ def test_affected_context_includes_only_target_section_and_source_unit(project: 
     result = runner.invoke(__import__("documentledger.cli").cli.app, ["docs", "build-context", "--affected", "--print"])
     assert result.exit_code == 0
     assert "docs/usage.md :: Usage / Validate ledger state" in result.output
+    assert "Review action: update_required" in result.output
     assert "py:function:documentledger/cli.py::doctor" in result.output
     assert "py:function:documentledger/cli.py::scan" not in result.output
     assert 'def doctor(ctx: typer.Context, json: bool = typer.Option(False, "--json"))' in result.output

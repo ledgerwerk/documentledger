@@ -23,7 +23,9 @@ from documentledger.proposal_manifest import (
 )
 from documentledger.scanner import collect_files, file_hash
 from documentledger.source_index import file_unit_id, source_inventory
+from documentledger.source_roles import classify_source_role
 from documentledger.storage import (
+    DOC_RECORD_SCHEMA,
     iter_doc_records,
     latest_scan,
     load_doc_record,
@@ -130,9 +132,7 @@ GENERIC_PROPOSAL_NAMES = {"main", "build", "entry", "run", "get", "set", "metada
 
 
 def _source_role(unit: dict[str, Any]) -> str:
-    path = str(unit.get("path", "")).replace("\\", "/")
-    parts = path.split("/")
-    return "test" if "tests" in parts or path.startswith("test") or Path(path).name.startswith("test_") else "production"
+    return classify_source_role(unit)
 
 
 def _markdown_evidence(section_text: str) -> tuple[str, str]:
@@ -148,72 +148,341 @@ def _token_in(text: str, token: str) -> bool:
     return re.search(rf"(?<![\w]){re.escape(token)}(?![\w])", text) is not None
 
 
+@dataclass(frozen=True)
+class LinkCandidate:
+    doc_path: str
+    section_id: str
+    source_id: str
+    source_path: str
+    confidence: str
+    evidence_kind: str
+    evidence_text: str
+    evidence_group: str
+    coverage: str
+    impact: str
+    tracked_hashes: tuple[str, ...]
+    specificity: int
+    reason: str
+
+
+@dataclass(frozen=True)
+class CandidateSelection:
+    exact: tuple[LinkCandidate, ...]
+    review: tuple[LinkCandidate, ...]
+    dominated_count: int
+
+
+@dataclass(frozen=True)
+class _EvidenceSpan:
+    text: str
+    kind: str
+    start: int
+    end: int
+
+
+def _evidence_spans(section_text: str) -> list[_EvidenceSpan]:
+    spans: list[_EvidenceSpan] = []
+    occupied: list[tuple[int, int]] = []
+    patterns = (
+        (r"<!--\s*documentledger:\s*(.*?)-->", "directive"),
+        (r"```[^\n]*\n(.*?)```", "code"),
+        (r"(?<!`)`([^`\n]+)`(?!`)", "code"),
+    )
+    for pattern, kind in patterns:
+        for match in re.finditer(pattern, section_text, flags=re.DOTALL):
+            if any(match.start() < end and match.end() > start for start, end in occupied):
+                continue
+            text = match.group(1)
+            spans.append(_EvidenceSpan(text.strip(), kind, match.start(), match.end()))
+            occupied.append((match.start(), match.end()))
+    for match in re.finditer(r"[^\n]+", section_text):
+        if any(match.start() < end and match.end() > start for start, end in occupied):
+            continue
+        text = match.group(0).strip()
+        if text:
+            spans.append(_EvidenceSpan(text, "prose", match.start(), match.end()))
+    return sorted(spans, key=lambda item: (item.start, item.end, item.kind))
+
+
+def _candidate_ancestors(source_id: str) -> tuple[str, ...]:
+    if not source_id.startswith("py:"):
+        return ()
+    unit_ref = source_id[3:]
+    unit_kind_path, _, qualname = unit_ref.partition("::")
+    kind, separator, source_path = unit_kind_path.partition(":")
+    if not separator:
+        return ()
+    ancestors: list[str] = []
+    if kind == "method" and "." in qualname:
+        ancestors.append(f"py:class:{source_path}::{qualname.rsplit('.', 1)[0]}")
+    if kind in {"method", "function", "class"}:
+        ancestors.append(f"py:module:{source_path}")
+    if kind == "module" or kind in {"method", "function", "class"}:
+        ancestors.append(f"py:file:{source_path}")
+    return tuple(ancestors)
+
+
+def _specificity(unit: dict[str, Any]) -> int:
+    return {"file": 0, "module": 1, "class": 2, "function": 3, "method": 3}.get(str(unit.get("kind", "")), 0)
+
+
+def _confidence_rank(confidence: str) -> int:
+    return {"medium": 1, "high": 2, "exact": 3}.get(confidence, 0)
+
+
+def _class_claim(text: str, qualname: str) -> bool:
+    match = re.search(rf"(?<![\w]){re.escape(qualname)}(?![\w])", text, flags=re.IGNORECASE)
+    if match is None:
+        return False
+    context = text[max(0, match.start() - 80) : match.end() + 100].lower()
+    return any(word in context for word in ("class", "facade", "owns", "provides", "responsible", "implements"))
+
+
+def _candidate_semantics(
+    section_text: str,
+    unit: dict[str, Any],
+    evidence_kind: str,
+    evidence_text: str,
+) -> tuple[str, str, tuple[str, ...], str]:
+    text = section_text.lower()
+    kind = str(unit.get("kind", ""))
+    if evidence_kind == "dependency-directive":
+        directive = re.search(r"watch\s*=\s*['\"]([^'\"]+)['\"]", evidence_text)
+        watch = directive.group(1) if directive else "public_contract"
+        tracked = {
+            "public_contract": ("public_contract_hash",),
+            "public_contract_hash": ("public_contract_hash",),
+            "signature": ("signature_hash",),
+            "body": ("body_hash",),
+            "implementation": ("body_hash",),
+        }.get(watch, ("public_contract_hash",))
+        return "api-autodoc", "public-api", tracked, "Explicit Documentledger dependency directive."
+    if evidence_kind == "class-level-claim":
+        return (
+            "architecture",
+            "implementation-note",
+            ("body_hash", "public_contract_hash"),
+            "Prose makes a class-level implementation claim.",
+        )
+    if kind == "file":
+        return (
+            "broad-file-fallback",
+            "unknown",
+            ("file_hash",),
+            f"Documentation names source path `{unit.get('path', '')}`.",
+        )
+    if any(word in text for word in ("troubleshoot", "error", "exception")):
+        return (
+            "troubleshooting",
+            "behavior",
+            ("public_contract_hash",),
+            "Evidence appears in troubleshooting or error-contract documentation.",
+        )
+    if any(word in text for word in ("json", "schema", "field")):
+        return "json-contract", "schema", ("public_contract_hash",), "Evidence appears in schema or data-contract documentation."
+    if any(word in text for word in ("example", "sample output", "demonstrates")):
+        return "example", "example-output", ("public_contract_hash",), "Evidence appears in a documented example."
+    if any(word in text for word in ("cli", "command", "option", "flag")):
+        return (
+            "cli-command",
+            "behavior",
+            ("signature_hash", "decorator_hash", "public_contract_hash"),
+            "Evidence documents a CLI command or option.",
+        )
+    if any(word in text for word in ("workflow", "sequence", "step")):
+        return "workflow", "behavior", ("public_contract_hash",), "Evidence documents a user workflow."
+    if kind in {"function", "method", "class"}:
+        return (
+            "api-autodoc",
+            "public-api",
+            ("signature_hash", "docstring_hash", "public_contract_hash"),
+            "Exact public Python symbol reference.",
+        )
+    return "architecture", "implementation-note", ("body_hash", "public_contract_hash"), "Scoped source implementation reference."
+
+
+def _select_link_candidates(candidates: list[LinkCandidate]) -> CandidateSelection:
+    dominated = {
+        candidate
+        for candidate in candidates
+        if any(
+            other.evidence_group == candidate.evidence_group
+            and candidate.source_id in _candidate_ancestors(other.source_id)
+            and _confidence_rank(other.confidence) >= _confidence_rank(candidate.confidence)
+            for other in candidates
+            if other.source_id != candidate.source_id
+        )
+    }
+    unique: dict[str, LinkCandidate] = {}
+    for candidate in candidates:
+        if candidate in dominated:
+            continue
+        current = unique.get(candidate.source_id)
+        if current is None or _confidence_rank(candidate.confidence) > _confidence_rank(current.confidence):
+            unique[candidate.source_id] = candidate
+    selected = tuple(sorted(unique.values(), key=lambda item: (item.source_path, item.source_id)))
+    return CandidateSelection(
+        exact=tuple(item for item in selected if item.confidence == "exact"),
+        review=tuple(item for item in selected if item.confidence != "exact"),
+        dominated_count=len(dominated),
+    )
+
+
+def _match_evidence(
+    span: _EvidenceSpan,
+    unit: dict[str, Any],
+    symbols: dict[str, list[dict[str, Any]]],
+) -> tuple[str | None, str, str, str | None]:
+    kind = str(unit.get("kind", ""))
+    source_id = str(unit.get("source_id", ""))
+    source_path = str(unit.get("path", ""))
+    qualname = str(unit.get("qualname", ""))
+    if source_id and _token_in(span.text, source_id):
+        return "source-id-reference", source_id, "exact", None
+    if kind in {"file", "module"} and source_path and _token_in(span.text, source_path):
+        return "source-path-reference", source_path, "exact", None
+    if kind in {"function", "method"} and qualname and "." in qualname and _token_in(span.text, qualname):
+        return "qualified-symbol-reference", qualname, "exact", None
+    if kind in {"function", "method"} and qualname:
+        name = qualname.rsplit(".", 1)[-1]
+        if name in GENERIC_PROPOSAL_NAMES and span.kind == "prose" and _token_in(span.text, name):
+            return None, name, "", "generic"
+        matches = symbols.get(name, [])
+        call = re.search(rf"(?<![\w]){re.escape(name)}\s*\(", span.text)
+        if call and len(matches) == 1 and matches[0].get("source_id") == source_id:
+            confidence = "exact" if _token_in(span.text, source_path) else "high"
+            return "unique-call-reference", call.group(0).strip(), confidence, None
+        if call and len(matches) > 1:
+            return None, name, "", "ambiguous"
+        if kind == "function" and _token_in(span.text, name) and len(matches) == 1:
+            return "unique-symbol-reference", name, "high", None
+        if kind == "function" and _token_in(span.text, name) and len(matches) > 1:
+            return None, name, "", "ambiguous"
+    if kind == "class" and qualname and _token_in(span.text, qualname):
+        claim = span.kind == "prose" and _class_claim(span.text, qualname)
+        if span.kind == "prose" and not claim:
+            return None, qualname, "", "low-confidence"
+        evidence_kind = "class-level-claim" if claim else "class-name-mention"
+        confidence = "high" if claim or span.kind == "code" else "medium"
+        return evidence_kind, qualname, confidence, None
+    return None, "", "", None
+
+
 def _proposal_links_for_section(
     section_text: str,
     inventory: dict[str, dict[str, Any]],
     *,
+    doc_path: str = "",
+    section_id: str = "",
     include_tests: bool = False,
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    """Generate conservative deterministic proposals and rejection counters."""
-    proposals: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
-    code, prose = _markdown_evidence(section_text)
-    stats = {"excluded_test_units": 0, "generic_matches_rejected": 0, "low_confidence_rejected": 0}
-    for unit in sorted(inventory.values(), key=lambda item: (str(item.get("path", "")), str(item.get("source_id", "")))):
-        if _source_role(unit) == "test" and not include_tests:
-            stats["excluded_test_units"] += 1
-            continue
-        source_path = str(unit.get("path", ""))
-        qualname = str(unit.get("qualname", ""))
-        source_id = str(unit.get("source_id", ""))
-        match_text: str | None = None
-        reason: str | None = None
-        evidence_kind: str | None = None
-        confidence = "medium"
-        if source_id and _token_in(code, source_id):
-            match_text = source_id
-            reason = f"Code contains stable source id `{source_id}`."
-            evidence_kind, confidence = "source-id-in-code", "high"
-        elif source_path and _token_in(code, source_path):
-            match_text = source_path
-            reason = f"Code contains exact source path `{source_path}`."
-            evidence_kind = "exact-source-reference"
-            confidence = "high"
-        elif qualname and qualname != source_path and "." in qualname and _token_in(code, qualname):
-            match_text = qualname
-            reason = f"Code contains exact qualified symbol `{qualname}`."
-            evidence_kind = "exact-qualified-symbol"
-            confidence = "high"
-        elif unit.get("kind") == "class" and qualname and qualname[:1].isupper() and _token_in(code, qualname):
-            match_text = qualname
-            reason = f"Code contains public class `{qualname}`."
-            evidence_kind = "public-class-in-code"
-        elif qualname and "." not in qualname and qualname not in GENERIC_PROPOSAL_NAMES and _token_in(code, qualname):
-            module_context = source_path and (_token_in(code, source_path) or _token_in(section_text, source_path))
-            if module_context:
-                match_text = qualname
-                reason = f"Code contains public symbol `{qualname}` with source path context `{source_path}`."
-                evidence_kind = "public-symbol-with-path-context"
-            else:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Generate evidence-ranked proposals and reject ambiguous symbol guesses."""
+    units = list(inventory.values())
+    symbols: dict[str, list[dict[str, Any]]] = {}
+    for unit in units:
+        if str(unit.get("kind", "")) in {"function", "method"}:
+            name = str(unit.get("qualname", "")).rsplit(".", 1)[-1]
+            if name and not name.startswith("_"):
+                symbols.setdefault(name, []).append(unit)
+    stats = {
+        "excluded_test_units": sum(1 for unit in units if _source_role(unit) == "test") if not include_tests else 0,
+        "generic_matches_rejected": 0,
+        "low_confidence_rejected": 0,
+        "ambiguous_matches": 0,
+        "dominated_ancestors": 0,
+    }
+    candidates: list[LinkCandidate] = []
+    ambiguous_seen: set[tuple[str, int, int]] = set()
+    for span in _evidence_spans(section_text):
+        if span.kind == "directive":
+            source_match = re.search(r"depends-on\s*=\s*['\"]([^'\"]+)['\"]", span.text)
+            if source_match is None:
+                continue
+            source_id = source_match.group(1)
+            unit = inventory.get(source_id)
+            if unit is None:
                 stats["low_confidence_rejected"] += 1
-        elif qualname in GENERIC_PROPOSAL_NAMES and _token_in(prose, qualname):
-            stats["generic_matches_rejected"] += 1
-        if match_text is None:
+                continue
+            if _source_role(unit) == "test" and not include_tests:
+                continue
+            coverage, impact, tracked, reason = _candidate_semantics(section_text, unit, "dependency-directive", span.text)
+            candidates.append(
+                LinkCandidate(
+                    doc_path,
+                    section_id,
+                    source_id,
+                    str(unit.get("path", "")),
+                    "exact",
+                    "dependency-directive",
+                    span.text,
+                    f"{span.start}:{span.end}",
+                    coverage,
+                    impact,
+                    tracked,
+                    _specificity(unit),
+                    reason,
+                )
+            )
             continue
-        key = (source_id, "implementation-note", "unknown")
-        if key in seen:
-            continue
-        seen.add(key)
-        proposals.append(
-            {
-                "source_unit": source_id,
-                "coverage": "implementation-note",
-                "impact": "unknown",
-                "reason": reason,
-                "confidence": confidence,
-                "evidence": {"kind": evidence_kind, "text": match_text, "source_role": _source_role(unit)},
-            }
-        )
+        for unit in units:
+            role = _source_role(unit)
+            if role == "test" and not include_tests:
+                continue
+            if role in {"private", "documentation-support"}:
+                continue
+            source_id = str(unit.get("source_id", ""))
+            source_path = str(unit.get("path", ""))
+            evidence_kind, evidence_text, confidence, issue = _match_evidence(span, unit, symbols)
+            if issue == "ambiguous":
+                ambiguous_seen.add((evidence_text, span.start, span.end))
+                continue
+            if issue == "generic":
+                stats["generic_matches_rejected"] += 1
+                continue
+            if issue == "low-confidence":
+                stats["low_confidence_rejected"] += 1
+                continue
+            if evidence_kind is None:
+                continue
+            coverage, impact, tracked, reason = _candidate_semantics(section_text, unit, evidence_kind, evidence_text)
+            candidates.append(
+                LinkCandidate(
+                    doc_path,
+                    section_id,
+                    source_id,
+                    source_path,
+                    confidence,
+                    evidence_kind,
+                    evidence_text,
+                    f"{span.start}:{span.end}",
+                    coverage,
+                    impact,
+                    tracked,
+                    _specificity(unit),
+                    reason,
+                )
+            )
+    stats["ambiguous_matches"] = len(ambiguous_seen)
+    stats["ambiguous_evidence"] = [{"text": text, "span": [start, end]} for text, start, end in sorted(ambiguous_seen)]
+    selection = _select_link_candidates(candidates)
+    stats["dominated_ancestors"] = selection.dominated_count
+    proposals = [
+        {
+            "source_unit": candidate.source_id,
+            "coverage": candidate.coverage,
+            "impact": candidate.impact,
+            "tracked_hashes": list(candidate.tracked_hashes),
+            "reason": candidate.reason,
+            "confidence": candidate.confidence,
+            "auto_applicable": candidate.confidence == "exact",
+            "evidence": {
+                "kind": candidate.evidence_kind,
+                "text": candidate.evidence_text,
+                "source_role": _source_role(inventory[candidate.source_id]),
+            },
+        }
+        for candidate in (*selection.exact, *selection.review)
+    ]
     return proposals, stats
 
 
@@ -299,17 +568,29 @@ def propose_mappings(
     proposal_payloads: list[tuple[str, Path, dict[str, Any], list[dict[str, Any]], dict[str, str]]] = []
     proposed_sections = 0
     proposed_edges = 0
-    rejected = {"excluded_test_units": 0, "generic_matches_rejected": 0, "low_confidence_rejected": 0}
-    documents_without_candidates: list[str] = []
+    rejected = {
+        "excluded_test_units": 0,
+        "generic_matches_rejected": 0,
+        "low_confidence_rejected": 0,
+        "ambiguous_matches": 0,
+        "dominated_ancestors": 0,
+    }
     events: list[dict[str, Any]] = []
 
     for doc_path in docs:
         sections_payload: list[dict[str, Any]] = []
         linked_source_paths: set[str] = set()
         for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
-            links, stats = _proposal_links_for_section(section.text, inventory, include_tests=include_tests)
+            links, stats = _proposal_links_for_section(
+                section.text,
+                inventory,
+                doc_path=doc_path,
+                section_id=section.heading_slug,
+                include_tests=include_tests,
+            )
             for key, value in stats.items():
-                rejected[key] += value
+                if isinstance(value, int):
+                    rejected[key] += value
             if not links:
                 continue
             for link in links:
@@ -438,7 +719,7 @@ def find_section(workspace: Workspace, doc_path: str, section_ref: str) -> dict[
 
 def record_for_doc(workspace: Workspace, doc_path: str) -> dict[str, Any]:
     return load_doc_record(workspace, doc_path) or {
-        "schema": "documentledger.doc_record.v4",
+        "schema": DOC_RECORD_SCHEMA,
         "doc_path": doc_path,
         "linked_sources": [],
         "sections": [],

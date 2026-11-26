@@ -57,10 +57,29 @@ _COMMANDS: tuple[CommandMetadata, ...] = (
         effect="workspace-write",
     ),
     CommandMetadata(
+        path="review",
+        summary="Review changed source, affected documentation, and safe exact mappings.",
+        audience="agent",
+        effect="workspace-write",
+    ),
+    CommandMetadata(
+        path="finish",
+        summary="Audit links, run configured validation, and record section freshness dispositions.",
+        audience="agent",
+        effect="workspace-write",
+    ),
+    CommandMetadata(
         path="coverage",
         summary="Compute documentation coverage metrics.",
         audience="both",
         effect="read",
+    ),
+    CommandMetadata(
+        path="capabilities",
+        summary="Report versioned features and the canonical command surface.",
+        audience="agent",
+        effect="read",
+        requires_workspace=False,
     ),
     CommandMetadata(
         path="commands",

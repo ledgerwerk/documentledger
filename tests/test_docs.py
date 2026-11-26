@@ -38,8 +38,10 @@ def test_mark_fresh_updates_fields(project: Path, runner: CliRunner) -> None:
     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["result"]["updated_docs"] == ["README.md"]
-    assert record["schema"] == "documentledger.doc_record.v4"
+    assert record["schema"] == "documentledger.doc_record.v5"
     assert record["last_fresh_scan_version"] == scan_version
+    assert record["sections"][0]["freshness"]["disposition"] == "reviewed-no-change"
+    assert record["sections"][0]["freshness"]["source_scan_version"] == scan_version
     assert record["version"] == storage["state_version"]
     assert_no_timestamp_keys(record)
 

@@ -19,12 +19,13 @@ Initialization creates `.ledger/ledger.toml`, the Documentledger tool config, th
 ## Inspect status and next action
 
 ```bash
+documentledger --json capabilities
 documentledger --json status
 documentledger --json doctor
 documentledger --json next-action
 ```
 
-`uninitialized` means no resolvable canonical project or its required metadata, not simply that a legacy root TOML file is absent. Diagnostics distinguish missing bindings, missing data, invalid configuration, and link/index problems.
+Probe `capabilities` before relying on optional workflow commands. Status distinguishes an `uninitialized` workspace from a ready workspace and includes a recommended next action. Its `state` is `bootstrap_required` when no baseline or links exist, `incremental_affected` when linked sections need updating, `mapping_incomplete` when relevant changed units have no mappings, and `incremental_clean` otherwise. The separate `freshness_state` and `mapping_state` fields describe those dimensions directly. Production changes trigger mapping review by default; test, private, and generated roles are ignored unless `mapping_review_roles` opts them in.
 
 <!-- docledger-section: scan-source-and-documentation-files -->
 
@@ -82,6 +83,20 @@ documentledger --json coverage
 
 Proposal files are deterministic suggestions. Review them before applying a batch; `--check-and-apply` validates the complete batch before one logical write.
 
+<!-- docledger-section: review-current-changes -->
+
+## Review current changes
+
+Use the capability-aware review command for the normal incremental path:
+
+```bash
+documentledger review
+documentledger review --doc docs/usage.md
+documentledger review --details
+```
+
+Review scans current files and returns a bounded summary of affected sections, relevant unmapped changes, mapping candidates, and the next action. Safe exact mappings may be applied automatically; ambiguous candidates remain review items. Resolve mappings deliberately with `link add-section` or reviewed `link import-map`. Use `--details` when full evidence arrays are needed. The lower-level `scan`, `document affected`, and `link propose` commands remain available for bootstrap and manual workflows.
+
 <!-- docledger-section: find-and-update-stale-documentation -->
 
 ## Build context, update, and validate
@@ -97,18 +112,26 @@ Edit affected sections, run configured validation commands, and inspect the resu
 
 <!-- docledger-section: mark-documentation-fresh -->
 
-## Mark fresh
+## Finish freshness
+
+After editing, run `documentledger finish`. It checks mappings, audits links, runs configured validation commands, and writes section-level freshness dispositions only after every gate passes:
 
 ```bash
-documentledger document mark-fresh \
-  --doc docs/usage.md \
-  --section usage-scan \
+documentledger finish
+documentledger finish --reviewed-no-change "docs/usage.md#usage-scan=The instructions remain accurate."
+documentledger finish --generated-verified "docs/api.md#api-client=Generated reference verified."
+```
+
+Changed sections are recorded as `updated`. An unchanged affected section requires an explicit `reviewed-no-change` reason or `generated-verified` decision. If mapping review, link audit, or configured validation fails, freshness is not written. Review the returned results and finish with `documentledger --json status`.
+
+For bootstrap and manual workflows, the lower-level freshness command remains available:
+
+```bash
+documentledger document mark-fresh --doc docs/usage.md --section usage-scan \
   --reason "Updated after scan version VERSION."
 ```
 
-Mark fresh only after validation. Section-level marking updates the live affected projection without requiring another scan. Unlinked documents are rejected unless `--allow-unlinked` is explicitly appropriate.
-
-`--all` selects all configured documents; `--affected` selects only currently affected documents. For bootstrap, use `--all --allow-unlinked` only after reviewing coverage and explicitly accepting any remaining unlinked documents.
+Section-level `mark-fresh` updates the live affected projection without another scan. `--all` selects all configured documents and `--affected` selects currently affected documents. Use `--allow-unlinked` only when intentionally accepting unlinked documents after reviewing coverage.
 
 <!-- docledger-section: json-and-human-output -->
 
@@ -134,7 +157,7 @@ Use `documentledger storage where` to inspect resolved mounts and `documentledge
 
 ## Validate ledger state
 
-Run `documentledger --json doctor`, `documentledger --json link audit`, and `documentledger --json check` before committing documentation updates.
+Run `documentledger finish` as the normal documentation gate, then inspect `documentledger --json doctor`, `documentledger --json status`, and `documentledger --json check` before committing. `finish` includes the link audit and configured validation when its advertised capability is available.
 
 `doctor` and `link audit` are read-only. If audit reports a linked missing section, move its links to a current section or remove them with `documentledger link remove-section --doc DOC --section SECTION_ID --source-unit SOURCE_ID`; after the final obsolete link is removed, the orphan record is pruned. Unlinked structural churn is repaired by the next `scan`.
 

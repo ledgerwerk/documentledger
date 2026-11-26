@@ -6,19 +6,15 @@ This is the normal agent operation after bootstrap.
 
 ## Sequence
 
-1. `documentledger --json status`
-2. `documentledger --json doctor`
-3. `documentledger --json scan`
-4. `documentledger --json document affected`
-5. `documentledger document build-context --affected --out -`
-6. Inspect source-unit evidence and section links.
-7. Edit affected sections unless consistency requires a broader update.
-8. Run configured validation commands.
-9. Mark updated sections fresh.
-10. Run `documentledger --json link audit`.
-11. Run `documentledger --json check`.
-12. Finish with `documentledger --json status`.
+1. `documentledger --json capabilities`
+2. `documentledger --json status` and `documentledger --json doctor`
+3. `documentledger review` to scan, summarize affected sections, and inspect relevant mapping candidates.
+4. Resolve ambiguous mappings and render bounded context with `documentledger document build-context --affected --out -` when needed.
+5. Edit affected sections and run configured validation commands.
+6. Run `documentledger finish`, supplying `--reviewed-no-change` or `--generated-verified` decisions for unchanged affected sections.
+7. Inspect `documentledger --json status`, `documentledger --json link audit`, and `documentledger --json check`.
 
+The capability contract is the source of truth for optional workflow commands. The lower-level `scan`, `document affected`, `link propose`/`link import-map`, and `document mark-fresh` commands remain available for bootstrap and manual control.
 `scan` reconciles each existing durable document record with the current Markdown section
 index before deciding that the scan is unchanged. It adds new headings, refreshes structural
 metadata for surviving sections, prunes removed sections with empty `links`, and retains
@@ -29,7 +25,7 @@ the scan result. `doctor` and `link audit` remain read-only.
 
 ## Live freshness projection
 
-Section-level `documentledger document mark-fresh` updates affectedness from the current scan without another scan. It refreshes section hashes and the tracked source-unit hash set at the latest scan version. A reason is required so the state transition remains reviewable.
+`documentledger finish` is the normal freshness gate: it requires resolved mappings, a passing link audit, and successful configured validation before recording section dispositions. Changed sections are recorded as `updated`; unchanged affected sections need a `reviewed-no-change` or `generated-verified` decision. The lower-level section-specific `documentledger document mark-fresh` remains available for manual workflows and updates the live affected projection without another scan.
 
 <!-- docledger-section: incremental-scope -->
 

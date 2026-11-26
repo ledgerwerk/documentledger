@@ -16,12 +16,13 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
 
 from documentledger.errors import DocumentledgerError
 from documentledger.models import ToolConfig
+from documentledger.source_roles import SOURCE_ROLES
 
 _TOP_LEVEL = {"config_version", "ledger", "scan", "validation", "policy"}
+_POLICY = {"require_doc_frontmatter", "mapping_review_roles"}
 _LEDGER = {"code"}
 _SCAN = {"source_roots", "doc_roots", "source_extensions", "doc_extensions"}
 _VALIDATION = {"commands"}
-_POLICY = {"require_doc_frontmatter"}
 
 
 def _table(data: Mapping[str, Any], name: str) -> Mapping[str, Any]:
@@ -71,6 +72,13 @@ def parse_tool_config(data: Mapping[str, Any], *, path: Path | None = None) -> T
     frontmatter = policy.get("require_doc_frontmatter", False)
     if not isinstance(frontmatter, bool):
         raise DocumentledgerError("invalid_tool_config", "policy.require_doc_frontmatter must be boolean.")
+    review_roles = _strings(policy.get("mapping_review_roles", ["production"]), "policy.mapping_review_roles")
+    invalid_roles = sorted(set(review_roles) - SOURCE_ROLES)
+    if invalid_roles:
+        raise DocumentledgerError(
+            "invalid_tool_config",
+            f"policy.mapping_review_roles contains unsupported role(s): {', '.join(invalid_roles)}.",
+        )
     return ToolConfig(
         config_version=2,
         ledger_code=code,
@@ -79,6 +87,7 @@ def parse_tool_config(data: Mapping[str, Any], *, path: Path | None = None) -> T
         source_extensions=_strings(scan.get("source_extensions", ()), "scan.source_extensions"),
         doc_extensions=_strings(scan.get("doc_extensions", ()), "scan.doc_extensions"),
         validation_commands=_strings(validation.get("commands", ()), "validation.commands"),
+        mapping_review_roles=review_roles,
         require_doc_frontmatter=frontmatter,
     )
 
@@ -109,6 +118,7 @@ def tool_config_document(config: ToolConfig) -> str:
             "",
             "[policy]",
             f"require_doc_frontmatter = {str(config.require_doc_frontmatter).lower()}",
+            f"mapping_review_roles = {list(config.mapping_review_roles)!r}",
             "",
         ]
     )
@@ -125,6 +135,7 @@ def tool_config_document(config: ToolConfig) -> str:
         ("source_extensions", config.source_extensions),
         ("doc_extensions", config.doc_extensions),
         ("commands", config.validation_commands),
+        ("mapping_review_roles", config.mapping_review_roles),
     ):
         text = text.replace(f"{key} = {list(values)!r}", f"{key} = {json.dumps(list(values))}")
     return text

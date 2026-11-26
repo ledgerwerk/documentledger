@@ -29,11 +29,12 @@ def test_status_recommendations_use_canonical_commands_and_separate_freshness(pr
     before_scan = invoke_json(runner, ["status"])["result"]
     assert before_scan["recommended_command"] == "documentledger scan"
     assert before_scan["freshness_state"] == "clean"
-    assert before_scan["mapping_state"] == "review_required"
+    assert before_scan["mapping_state"] == "bootstrap_required"
     invoke_json(runner, ["scan"])
     after_scan = invoke_json(runner, ["status"])["result"]
     assert ".ledger/documentledger/data" not in after_scan["recommended_command"]
     assert "docledger" not in after_scan["recommended_command"]
+    assert after_scan["recommended_command"] == "documentledger review"
 
 
 def test_status_reports_missing_workspace(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:

@@ -22,7 +22,7 @@ def test_add_link_idempotent(project: Path, runner: CliRunner) -> None:
     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
     assert data["result"]["linked_sources"] == ["documentledger/cli.py"]
-    assert record["schema"] == "documentledger.doc_record.v4"
+    assert record["schema"] == "documentledger.doc_record.v5"
     assert record["last_fresh_scan_version"] == 0
     assert "last_fresh_scan_id" not in record
     assert record["version"] == 2

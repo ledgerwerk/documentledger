@@ -52,7 +52,7 @@ documentledger --json link audit
 documentledger --json coverage
 ```
 
-Review coverage before freshness marking: every configured document must be linked or explicitly accepted as intentionally unlinked, while internal and test source units may remain intentionally omitted. Run configured tests and documentation validation before freshness marking. For a reviewed bootstrap batch, finish with:
+Review coverage before freshness marking: every configured document must be linked or explicitly accepted as intentionally unlinked, while internal and test source units may remain intentionally omitted. Run configured tests, documentation validation, and the link audit. For a regular affected-document update, use `documentledger finish` after resolving mappings and recording any required no-change decisions. For this broad bootstrap-only transition, the explicit low-level `mark-fresh --all --allow-unlinked` command remains available:
 
 ```bash
 documentledger document mark-fresh --all --allow-unlinked \

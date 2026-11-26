@@ -21,10 +21,10 @@ from documentledger.identity import doc_record_filename, normalize_repo_path
 from documentledger.models import Config
 from documentledger.source_index import source_inventory
 from documentledger.storage import (
-    DOC_RECORD_SCHEMA,
     SCAN_SCHEMA,
     SOURCE_INDEX_FILENAME,
     SOURCE_INDEX_SCHEMA,
+    SUPPORTED_DOC_RECORD_SCHEMAS,
     normalize_source_index_payload,
     read_json,
     read_yaml,
@@ -145,6 +145,7 @@ def load_legacy_project(path: Path) -> LegacyProject:
         doc_extensions=_strings(scan.get("doc_extensions", []), "scan.doc_extensions"),
         validation_commands=_strings(validation.get("commands", []), "validation.commands"),
         require_doc_frontmatter=bool(policy.get("require_doc_frontmatter", False)),
+        mapping_review_roles=_strings(policy.get("mapping_review_roles", ["production"]), "policy.mapping_review_roles"),
     )
     return LegacyProject(root=root, config_path=path.resolve(), data_dir=data_dir, config=config, raw=raw)
 
@@ -258,7 +259,7 @@ def validate_legacy_state(project: LegacyProject, inventory: LegacyInventory) ->
         if item.relative_path.startswith("docs/") and item.relative_path.endswith(".yaml"):
             record = read_yaml(project.data_dir / item.relative_path)
             _check_no_timestamps(record, item.relative_path)
-            if record.get("schema") != DOC_RECORD_SCHEMA:
+            if record.get("schema") not in SUPPORTED_DOC_RECORD_SCHEMAS:
                 raise DocumentledgerError("schema_mismatch", f"Document record {item.relative_path} has an incompatible schema.")
             doc_path = normalize_repo_path(str(record.get("doc_path", "")))
             if doc_record_filename(doc_path) != Path(item.relative_path).name:

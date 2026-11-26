@@ -18,7 +18,7 @@ Owner: Documentledger durable data mount. Committed source of truth. Required ke
 
 ## Document records and section links
 
-Document records use `documentledger.doc_record.v4`. A record contains `doc_path`, section records, section hashes, `linked_sources`, `last_fresh_scan_version`, `last_fresh_hash`, notes, and integer `version`. Section links identify a source unit and carry coverage, impact, reason, and tracked hash dimensions. Missing sections or source units fail link audits.
+Document records use `documentledger.doc_record.v5`; v4 records remain readable and are normalized on write. A record contains `doc_path`, section records, section hashes, `linked_sources`, `last_fresh_scan_version`, `last_fresh_hash`, notes, and integer `version`. Section records include heading-independent `body_hash` and `body_length` for conservative rename reconciliation, plus optional freshness dispositions (`updated`, `reviewed-no-change`, or `generated-verified`) and a pending section hash used to preserve failed finish retries. Section links identify a source unit and carry coverage, impact, reason, and tracked hash dimensions. Missing sections or source units fail link audits.
 
 <!-- docledger-section: schemas-mapping-migration -->
 
