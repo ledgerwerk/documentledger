@@ -1,0 +1,2914 @@
+ .codecrate.toml                       |   3 +-
+ .github/workflows/tests.yml           |   3 +
+ docs/bootstrap.md                     |  29 +++-
+ docs/cli.md                           | 257 +++++++++++++++++++++-------------
+ docs/configuration.md                 |  28 ++--
+ docs/quickstart.md                    |  70 +++++++--
+ documentledger/capabilities.py        |  14 +-
+ documentledger/cli.py                 |   5 +-
+ documentledger/command_catalog.py     | 112 +++++++++++++++
+ documentledger/commands/document.py   |   5 +-
+ documentledger/commands/root.py       |  14 +-
+ documentledger/finish.py              |  47 +++----
+ documentledger/impact.py              |  56 ++++++--
+ documentledger/links.py               |  53 ++++---
+ documentledger/models.py              |  28 +++-
+ documentledger/render.py              |  62 +++-----
+ documentledger/review.py              |  38 +++--
+ documentledger/verification.py        |  25 +++-
+ scripts/generate_cli_reference.py     |  40 ++++--
+ skills/documentledger/SKILL.md        |  79 ++++++++---
+ tests/test_bootstrap_workflow.py      |  11 +-
+ tests/test_documentation_contract.py  |  33 ++++-
+ tests/test_finish.py                  |  86 +++++++++++-
+ tests/test_init.py                    |  18 +++
+ tests/test_render.py                  |  11 ++
+ tests/test_review.py                  | 128 ++++++++++++++++-
+ tests/test_review_fixes.py            |  13 ++
+ tests/test_skill_files.py             |  62 +++++---
+ tests/test_skill_workflow_contract.py |  94 +++++++++----
+ tests/test_source_roles.py            |  34 +++--
+ tests/test_status.py                  |   3 +-
+ tests/test_verification.py            |  63 +++++++++
+ 32 files changed, 1158 insertions(+), 366 deletions(-)
+
+diff --git a/.codecrate.toml b/.codecrate.toml
+index 07b0b70..9aa6aeb 100644
+--- a/.codecrate.toml
++++ b/.codecrate.toml
+@@ -4,10 +4,9 @@ keep_docstrings = true
+ dedupe = true
+ respect_gitignore = true
+ # exclude = ["*/.venv/*", "integration_tests", "examples", "docs"]
+-gitignore_allow = ["documentledger/_version.py"]
+ exclude = ["*/.venv/*", "integration_tests", "todo.md"]
+ include = [
+-  "**/*.py", "**/*.toml", "**/*.yaml", "**/*.yml",
++  "**/*.py", "**/*.toml", "**/*.json", "**/*.yaml", "**/*.yml", "LICENSE*",
+   "**/*.rst", "**/*.md", "**/*.typed",
+   "**/*.js", "**/*.css", "**/*.html", "**/*.conf",
+   "**/*.sh", "**/*.txt", "**/Makefile",
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+index 77d295d..1f6ff8a 100644
+--- a/.github/workflows/tests.yml
++++ b/.github/workflows/tests.yml
+@@ -17,6 +17,9 @@ jobs:
+       run: |
+         pip install pytest
+         pip install -e ".[docs]"
++    - name: Check generated CLI reference
++      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
++      run: python scripts/generate_cli_reference.py --check
+     - name: Run tests
+       if: runner.os != 'Windows'
+       run: python -m pytest
+diff --git a/docs/bootstrap.md b/docs/bootstrap.md
+index 4eb6c0d..3652773 100644
+--- a/docs/bootstrap.md
++++ b/docs/bootstrap.md
+@@ -11,6 +11,7 @@ Create the canonical project, establish a baseline, and build bounded context be
+ ## First scan baseline
+
+ ```bash
++documentledger --json capabilities
+ documentledger init --project-name example
+ documentledger --json scan
+ ```
+@@ -22,22 +23,40 @@ The first scan hashes configured sources and docs but has no prior version for c
+ ## Build bootstrap context
+
+ ```bash
+-documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md
++documentledger document build-context --bootstrap --out -
+ ```
+
+ The output contains the current inventory and unlinked source evidence. Use it to decide what documentation should exist before adding links.
+
++When `context_pagination.v1` is advertised, follow each `next_cursor` until `truncated` is false:
++
++<!-- requires-capability: context_pagination.v1 -->
++
++```bash
++documentledger --json document build-context --bootstrap --page-size 40 --out -
++documentledger --json document build-context --bootstrap --cursor NEXT_CURSOR --page-size 40 --out -
++```
++
++Without pagination support, narrow the requested scope and stop if relevant evidence remains omitted.
++
+ <!-- docledger-section: bootstrap-proposals -->
+
+ ## Review deterministic proposals
+
+ ```bash
+-documentledger link propose --all-docs --out-dir /tmp/documentledger-maps
+-documentledger --json link import-map --directory /tmp/documentledger-maps --validate
+-documentledger --json link import-map --directory /tmp/documentledger-maps --check-and-apply
++documentledger --json link propose --all-docs --out-dir ./documentledger-maps
++```
++
++Inspect generated proposal files. When `proposal_manifest.v1` is advertised, also inspect the scan-bound manifest. Use manifest-owned imports only when both proposal capabilities are advertised.
++
++<!-- requires-capability: proposal_manifest.v1, import_map_review.v1 -->
++
++```bash
++documentledger --json link import-map --directory ./documentledger-maps --review
++documentledger --json link import-map --directory ./documentledger-maps --check-and-apply
+ ```
+
+-`--validate` checks the complete batch without writing. Review and correct proposal files, then use `--check-and-apply` for an atomic application.
++If either capability is absent, do not use directory imports. Inspect the installed command help and use only supported file-based validation and apply options. Never bypass proposal review.
+
+ An empty top-level `sections: []` file is a valid reviewed no-op for a document. Empty `links: []` inside a named section remains invalid unless an explicit clearing operation is requested.
+
+diff --git a/docs/cli.md b/docs/cli.md
+index db26224..61e49a6 100644
+--- a/docs/cli.md
++++ b/docs/cli.md
+@@ -23,6 +23,8 @@ Global options may appear before the command path:
+
+ Initialize Documentledger storage for a project.
+
++Initialization discovers source roots once and records them in configuration. Use repeatable `--source-root` options when detection is ambiguous or a different explicit set is required.
++
+ - **Effect:** `workspace-write`
+ - **Audience:** `agent`
+ - **Workspace required:** `no`
+@@ -37,21 +39,25 @@ documentledger init
+
+ ### Arguments and options
+
+-| Parameter              | Required | Default     | Type      |
+-| ---------------------- | -------- | ----------- | --------- |
+-| `--project-name`       | no       | ``          | `str`     |
+-| `--source-root`        | no       | ``          | `str`     |
+-| `--documentledger-dir` | no       | `'.ledger'` | `str`     |
+-| `--hidden-config`      | no       | ``          | `boolean` |
++| Parameter              | Required | Default     | Type        |
++| ---------------------- | -------- | ----------- | ----------- |
++| `--project-name`       | no       | ``          | `str`       |
++| `--source-root`        | no       | ``          | `list[str]` |
++| `--documentledger-dir` | no       | `'.ledger'` | `str`       |
++| `--hidden-config`      | no       | ``          | `boolean`   |
+
+ ### JSON result and errors
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+-documentledger init
++documentledger init --project-name example
++```
++
++```bash
++documentledger init --source-root src/example --source-root tests
+ ```
+
+ ## status
+@@ -78,7 +84,7 @@ documentledger status
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger status
+@@ -108,7 +114,7 @@ documentledger info
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger info
+@@ -140,7 +146,7 @@ documentledger doctor
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger doctor
+@@ -150,6 +156,8 @@ documentledger doctor
+
+ Run deterministic CI validation gate.
+
++Use `--complete` for the strict completion gate. It checks global role-aware mapping coverage, documentation navigation, freshness, link integrity, and current validation attestations.
++
+ - **Effect:** `read`
+ - **Audience:** `agent`
+ - **Workspace required:** `yes`
+@@ -164,20 +172,20 @@ documentledger check
+
+ ### Arguments and options
+
+-| Parameter             | Required | Default | Type      |
+-| --------------------- | -------- | ------- | --------- |
+-| `--complete`          | no       | ``      | `boolean` |
+-| `--required-page`     | no       | ``      | `str`     |
+-| `--navigation-target` | no       | ``      | `str`     |
++| Parameter             | Required | Default | Type        |
++| --------------------- | -------- | ------- | ----------- |
++| `--complete`          | no       | ``      | `boolean`   |
++| `--required-page`     | no       | ``      | `list[str]` |
++| `--navigation-target` | no       | ``      | `list[str]` |
+
+ ### JSON result and errors
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+-documentledger check
++documentledger check --complete
+ ```
+
+ ## next-action
+@@ -204,7 +212,7 @@ documentledger next-action
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger next-action
+@@ -234,7 +242,7 @@ documentledger scan
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger scan
+@@ -244,6 +252,8 @@ documentledger scan
+
+ Review changed source, affected documentation, and safe exact mappings.
+
++Runs or reuses an incremental scan, proposes only exact policy-approved mappings, and reports affected sections and unresolved coverage gaps. Review does not mark sections fresh.
++
+ - **Effect:** `workspace-write`
+ - **Audience:** `agent`
+ - **Workspace required:** `yes`
+@@ -254,23 +264,35 @@ Review changed source, affected documentation, and safe exact mappings.
+
+ ```bash
+ documentledger review
+-documentledger review --doc docs/api.md
+-documentledger review --details
+ ```
+
+ ### Arguments and options
+
+-- `--doc PATH`: Limit review to one documentation path.
+-- `--details`: Include complete review arrays in JSON output.
++| Parameter   | Required | Default | Type      |
++| ----------- | -------- | ------- | --------- |
++| `--doc`     | no       | ``      | `str`     |
++| `--details` | no       | ``      | `boolean` |
+
+ ### JSON result and errors
+
+-With `--json`, returns `documentledger.review.v1` with bounded affected sections, relevant unmapped changes, mapping candidates, ignored counts, and a next action. `--details` disables array limits.
++With `--json`, returns `documentledger.review.v1` with affected sections, relevant unmapped changes, mapping candidates, ignored changes, and a next action. Output arrays are bounded by default; `--details` removes the limits.
++
++### Examples
++
++```bash
++documentledger review
++```
++
++```bash
++documentledger review --doc docs/api.md --details
++```
+
+ ## finish
+
+ Audit links, run configured validation, and record section freshness dispositions.
+
++Audits links, runs configured validation through the canonical verification pipeline, and records freshness only after all checks pass. Unchanged affected sections require an explicit review decision.
++
+ - **Effect:** `workspace-write`
+ - **Audience:** `agent`
+ - **Workspace required:** `yes`
+@@ -281,23 +303,39 @@ Audit links, run configured validation, and record section freshness disposition
+
+ ```bash
+ documentledger finish
+-documentledger finish --reviewed-no-change docs/usage.md#usage-run-scan="Claims remain accurate."
+-documentledger finish --generated-verified docs/api.md#api-client="Generated reference verified."
+ ```
+
+ ### Arguments and options
+
+-- `--reviewed-no-change DOC#SECTION=REASON`: Record an explicit no-change review for an affected section.
+-- `--generated-verified DOC#SECTION=REASON`: Verify an affected generated-reference section.
++| Parameter              | Required | Default | Type        |
++| ---------------------- | -------- | ------- | ----------- |
++| `--reviewed-no-change` | no       | ``      | `list[str]` |
++| `--generated-verified` | no       | ``      | `list[str]` |
+
+ ### JSON result and errors
+
+-With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and configured validation results. Freshness is written only after mappings are resolved, the link audit passes, and all configured validation commands succeed. Changed sections are recorded as `updated`; unchanged sections require an explicit decision.
++With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and validation results. Validation failure or content mutation leaves freshness unchanged.
++
++### Examples
++
++```bash
++documentledger finish
++```
++
++```bash
++documentledger finish --reviewed-no-change "docs/api.md#api=The claim remains accurate."
++```
++
++```bash
++documentledger finish --generated-verified "docs/api.md#reference=Generated output verified."
++```
+
+ ## coverage
+
+ Compute documentation coverage metrics.
+
++Reports global documentation and source coverage. Source units are grouped by role; only configured mapping-review roles block completion by remaining unlinked.
++
+ - **Effect:** `read`
+ - **Audience:** `both`
+ - **Workspace required:** `yes`
+@@ -318,16 +356,18 @@ documentledger coverage
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+-documentledger coverage
++documentledger --json coverage
+ ```
+
+ ## capabilities
+
+ Report versioned features and the canonical command surface.
+
++Probe this command before choosing optional automation. Each advertised capability is versioned and corresponds to an available workflow in the installed package.
++
+ - **Effect:** `read`
+ - **Audience:** `agent`
+ - **Workspace required:** `no`
+@@ -338,16 +378,21 @@ Report versioned features and the canonical command surface.
+
+ ```bash
+ documentledger capabilities
+-documentledger --json capabilities
+ ```
+
+ ### Arguments and options
+
+ - None.
+
+-### JSON result
++### JSON result and errors
++
++Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, versioned capability identifiers, and canonical command paths.
++
++### Examples
+
+-Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, capability identifiers, and canonical command paths.
++```bash
++documentledger --json capabilities
++```
+
+ ## commands
+
+@@ -373,7 +418,7 @@ documentledger commands
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger commands
+@@ -397,15 +442,15 @@ documentledger help
+
+ ### Arguments and options
+
+-| Parameter      | Required | Default | Type  |
+-| -------------- | -------- | ------- | ----- |
+-| `command_path` | no       | `[]`    | `str` |
++| Parameter      | Required | Default | Type        |
++| -------------- | -------- | ------- | ----------- |
++| `command_path` | no       | `[]`    | `list[str]` |
+
+ ### JSON result and errors
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger help
+@@ -435,7 +480,7 @@ documentledger config show
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger config show
+@@ -467,7 +512,7 @@ documentledger config validate
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger config validate
+@@ -497,7 +542,7 @@ documentledger schema list
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger schema list
+@@ -529,7 +574,7 @@ documentledger schema show
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger schema show
+@@ -561,7 +606,7 @@ documentledger schema values
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger schema values
+@@ -591,7 +636,7 @@ documentledger document list
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger document list
+@@ -626,7 +671,7 @@ documentledger document sections
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger document sections
+@@ -658,7 +703,7 @@ documentledger document affected
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger document affected
+@@ -688,7 +733,7 @@ documentledger document stale
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger document stale
+@@ -698,6 +743,8 @@ documentledger document stale
+
+ Build a bounded documentation update context.
+
++Builds bounded source-backed context for bootstrap or documentation updates. When pagination is advertised, continue with `--cursor NEXT_CURSOR` until the result is not truncated; do not treat omitted evidence as reviewed.
++
+ - **Effect:** `workspace-write`
+ - **Audience:** `agent`
+ - **Workspace required:** `yes`
+@@ -733,16 +780,22 @@ documentledger document build-context
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+-documentledger document build-context
++documentledger document build-context --affected --include-unlinked --out -
++```
++
++```bash
++documentledger --json document build-context --bootstrap --page-size 40 --out -
+ ```
+
+ ## document validate
+
+ Run configured validation and record a current-content attestation.
+
++Runs the configured documentation validation commands and records an attestation for the current source, documentation, configuration, and scan snapshot.
++
+ - **Effect:** `workspace-write`
+ - **Audience:** `agent`
+ - **Workspace required:** `yes`
+@@ -757,16 +810,16 @@ documentledger document validate
+
+ ### Arguments and options
+
+-| Parameter             | Required | Default | Type  |
+-| --------------------- | -------- | ------- | ----- |
+-| `--required-page`     | no       | ``      | `str` |
+-| `--navigation-target` | no       | ``      | `str` |
++| Parameter             | Required | Default | Type        |
++| --------------------- | -------- | ------- | ----------- |
++| `--required-page`     | no       | ``      | `list[str]` |
++| `--navigation-target` | no       | ``      | `list[str]` |
+
+ ### JSON result and errors
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger document validate
+@@ -803,7 +856,7 @@ documentledger document mark-fresh
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger document mark-fresh
+@@ -827,23 +880,23 @@ documentledger source list
+
+ ### Arguments and options
+
+-| Parameter          | Required | Default | Type      |
+-| ------------------ | -------- | ------- | --------- |
+-| `--kind`           | no       | ``      | `str`     |
+-| `--path`           | no       | ``      | `str`     |
+-| `--path-prefix`    | no       | ``      | `str`     |
+-| `--qualname`       | no       | ``      | `str`     |
+-| `--query`          | no       | ``      | `str`     |
+-| `--ids-only`       | no       | ``      | `boolean` |
+-| `--include-hashes` | no       | ``      | `boolean` |
+-| `--limit`          | no       | `100`   | `int`     |
+-| `--cursor`         | no       | ``      | `str`     |
++| Parameter          | Required | Default | Type        |
++| ------------------ | -------- | ------- | ----------- |
++| `--kind`           | no       | ``      | `list[str]` |
++| `--path`           | no       | ``      | `str`       |
++| `--path-prefix`    | no       | ``      | `str`       |
++| `--qualname`       | no       | ``      | `str`       |
++| `--query`          | no       | ``      | `str`       |
++| `--ids-only`       | no       | ``      | `boolean`   |
++| `--include-hashes` | no       | ``      | `boolean`   |
++| `--limit`          | no       | `100`   | `int`       |
++| `--cursor`         | no       | ``      | `str`       |
+
+ ### JSON result and errors
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger source list
+@@ -875,7 +928,7 @@ documentledger source show
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger source show
+@@ -905,7 +958,7 @@ documentledger link list
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger link list
+@@ -939,7 +992,7 @@ documentledger link add
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger link add
+@@ -972,7 +1025,7 @@ documentledger link remove
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger link remove
+@@ -1009,7 +1062,7 @@ documentledger link add-section
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger link add-section
+@@ -1043,7 +1096,7 @@ documentledger link remove-section
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger link remove-section
+@@ -1053,6 +1106,8 @@ documentledger link remove-section
+
+ Import a mapping batch of links.
+
++For manifest-owned proposal directories, review the scan-bound batch before applying it. `--check-and-apply` accepts only files recorded as reviewed. Standalone mapping files can be validated or applied separately.
++
+ - **Effect:** `workspace-write`
+ - **Audience:** `agent`
+ - **Workspace required:** `yes`
+@@ -1067,24 +1122,32 @@ documentledger link import-map
+
+ ### Arguments and options
+
+-| Parameter           | Required | Default | Type      |
+-| ------------------- | -------- | ------- | --------- |
+-| `--file`            | no       | ``      | `str`     |
+-| `--directory`       | no       | ``      | `str`     |
+-| `--validate`        | no       | ``      | `boolean` |
+-| `--apply`           | no       | ``      | `boolean` |
+-| `--check-and-apply` | no       | ``      | `boolean` |
+-| `--review`          | no       | ``      | `boolean` |
+-| `--replace-section` | no       | ``      | `boolean` |
++| Parameter           | Required | Default | Type        |
++| ------------------- | -------- | ------- | ----------- |
++| `--file`            | no       | ``      | `list[str]` |
++| `--directory`       | no       | ``      | `str`       |
++| `--validate`        | no       | ``      | `boolean`   |
++| `--apply`           | no       | ``      | `boolean`   |
++| `--check-and-apply` | no       | ``      | `boolean`   |
++| `--review`          | no       | ``      | `boolean`   |
++| `--replace-section` | no       | ``      | `boolean`   |
+
+ ### JSON result and errors
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+-documentledger link import-map
++documentledger --json link import-map --directory ./proposals --review
++```
++
++```bash
++documentledger --json link import-map --directory ./proposals --check-and-apply
++```
++
++```bash
++documentledger --json link import-map --file ./mapping.yaml --validate
+ ```
+
+ ## link audit
+@@ -1111,7 +1174,7 @@ documentledger link audit
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger link audit
+@@ -1121,6 +1184,8 @@ documentledger link audit
+
+ Propose new links from source inventory.
+
++Generates deterministic evidence-ranked mappings from a completed scan and writes a scan-bound manifest for the proposal batch. Documents without confident candidates remain represented in that manifest.
++
+ - **Effect:** `workspace-write`
+ - **Audience:** `agent`
+ - **Workspace required:** `yes`
+@@ -1146,10 +1211,10 @@ documentledger link propose
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+-documentledger link propose
++documentledger link propose --all-docs --out-dir ./proposals
+ ```
+
+ ## storage where
+@@ -1176,7 +1241,7 @@ documentledger storage where
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger storage where
+@@ -1208,7 +1273,7 @@ documentledger storage validate
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger storage validate
+@@ -1238,7 +1303,7 @@ documentledger migrate status
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger migrate status
+@@ -1275,7 +1340,7 @@ documentledger migrate plan
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger migrate plan
+@@ -1311,7 +1376,7 @@ documentledger migrate apply
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger migrate apply
+@@ -1344,7 +1409,7 @@ documentledger migrate recover
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger migrate recover
+@@ -1381,7 +1446,7 @@ documentledger migrate cleanup
+
+ With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
+
+-### Example
++### Examples
+
+ ```bash
+ documentledger migrate cleanup
+diff --git a/docs/configuration.md b/docs/configuration.md
+index 865515c..e11587d 100644
+--- a/docs/configuration.md
++++ b/docs/configuration.md
+@@ -34,17 +34,23 @@ mapping_review_roles = ["production"]
+
+ ## Fields
+
+-| Field                            | Type and default                     | Normalization and validation                   | Effect                                                     |
+-| -------------------------------- | ------------------------------------ | ---------------------------------------------- | ---------------------------------------------------------- |
+-| `config_version`                 | integer, required, `2`               | Must be exactly 2; unknown versions fail       | Selects the tool schema.                                   |
+-| `ledger.code`                    | non-empty string, default `dl`       | Must be a string                               | Prefix used by project-local ledger conventions.           |
+-| `scan.source_roots`              | array of strings, default empty      | Paths are interpreted relative to project root | Files collected for source indexing.                       |
+-| `scan.doc_roots`                 | array of strings, default empty      | Paths are interpreted relative to project root | Files collected and parsed as documentation.               |
+-| `scan.source_extensions`         | array of strings, default empty      | Extension filters are explicit                 | Limits source collection.                                  |
+-| `scan.doc_extensions`            | array of strings, default empty      | Extension filters are explicit                 | Limits documentation collection.                           |
+-| `validation.commands`            | array of strings, default empty      | Preserved as ordered commands                  | Commands used by context and `check`.                      |
+-| `policy.require_doc_frontmatter` | boolean, default `false`             | Non-boolean values fail                        | Requires front matter during validation.                   |
+-| `policy.mapping_review_roles`    | string array, default ["production"] | Supported role names only                      | Unmapped changes in selected roles require mapping review. |
++| Field                            | Type and default                     | Normalization and validation                   | Effect                                                       |
++| -------------------------------- | ------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------ |
++| `config_version`                 | integer, required, `2`               | Must be exactly 2; unknown versions fail       | Selects the tool schema.                                     |
++| `ledger.code`                    | non-empty string, default `dl`       | Must be a string                               | Prefix used by project-local ledger conventions.             |
++| `scan.source_roots`              | array of strings, default empty      | Paths are interpreted relative to project root | Configured at init; later roots are not added automatically. |
++| `scan.doc_roots`                 | array of strings, default empty      | Paths are interpreted relative to project root | Files collected and parsed as documentation.                 |
++| `scan.source_extensions`         | array of strings, default empty      | Extension filters are explicit                 | Limits source collection.                                    |
++| `scan.doc_extensions`            | array of strings, default empty      | Extension filters are explicit                 | Limits documentation collection.                             |
++| `validation.commands`            | array of strings, default empty      | Preserved as ordered commands                  | Commands used by context and `check`.                        |
++| `policy.require_doc_frontmatter` | boolean, default `false`             | Non-boolean values fail                        | Requires front matter during validation.                     |
++| `policy.mapping_review_roles`    | string array, default ["production"] | Supported role names only                      | Unmapped changes in selected roles require mapping review.   |
++
++## Source-root discovery
++
++`documentledger init` discovers production roots from project metadata, then falls back to a single conventional package or top-level module when metadata does not identify one. Ambiguous package roots require an explicit repeatable `--source-root PATH` selection. The `tests` root is appended only when it already contains Python files at initialization.
++
++Discovery is a one-time initialization decision. The selected roots are written to `scan.source_roots`; later package or test directories do not change the configuration. When `--source-root` is supplied, the explicit list is stored without adding other discovered roots. Edit `scan.source_roots` deliberately to change the indexed roots.
+
+ Unknown tables and fields fail with `unsupported_tool_config_field`; wrong types fail with `invalid_tool_config`; unsupported versions fail with `unsupported_tool_config_version`.
+
+diff --git a/docs/quickstart.md b/docs/quickstart.md
+index 4235147..925365a 100644
+--- a/docs/quickstart.md
++++ b/docs/quickstart.md
+@@ -4,36 +4,86 @@
+
+ ## Canonical path
+
+-Probe capabilities before using optional workflow commands. To bootstrap a new repository, establish a baseline, create and review mappings, then inspect coverage:
++Check the installed command contract before using optional workflow features. Initialize a repository, establish a baseline, and inspect bootstrap context before adding mappings.
+
+ ```bash
+-documentledger init --project-name example
+ documentledger --json capabilities
++documentledger init --project-name example
+ documentledger --json status
+ documentledger --json scan
+-documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md
+-documentledger link propose --all-docs --out-dir /tmp/documentledger-maps
+-documentledger --json link import-map --directory /tmp/documentledger-maps --check-and-apply
++documentledger document build-context --bootstrap --out -
++```
++
++If the context is truncated and `context_pagination.v1` is advertised, follow each `next_cursor` with another page request until `truncated` is false. If pagination is unavailable, narrow the requested documents or sections and stop if relevant evidence remains omitted.
++
++<!-- requires-capability: context_pagination.v1 -->
++
++```bash
++documentledger --json document build-context --bootstrap --page-size 40 --out -
++documentledger --json document build-context --bootstrap --cursor NEXT_CURSOR --page-size 40 --out -
++```
++
++Generate proposals only after reviewing the source and documentation context:
++
++```bash
++documentledger --json link propose --all-docs --out-dir ./documentledger-maps
++```
++
++When both `proposal_manifest.v1` and `import_map_review.v1` are advertised, inspect the scan-bound manifest and proposal files, review the owned batch, then apply it:
++
++<!-- requires-capability: proposal_manifest.v1, import_map_review.v1 -->
++
++```bash
++documentledger --json link import-map --directory ./documentledger-maps --review
++documentledger --json link import-map --directory ./documentledger-maps --check-and-apply
++```
++
++Do not use directory imports when either capability is absent. Inspect the installed `link import-map` help and use only its supported file-based validation and apply options. If proposals cannot be safely reviewed and applied, stop rather than bypassing review.
++
++After applying reviewed mappings, audit links and inspect coverage:
++
++```bash
+ documentledger --json link audit
+ documentledger --json coverage
+ ```
+
+-The first scan creates a baseline and reports no source deltas. See [Bootstrap](bootstrap.md) for deliberate no-op mappings and validation gates.
++The first scan creates a baseline and reports no source deltas. See [Bootstrap](bootstrap.md) for documentation and validation gates.
+
+ <!-- docledger-section: quickstart-incremental-path -->
+
+ ## Incremental path
+
+-For normal source changes, let `review` scan and summarize the work, edit affected docs, then finish through the configured gates:
++For normal source changes, review the affected documentation, update it from source evidence, and finish only through advertised capabilities.
+
+ ```bash
+ documentledger --json capabilities
+ documentledger --json status
++```
++
++<!-- requires-capability: review.v1 -->
++
++```bash
+ documentledger review
+-# edit affected documentation and run configured validation
++```
++
++Update affected documentation and run configured validation. When `finish.v1` is advertised, finish audits links and runs validation before recording freshness. Use `--reviewed-no-change DOC#SECTION=REASON` only when the claim remains accurate, and use `--generated-verified DOC#SECTION=REASON` only after checking a generated reference.
++
++<!-- requires-capability: finish.v1 -->
++
++```bash
+ documentledger finish
+ documentledger --json status
+-documentledger --json check
++documentledger --json check --complete
+ ```
+
+-If an affected section is unchanged, record why with `--reviewed-no-change DOC#SECTION=REASON`; use `--generated-verified` for a checked generated reference. `finish` audits links and runs configured validation before writing freshness. For bootstrap and manual control, the lower-level scan, affected, build-context, link, and `document mark-fresh` commands remain available.
++If finish is unavailable, require `validation.v1` before using manual freshness controls. Run validation and link audit, record only truthful scoped freshness dispositions, then run the strict completion check. If validation is unavailable, leave the work incomplete.
++
++<!-- requires-capability: validation.v1 -->
++
++```bash
++documentledger document validate
++documentledger --json link audit
++documentledger document mark-fresh --doc PATH --section SECTION_ID --reason "Validated update."
++documentledger --json check --complete
++documentledger --json status
++```
+diff --git a/documentledger/capabilities.py b/documentledger/capabilities.py
+index d43ff39..9006b73 100644
+--- a/documentledger/capabilities.py
++++ b/documentledger/capabilities.py
+@@ -4,6 +4,7 @@ from typing import Any
+
+ from documentledger import __version__
+ from documentledger.command_catalog import COMMAND_INVENTORY
++from documentledger.proposal_manifest import PROPOSAL_MANIFEST_SCHEMA
+ from documentledger.storage import STORAGE_SCHEMA_VERSION
+
+
+@@ -24,14 +25,19 @@ def _command_options(command_path: str) -> set[str]:
+
+ def capability_record() -> dict[str, Any]:
+     command_paths = sorted(entry.path for entry in COMMAND_INVENTORY.entries)
++    command_path_set = set(command_paths)
++    validation = "document validate" in command_path_set
+     features = {
+-        "review": "review" in command_paths,
+-        "finish": "finish" in command_paths,
+-        "proposal_manifest": "--manifest" in _command_options("link propose"),
++        "review": "review" in command_path_set,
++        "finish": "finish" in command_path_set and validation,
++        "proposal_manifest": PROPOSAL_MANIFEST_SCHEMA == "documentledger.proposal_manifest.v1"
++        and "link propose" in command_path_set
++        and "link import-map" in command_path_set,
+         "context_pagination": {"--cursor", "--page-size"} <= _command_options("document build-context"),
+         "import_map_review": "--review" in _command_options("link import-map"),
++        "validation": validation,
+     }
+-    capabilities = sorted(f"{name}.v1" for name in ("review", "finish") if features[name])
++    capabilities = sorted(f"{name}.v1" for name, enabled in features.items() if enabled)
+     return {
+         "schema": "documentledger.capabilities.v1",
+         "version": __version__,
+diff --git a/documentledger/cli.py b/documentledger/cli.py
+index a7944a6..9d8db00 100644
+--- a/documentledger/cli.py
++++ b/documentledger/cli.py
+@@ -250,19 +250,20 @@ def _register_docs_aliases() -> None:
+     @handle_command_error("docs affected")
+     def docs_affected(ctx: typer.Context, doc: str | None = typer.Option(None, "--doc")) -> None:
+         from documentledger.identity import normalize_repo_path
+-        from documentledger.impact import resolve_affected_sections
++        from documentledger.impact import resolve_affected_sections, with_legacy_action
+
+         state = get_state(ctx)
+         workspace = load_workspace(start=state.root)
+         docs = [normalize_repo_path(doc)] if doc else None
+         affected = resolve_affected_sections(workspace, docs=docs)
++        affected_output = [with_legacy_action(item) for item in affected]
+         human = ["Affected documentation sections:"]
+         if not affected:
+             human.append("- None")
+         for item in affected:
+             heading = " / ".join(item["heading_path"]) or item["section_id"]
+             human.append(f"- {item['doc_path']} :: {heading}")
+-        emit_success(ctx, "document affected", {"affected_sections": affected}, "\n".join(human))
++        emit_success(ctx, "document affected", {"affected_sections": affected_output}, "\n".join(human))
+
+     # docs stale -> document stale
+     @docs_alias.command("stale")
+diff --git a/documentledger/command_catalog.py b/documentledger/command_catalog.py
+index 12bc882..566c898 100644
+--- a/documentledger/command_catalog.py
++++ b/documentledger/command_catalog.py
+@@ -6,6 +6,8 @@ Used by: commands, help, generated CLI reference, drift tests.
+
+ from __future__ import annotations
+
++from typing import TypedDict
++
+ from ledgercore.cli import CommandInventory, CommandMetadata
+
+ # All canonical commands with their metadata.
+@@ -311,6 +313,116 @@ _COMMANDS: tuple[CommandMetadata, ...] = (
+     ),
+ )
+
++
++class CommandReferenceDetails(TypedDict, total=False):
++    extended_description: str
++    json_result: str
++    examples: tuple[str, ...]
++
++
++COMMAND_REFERENCE_DETAILS: dict[str, CommandReferenceDetails] = {
++    "init": {
++        "extended_description": (
++            "Initialization discovers source roots once and records them in configuration. "
++            "Use repeatable `--source-root` options when detection is ambiguous or a different explicit set is required."
++        ),
++        "examples": (
++            "documentledger init --project-name example",
++            "documentledger init --source-root src/example --source-root tests",
++        ),
++    },
++    "check": {
++        "extended_description": (
++            "Use `--complete` for the strict completion gate. It checks global role-aware mapping coverage, documentation navigation, "
++            "freshness, link integrity, and current validation attestations."
++        ),
++        "examples": ("documentledger check --complete",),
++    },
++    "review": {
++        "extended_description": (
++            "Runs or reuses an incremental scan, proposes only exact policy-approved mappings, and reports affected sections "
++            "and unresolved coverage gaps. Review does not mark sections fresh."
++        ),
++        "json_result": (
++            "With `--json`, returns `documentledger.review.v1` with affected sections, relevant unmapped changes, mapping candidates, "
++            "ignored changes, and a next action. Output arrays are bounded by default; `--details` removes the limits."
++        ),
++        "examples": (
++            "documentledger review",
++            "documentledger review --doc docs/api.md --details",
++        ),
++    },
++    "finish": {
++        "extended_description": (
++            "Audits links, runs configured validation through the canonical verification pipeline, and records freshness only "
++            "after all checks pass. Unchanged affected sections require an explicit review decision."
++        ),
++        "json_result": (
++            "With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and validation results. "
++            "Validation failure or content mutation leaves freshness unchanged."
++        ),
++        "examples": (
++            "documentledger finish",
++            'documentledger finish --reviewed-no-change "docs/api.md#api=The claim remains accurate."',
++            'documentledger finish --generated-verified "docs/api.md#reference=Generated output verified."',
++        ),
++    },
++    "capabilities": {
++        "extended_description": (
++            "Probe this command before choosing optional automation. Each advertised capability is versioned and corresponds to "
++            "an available workflow in the installed package."
++        ),
++        "json_result": (
++            "Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, versioned capability "
++            "identifiers, and canonical command paths."
++        ),
++        "examples": ("documentledger --json capabilities",),
++    },
++    "document build-context": {
++        "extended_description": (
++            "Builds bounded source-backed context for bootstrap or documentation updates. When pagination is advertised, continue "
++            "with `--cursor NEXT_CURSOR` until the result is not truncated; do not treat omitted evidence as reviewed."
++        ),
++        "examples": (
++            "documentledger document build-context --affected --include-unlinked --out -",
++            "documentledger --json document build-context --bootstrap --page-size 40 --out -",
++        ),
++    },
++    "document validate": {
++        "extended_description": (
++            "Runs the configured documentation validation commands and records an attestation for the current source, documentation, "
++            "configuration, and scan snapshot."
++        ),
++        "examples": ("documentledger document validate",),
++    },
++    "link import-map": {
++        "extended_description": (
++            "For manifest-owned proposal directories, review the scan-bound batch before applying it. `--check-and-apply` accepts "
++            "only files recorded as reviewed. Standalone mapping files can be validated or applied separately."
++        ),
++        "examples": (
++            "documentledger --json link import-map --directory ./proposals --review",
++            "documentledger --json link import-map --directory ./proposals --check-and-apply",
++            "documentledger --json link import-map --file ./mapping.yaml --validate",
++        ),
++    },
++    "link propose": {
++        "extended_description": (
++            "Generates deterministic evidence-ranked mappings from a completed scan and writes a scan-bound manifest for the proposal "
++            "batch. Documents without confident candidates remain represented in that manifest."
++        ),
++        "examples": ("documentledger link propose --all-docs --out-dir ./proposals",),
++    },
++    "coverage": {
++        "extended_description": (
++            "Reports global documentation and source coverage. Source units are grouped by role; only configured mapping-review roles "
++            "block completion by remaining unlinked."
++        ),
++        "examples": ("documentledger --json coverage",),
++    },
++}
++
++
+ # Build the inventory (validates no duplicates or shadow conflicts).
+ COMMAND_INVENTORY = CommandInventory(_COMMANDS)
+
+diff --git a/documentledger/commands/document.py b/documentledger/commands/document.py
+index eb39724..dd39fff 100644
+--- a/documentledger/commands/document.py
++++ b/documentledger/commands/document.py
+@@ -131,17 +131,18 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
+     def document_affected(ctx: typer.Context, doc: str | None = typer.Option(None, "--doc")) -> None:
+         state = get_state(ctx)
+         workspace = load_workspace(start=state.root)
+-        from documentledger.impact import resolve_affected_sections
++        from documentledger.impact import resolve_affected_sections, with_legacy_action
+
+         docs = [normalize_repo_path(doc)] if doc else None
+         affected = resolve_affected_sections(workspace, docs=docs)
++        affected_output = [with_legacy_action(item) for item in affected]
+         human = ["Affected documentation sections:"]
+         if not affected:
+             human.append("- None")
+         for item in affected:
+             heading = " / ".join(item["heading_path"]) or item["section_id"]
+             human.append(f"- {item['doc_path']} :: {heading}")
+-        emit_success(ctx, "document affected", {"affected_sections": affected}, "\n".join(human))
++        emit_success(ctx, "document affected", {"affected_sections": affected_output}, "\n".join(human))
+
+     @docs_app.command("stale")
+     @handle_command_error("document stale")
+diff --git a/documentledger/commands/root.py b/documentledger/commands/root.py
+index f68fe9b..342cf8e 100644
+--- a/documentledger/commands/root.py
++++ b/documentledger/commands/root.py
+@@ -226,7 +226,10 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
+         1 for record in iter_doc_records(workspace) for section in (record.get("sections", []) or []) if section.get("links")
+     )
+     freshness_state = "clean" if affected_count == 0 else "affected"
+-    coverage_review_required = linked_sections <= 0 or bool(relevant_unmapped)
++    readiness = _readiness_fields(workspace, _doctor_issues(workspace))
++    mapping_complete = readiness["mapping"]["state"] == "covered"
++    change_mapping_state = "bootstrap_required" if linked_sections <= 0 else "review_required" if relevant_unmapped else "clean"
++    coverage_review_required = not mapping_complete
+     result = {
+         "initialized": True,
+         "state": state,
+@@ -246,7 +249,9 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
+         "recommended_command": command,
+         "recommended_reason": reason,
+         "freshness_state": freshness_state,
+-        "mapping_state": "bootstrap_required" if linked_sections <= 0 else "review_required" if relevant_unmapped else "complete",
++        "mapping_state": "complete" if mapping_complete else "review_required",
++        "change_mapping_state": change_mapping_state,
++        "change_mapping_review_required": change_mapping_state != "clean",
+         "coverage_review_required": coverage_review_required,
+         "relevant_unmapped_changed_unit_count": len(relevant_unmapped),
+         "ignored_change_counts": ignored_counts,
+@@ -256,7 +261,7 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
+         },
+         "issues": issues,
+     }
+-    result.update(_readiness_fields(workspace, _doctor_issues(workspace)))
++    result.update(readiness)
+     if paths is not None:
+         result.update(
+             {
+@@ -462,6 +467,7 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
+     def scan(ctx: typer.Context) -> None:
+         started_at = perf_counter()
+         state = get_state(ctx)
++        from documentledger.impact import with_legacy_action
+         from documentledger.scanner import run_scan
+
+         result_obj = run_scan(load_workspace(start=state.root))
+@@ -473,7 +479,7 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
+             "changed_units": result_obj.changed_units,
+             "added_units": result_obj.added_units,
+             "deleted_units": result_obj.deleted_units,
+-            "affected_sections": result_obj.affected_sections,
++            "affected_sections": [with_legacy_action(item) for item in result_obj.affected_sections],
+             "stale_docs": result_obj.stale_docs,
+             "unlinked_changed_sources": result_obj.unlinked_changed_sources,
+             "unmapped_changed_units": result_obj.unmapped_changed_units,
+diff --git a/documentledger/finish.py b/documentledger/finish.py
+index d8fbd57..840ad93 100644
+--- a/documentledger/finish.py
++++ b/documentledger/finish.py
+@@ -2,8 +2,6 @@
+
+ from __future__ import annotations
+
+-import shlex
+-import subprocess
+ from typing import Any
+
+ from documentledger.errors import DocumentledgerError
+@@ -14,6 +12,7 @@ from documentledger.links import audit_links
+ from documentledger.models import FinishResult, FreshnessResolution, ReviewDecision, ValidationResult, Workspace
+ from documentledger.review import build_review_plan
+ from documentledger.storage import doc_record_path, iter_doc_records, latest_scan, read_yaml
++from documentledger.verification import documentation_status, run_validation
+
+ _VALID_DECISIONS = {"reviewed-no-change", "generated-verified"}
+
+@@ -30,27 +29,6 @@ def _decision_key(decision: ReviewDecision) -> tuple[str, str]:
+     return doc_path, section_id
+
+
+-def _run_validation(workspace: Workspace) -> tuple[ValidationResult, ...]:
+-    results: list[ValidationResult] = []
+-    for command in workspace.config.validation_commands:
+-        try:
+-            argv = shlex.split(command)
+-            if not argv:
+-                continue
+-            completed = subprocess.run(
+-                argv,
+-                cwd=workspace.config.root,
+-                check=False,
+-                capture_output=True,
+-                text=True,
+-            )
+-            output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
+-            results.append(ValidationResult(command, completed.returncode, output[-4000:], len(output) > 4000))
+-        except OSError as exc:
+-            results.append(ValidationResult(command, 127, str(exc)[:4000], len(str(exc)) > 4000))
+-    return tuple(results)
+-
+-
+ def _section_hashes(records: list[dict[str, Any]]) -> dict[tuple[str, str], tuple[str, str]]:
+     hashes: dict[tuple[str, str], tuple[str, str]] = {}
+     for record in records:
+@@ -96,6 +74,7 @@ def finish_review(workspace: Workspace, decisions: tuple[ReviewDecision, ...] =
+         "unmapped_changed_units": list(pending_unmapped.values()),
+         "suggestions": [item.to_record() for item in plan.mapping_suggestions],
+         "ambiguous_evidence": [item.to_record() for item in plan.ambiguous_items],
++        "coverage_gaps": [item.to_record() for item in plan.coverage_gaps],
+     }
+     if any(unresolved_mappings.values()):
+         raise DocumentledgerError(
+@@ -120,7 +99,7 @@ def finish_review(workspace: Workspace, decisions: tuple[ReviewDecision, ...] =
+         key = (str(item.get("doc_path", "")), str(item.get("section_id", "")))
+         actions[key] = str(item.get("review_action", "review_required"))
+     for item in plan.affected:
+-        actions[(item.doc_path, item.section_id)] = item.action
++        actions[(item.doc_path, item.section_id)] = item.review_action
+
+     decision_map: dict[tuple[str, str], ReviewDecision] = {}
+     for decision in decisions:
+@@ -168,15 +147,21 @@ def finish_review(workspace: Workspace, decisions: tuple[ReviewDecision, ...] =
+             f"No unchanged affected section requires the supplied decision: {key[0]} [{key[1]}].",
+         )
+
+-    validation = _run_validation(workspace)
+-    failures = [item.to_record() for item in validation if item.exit_code != 0]
+-    if failures:
++    validation_result = run_validation(workspace)
++    attestation = dict(validation_result.get("attestation", {}))
++    documentation = documentation_status(workspace)
++    if documentation["validation_required"] and not documentation["validation_verified_for_current_content"]:
+         raise DocumentledgerError(
+-            "validation_subprocess_failed",
+-            "Configured validation failed; no freshness dispositions were recorded.",
+-            ["Fix the reported validation failures and retry finish."],
+-            details={"validation": failures},
++            "validation_not_configured",
++            "Finish requires a current validation attestation for this documentation project.",
++            ["Configure and run the required documentation validation command before retrying finish."],
++            details={"attestation_result": attestation.get("result"), "issues": attestation.get("issues", [])},
+         )
++    validation = tuple(
++        ValidationResult(str(item["command"]), int(item.get("exit_code") or 0), "")
++        for item in attestation.get("command_results", [])
++        if "command" in item
++    )
+
+     resolved = tuple(resolutions)
+     record_freshness_resolutions(workspace, resolved)
+diff --git a/documentledger/impact.py b/documentledger/impact.py
+index cd72a1a..80b324d 100644
+--- a/documentledger/impact.py
++++ b/documentledger/impact.py
+@@ -20,6 +20,14 @@ def review_action_for(changed_links: list[dict[str, Any]]) -> str:
+     return "review_required"
+
+
++def legacy_action_for(review_action: str) -> str:
++    return "verify-generated-reference" if review_action == "generated_verify" else "rewrite-section"
++
++
++def with_legacy_action(section: dict[str, Any]) -> dict[str, Any]:
++    return section | {"action": legacy_action_for(str(section.get("review_action", "review_required")))}
++
++
+ def link_mismatches(
+     link: dict[str, Any],
+     source_units: dict[str, dict[str, Any]],
+@@ -73,6 +81,12 @@ def resolve_affected_sections(
+     changed_sources = set(scan_record.get("changed_sources", []) or [])
+     deleted_sources = set(scan_record.get("deleted_sources", []) or [])
+     source_units = dict(scan_record.get("source_units", {}))
++    scan_version = int(scan_record.get("version", 0))
++    delta_units = [*(scan_record.get("changed_units", []) or []), *(scan_record.get("added_units", []) or [])]
++    delta_units_by_id = {str(unit.get("source_id", "")): unit for unit in delta_units}
++    delta_units_by_path: dict[str, list[dict[str, Any]]] = {}
++    for unit in delta_units:
++        delta_units_by_path.setdefault(str(unit.get("path", "")), []).append(unit)
+     affected: list[dict[str, Any]] = []
+     for record in iter_doc_records(workspace):
+         doc_path = str(record.get("doc_path", ""))
+@@ -81,18 +95,35 @@ def resolve_affected_sections(
+         for section in record.get("sections", []) or []:
+             if section_id is not None and str(section.get("heading_slug")) != section_id and str(section.get("section_id")) != section_id:
+                 continue
+-            changed_links = [
+-                mismatch
+-                for mismatch in (
+-                    link_mismatches(dict(link), source_units, changed_sources, deleted_sources) for link in (section.get("links", []) or [])
+-                )
+-                if mismatch is not None
+-            ]
++            freshness = dict(section.get("freshness", {}) or {})
++            freshness_scan_version = int(freshness.get("source_scan_version", 0) or 0)
++            needs_current_delta_review = freshness_scan_version < scan_version
++            changed_links: list[dict[str, Any]] = []
++            for link in section.get("links", []) or []:
++                link_record = dict(link)
++                mismatch = link_mismatches(link_record, source_units, changed_sources, deleted_sources)
++                if mismatch is None and needs_current_delta_review:
++                    source_id = str(link_record.get("source_id", ""))
++                    source_path = str(link_record.get("source_path", ""))
++                    delta_unit = delta_units_by_id.get(source_id)
++                    if delta_unit is None and source_id.startswith("py:file:"):
++                        path_units = delta_units_by_path.get(source_path, [])
++                        delta_unit = path_units[0] if path_units else None
++                    if delta_unit is not None:
++                        mismatch = {
++                            "source_id": source_id,
++                            "source_path": source_path,
++                            "coverage": str(link_record.get("coverage", "")),
++                            "impact": str(link_record.get("impact", "")),
++                            "reason": str(link_record.get("reason", "")),
++                            "change_type": str(delta_unit.get("change_type", "modified")),
++                            "changed_hashes": list(delta_unit.get("changed_hashes", []) or ["file_hash"]),
++                            "line_span": list(delta_unit.get("new_line_span", [0, 0])),
++                        }
++                if mismatch is not None:
++                    changed_links.append(mismatch)
+             if not changed_links:
+                 continue
+-            action = (
+-                "verify-generated-reference" if all(link["coverage"] in GENERATED_COVERAGE for link in changed_links) else "rewrite-section"
+-            )
+             review_action = review_action_for(changed_links)
+             affected.append(
+                 {
+@@ -103,7 +134,6 @@ def resolve_affected_sections(
+                     "line_span": list(section.get("line_span", [0, 0])),
+                     "section_hash": str(section.get("section_hash", "")),
+                     "summary": str(section.get("summary", "")),
+-                    "action": action,
+                     "review_action": review_action,
+                     "changed_units": changed_links,
+                 }
+@@ -125,8 +155,8 @@ def stale_doc_details(workspace: Workspace, scan: dict[str, Any] | None = None)
+                 "section_id": item["section_id"],
+                 "heading_path": item["heading_path"],
+                 "line_span": item["line_span"],
+-                "action": item["action"],
+-                "review_action": item.get("review_action", ""),
++                "action": legacy_action_for(str(item["review_action"])),
++                "review_action": item["review_action"],
+             }
+         )
+         for unit in item.get("changed_units", []) or []:
+diff --git a/documentledger/links.py b/documentledger/links.py
+index 8168baf..ffee572 100644
+--- a/documentledger/links.py
++++ b/documentledger/links.py
+@@ -486,6 +486,36 @@ def _proposal_links_for_section(
+     return proposals, stats
+
+
++def _initialize_canonical_proposal_artifacts(
++    workspace: Workspace,
++    out_dir: str | None,
++    artifacts_dir: Path | None,
++    output_dir: Path,
++) -> None:
++    if not (
++        out_dir is None
++        and artifacts_dir is not None
++        and workspace.paths is not None
++        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
++        and not artifacts_dir.exists()
++    ):
++        return
++    import ledgercore
++
++    from documentledger.project import resolve_canonical_project
++
++    canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
++    try:
++        ledgercore.initialize_storage_binding(cast(Any, canonical.layout).mounts["artifacts"], require_empty=True)
++    except (OSError, AtomicWriteError) as exc:
++        raise_output_write_error(
++            output_dir / PROPOSAL_MANIFEST_NAME,
++            command="link propose",
++            cause=exc,
++            managed_artifact=True,
++        )
++
++
+ def propose_mappings(
+     workspace: Workspace,
+     *,
+@@ -504,27 +534,7 @@ def propose_mappings(
+     output_dir = (
+         Path(out_dir) if out_dir else ((artifacts_dir / "proposals") if artifacts_dir else workspace.config.storage_dir / "proposals")
+     )
+-    if (
+-        out_dir is None
+-        and artifacts_dir is not None
+-        and workspace.paths is not None
+-        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
+-        and not artifacts_dir.exists()
+-    ):
+-        import ledgercore
+-
+-        from documentledger.project import resolve_canonical_project
+-
+-        canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
+-        try:
+-            ledgercore.initialize_storage_binding(cast(Any, canonical.layout).mounts["artifacts"], require_empty=True)
+-        except (OSError, AtomicWriteError) as exc:
+-            raise_output_write_error(
+-                output_dir / PROPOSAL_MANIFEST_NAME,
+-                command="link propose",
+-                cause=exc,
+-                managed_artifact=True,
+-            )
++    _initialize_canonical_proposal_artifacts(workspace, out_dir, artifacts_dir, output_dir)
+
+     manifest_path = output_dir / PROPOSAL_MANIFEST_NAME
+     owned_names = existing_owned_filenames(output_dir)
+@@ -577,6 +587,7 @@ def propose_mappings(
+     }
+     events: list[dict[str, Any]] = []
+
++    documents_without_candidates: list[str] = []
+     for doc_path in docs:
+         sections_payload: list[dict[str, Any]] = []
+         linked_source_paths: set[str] = set()
+diff --git a/documentledger/models.py b/documentledger/models.py
+index 5aee2e0..38a3c41 100644
+--- a/documentledger/models.py
++++ b/documentledger/models.py
+@@ -145,7 +145,7 @@ class ReviewItem:
+     doc_path: str
+     section_id: str
+     section_title: str
+-    action: Literal["update_required", "review_required", "generated_verify"]
++    review_action: Literal["update_required", "review_required", "generated_verify"]
+     severity: Literal["high", "medium", "low"]
+     evidence: tuple[ChangedEvidence, ...]
+     reasons: tuple[str, ...]
+@@ -157,7 +157,8 @@ class ReviewItem:
+             "doc": self.doc_path,
+             "section_id": self.section_id,
+             "title": self.section_title,
+-            "action": self.action,
++            "action": "verify-generated-reference" if self.review_action == "generated_verify" else "rewrite-section",
++            "review_action": self.review_action,
+             "severity": self.severity,
+             "changed_units": [item.to_record() for item in changed_units],
+             "changed_units_total": len(evidence),
+@@ -210,6 +211,22 @@ class AmbiguousMatch:
+         }
+
+
++@dataclass(frozen=True)
++class CoverageGap:
++    doc_path: str
++    section_id: str
++    section_title: str
++    reason: str
++
++    def to_record(self) -> dict[str, Any]:
++        return {
++            "doc": self.doc_path,
++            "section_id": self.section_id,
++            "title": self.section_title,
++            "reason": self.reason,
++        }
++
++
+ @dataclass(frozen=True)
+ class ReviewPlan:
+     scan_version: int
+@@ -222,6 +239,7 @@ class ReviewPlan:
+     ambiguous_match_count: int
+     ignored_change_counts: dict[str, int]
+     next_action: dict[str, str]
++    coverage_gaps: tuple[CoverageGap, ...] = ()
+
+     def to_record(self, *, details: bool = False, limit: int = 40) -> dict[str, Any]:
+         cap = None if details else limit
+@@ -230,7 +248,8 @@ class ReviewPlan:
+         suggestions = list(self.mapping_suggestions)
+         applied = list(self.auto_applied)
+         ambiguous = list(self.ambiguous_items)
+-        pending_count = len(self.unmapped_relevant) + len(self.mapping_suggestions) + self.ambiguous_match_count
++        coverage_gaps = list(self.coverage_gaps)
++        pending_count = len(self.unmapped_relevant) + len(self.mapping_suggestions) + len(coverage_gaps) + self.ambiguous_match_count
+         return {
+             "schema": "documentledger.review.v1",
+             "state": self.state,
+@@ -246,6 +265,8 @@ class ReviewPlan:
+                 "suggestions": [item.to_record() for item in suggestions[:cap]],
+                 "ambiguous_matches": self.ambiguous_match_count,
+                 "ambiguous_items": [item.to_record() for item in ambiguous[:cap]],
++                "coverage_gaps": [item.to_record() for item in coverage_gaps[:cap]],
++                "coverage_gaps_total": len(coverage_gaps),
+             },
+             "ignored_changes": dict(self.ignored_change_counts),
+             "next_action": dict(self.next_action),
+@@ -255,6 +276,7 @@ class ReviewPlan:
+                 "suggestions": max(len(suggestions) - len(suggestions[:cap]), 0) if cap is not None else 0,
+                 "auto_applied_edges": max(len(applied) - len(applied[:cap]), 0) if cap is not None else 0,
+                 "ambiguous_items": max(len(ambiguous) - len(ambiguous[:cap]), 0) if cap is not None else 0,
++                "coverage_gaps": max(len(coverage_gaps) - len(coverage_gaps[:cap]), 0) if cap is not None else 0,
+             },
+         }
+
+diff --git a/documentledger/render.py b/documentledger/render.py
+index f4f274b..9e933c4 100644
+--- a/documentledger/render.py
++++ b/documentledger/render.py
+@@ -13,7 +13,7 @@ from documentledger.impact import resolve_affected_sections, stale_doc_details
+ from documentledger.links import current_source_inventory
+ from documentledger.models import Workspace
+ from documentledger.source_roles import classify_source_role
+-from documentledger.storage import iter_doc_records, latest_scan, workspace_root
++from documentledger.storage import iter_doc_records, latest_scan, state_version, workspace_root
+
+
+ def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
+@@ -74,7 +74,6 @@ def linked_sections(workspace: Workspace, docs: list[str] | None = None, section
+                     "line_span": list(section.get("line_span", [0, 0])),
+                     "section_hash": str(section.get("section_hash", "")),
+                     "summary": str(section.get("summary", "")),
+-                    "action": "review-section",
+                     "changed_units": [
+                         {
+                             "source_id": str(link.get("source_id", "")),
+@@ -113,7 +112,6 @@ def selected_doc_sections(workspace: Workspace, docs: list[str], section_id: str
+                     "line_span": [section.line_span[0], section.line_span[1]],
+                     "section_hash": section.section_hash,
+                     "summary": section.summary,
+-                    "action": "review-section",
+                     "changed_units": [
+                         {
+                             "source_id": str(link.get("source_id", "")),
+@@ -316,7 +314,7 @@ def _section_context_lines(workspace: Workspace, item: dict[str, Any], max_sourc
+         "",
+         f"Section id: {item['section_id']}",
+         f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
+-        f"Action: {item['action']}",
++        *review_action_lines(item),
+         "",
+         "Linked source units:",
+         "",
+@@ -556,48 +554,22 @@ def render_context(  # noqa: C901
+                 specs.append({"unit_id": source_id, "unit_type": "source", "role": role, "source_unit": unit})
+     else:
+         for item in selected_sections:
+-            doc_path = str(item["doc_path"])
+-            heading_path = " / ".join(item.get("heading_path", []) or []) or str(item["section_id"])
+-            block = [
+-                f"### {doc_path} :: {heading_path}",
+-                "",
+-                f"Section id: {item['section_id']}",
+-                f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
+-                f"Action: {item['action']}",
+-                *review_action_lines(item),
+-                "",
+-                "Linked source units:",
+-                "",
+-            ]
+-            for unit in item.get("changed_units", []) or []:
+-                source_unit_count += 1
+-                block.extend(
+-                    [
+-                        f"- {unit['source_id']}",
+-                        f"  - path: {unit['source_path']}",
+-                        f"  - status: {'missing' if unit.get('missing') else 'live'}",
+-                        *([f"  - kind: {unit['kind']}", f"  - signature: `{unit['signature']}`"] if not unit.get("missing") else []),
+-                        f"  - lines: {unit['line_span'][0]}-{unit['line_span'][1]}",
+-                        f"  - changed: {', '.join(unit.get('changed_hashes', []) or ['file_hash'])}",
+-                        f"  - reason: {unit['reason'] or 'No recorded reason.'}",
+-                        "",
+-                        "  Current relevant source:",
+-                        "",
+-                    ]
+-                )
+-                snippet = source_snippet(
+-                    workspace_root(workspace),
+-                    str(unit["source_path"]),
+-                    list(unit.get("line_span", [0, 0])),
+-                    max_lines=max_source_lines,
++            specs.append(
++                {
++                    "unit_id": f"section:{item['doc_path']}::{item['section_id']}",
++                    "unit_type": "section",
++                    "section": item,
++                }
++            )
++        if include_unlinked:
++            for source_path in bootstrap_sources:
++                specs.append(
++                    {
++                        "unit_id": f"unlinked-source:{source_path}",
++                        "unit_type": "unlinked-source",
++                        "source_path": source_path,
++                    }
+                 )
+-                block.extend(f"  {line}" for line in trim_lines(snippet, max_lines=max_source_lines))
+-                block.append("")
+-            block.extend(["Current section text:", ""])
+-            block.extend(trim_lines(str(item.get("text", "")).strip("\n"), max_lines=max_section_lines))
+-            block.append("")
+-            append_block(f"section:{item['doc_path']}::{item['section_id']}", block)
+-
+     manifest_hash = _context_manifest_hash(workspace, specs, [*bootstrap_sources, *bootstrap_docs])
+     request_offset = _context_offset(
+         cursor,
+diff --git a/documentledger/review.py b/documentledger/review.py
+index 644decd..aff5c93 100644
+--- a/documentledger/review.py
++++ b/documentledger/review.py
+@@ -15,7 +15,7 @@ from documentledger.links import (
+     add_section_link,
+     current_source_inventory,
+ )
+-from documentledger.models import AmbiguousMatch, ChangedEvidence, MappingSuggestion, ReviewItem, ReviewPlan, Workspace
++from documentledger.models import AmbiguousMatch, ChangedEvidence, CoverageGap, MappingSuggestion, ReviewItem, ReviewPlan, Workspace
+ from documentledger.scanner import collect_files, run_scan
+ from documentledger.source_roles import classify_source_role
+ from documentledger.storage import iter_doc_records, latest_scan
+@@ -33,10 +33,10 @@ def _evidence(record: dict[str, Any]) -> ChangedEvidence:
+
+
+ def _review_item(record: dict[str, Any]) -> ReviewItem:
+-    action = str(record.get("review_action", "review_required"))
+-    if action not in {"update_required", "review_required", "generated_verify"}:
+-        action = "review_required"
+-    severity = {"update_required": "high", "review_required": "medium", "generated_verify": "low"}[action]
++    review_action = str(record.get("review_action", "review_required"))
++    if review_action not in {"update_required", "review_required", "generated_verify"}:
++        review_action = "review_required"
++    severity = {"update_required": "high", "review_required": "medium", "generated_verify": "low"}[review_action]
+     reasons = {
+         "update_required": "Public contract or linked source changed. Update the section and its claims.",
+         "review_required": "Tracked implementation changed. Verify that the section remains accurate.",
+@@ -46,10 +46,10 @@ def _review_item(record: dict[str, Any]) -> ReviewItem:
+         doc_path=str(record.get("doc_path", "")),
+         section_id=str(record.get("section_id", "")),
+         section_title=str(record.get("summary", "")),
+-        action=action,  # type: ignore[arg-type]
++        review_action=review_action,  # type: ignore[arg-type]
+         severity=severity,  # type: ignore[arg-type]
+         evidence=tuple(_evidence(item) for item in record.get("changed_units", []) or []),
+-        reasons=(reasons[action],),
++        reasons=(reasons[review_action],),
+     )
+
+
+@@ -113,6 +113,7 @@ def build_review_plan(
+     auto_applied: list[MappingSuggestion] = []
+     suggestions: dict[tuple[str, str, str], MappingSuggestion] = {}
+     ambiguous_items: dict[tuple[str, str, str, int, int], AmbiguousMatch] = {}
++    coverage_gaps: dict[tuple[str, str], CoverageGap] = {}
+
+     for path in doc_paths:
+         sections = doc_sections_for_file(workspace.config.root / path, path)
+@@ -132,6 +133,13 @@ def build_review_plan(
+                 doc_path=path,
+                 section_id=section.section_id,
+             )
++            if is_unlinked and not proposals and not int(stats.get("ambiguous_matches", 0)):
++                coverage_gaps[(path, section.section_id)] = CoverageGap(
++                    path,
++                    section.section_id,
++                    section.summary,
++                    "No source dependency could be inferred for this documentation section.",
++                )
+             ambiguous_matches += int(stats.get("ambiguous_matches", 0))
+             for match in stats.get("ambiguous_evidence", []):
+                 span = tuple(int(value) for value in match["span"])
+@@ -175,10 +183,12 @@ def build_review_plan(
+                 else:
+                     suggestions[(path, section.section_id, source_id)] = suggestion
+
++    affected_records = resolve_affected_sections(workspace, scan=scan, docs=doc_paths)
++    affected_items = tuple(_review_item(item) for item in affected_records)
+     unmapped_records = relevant_unmapped_changed_units(workspace, scan=scan)
+     ignored_counts = ignored_changed_unit_counts(workspace, scan=scan)
+-    state = "review_required" if affected_items or unmapped_records or suggestions or ambiguous_matches else "clean"
+-    if affected_items and (unmapped_records or suggestions or ambiguous_matches):
++    state = "review_required" if affected_items or unmapped_records or suggestions or ambiguous_matches or coverage_gaps else "clean"
++    if affected_items and (unmapped_records or suggestions or ambiguous_matches or coverage_gaps):
+         next_action = {
+             "kind": "review_and_update",
+             "command": "resolve mapping suggestions, update affected sections, then run `documentledger finish`",
+@@ -188,7 +198,7 @@ def build_review_plan(
+             "kind": "update_docs",
+             "command": "update affected sections, then run `documentledger finish`",
+         }
+-    elif unmapped_records or suggestions or ambiguous_matches:
++    elif unmapped_records or suggestions or ambiguous_matches or coverage_gaps:
+         next_action = {
+             "kind": "review_mappings",
+             "command": "review mapping suggestions, then run `documentledger finish`",
+@@ -202,6 +212,7 @@ def build_review_plan(
+         affected=affected_items,
+         unmapped_relevant=tuple(_evidence(item) for item in unmapped_records),
+         mapping_suggestions=tuple(suggestions[key] for key in sorted(suggestions)),
++        coverage_gaps=tuple(coverage_gaps[key] for key in sorted(coverage_gaps)),
+         auto_applied=tuple(auto_applied),
+         ambiguous_items=tuple(ambiguous_items[key] for key in sorted(ambiguous_items)),
+         ambiguous_match_count=ambiguous_matches,
+@@ -214,10 +225,13 @@ def review_human_summary(plan: ReviewPlan) -> str:
+     lines = [f"Review: {plan.state} (scan {plan.scan_version})"]
+     lines.append(
+         f"Affected sections: {len(plan.affected)}. Relevant unmapped changes: {len(plan.unmapped_relevant)}. "
+-        f"Exact links added: {len(plan.auto_applied)}. Suggestions requiring review: {len(plan.mapping_suggestions)}."
++        f"Exact links added: {len(plan.auto_applied)}. Suggestions requiring review: {len(plan.mapping_suggestions)}. "
++        f"Unmapped sections: {len(plan.coverage_gaps)}."
+     )
+     for item in plan.affected[:REVIEW_OUTPUT_LIMIT]:
+-        lines.append(f"  {item.action}: {item.doc_path} [{item.section_title}]")
++        lines.append(f"  {item.review_action}: {item.doc_path} [{item.section_title}]")
++    for gap in plan.coverage_gaps[:REVIEW_OUTPUT_LIMIT]:
++        lines.append(f"  unresolved coverage: {gap.doc_path} [{gap.section_title}]")
+     for suggestion in plan.mapping_suggestions[:REVIEW_OUTPUT_LIMIT]:
+         lines.append(f"  mapping review: {suggestion.doc_path} -> {suggestion.source_id} ({suggestion.confidence})")
+     if plan.ambiguous_match_count:
+diff --git a/documentledger/verification.py b/documentledger/verification.py
+index 45506d8..1c99eca 100644
+--- a/documentledger/verification.py
++++ b/documentledger/verification.py
+@@ -15,6 +15,7 @@ from documentledger.errors import DocumentledgerError
+ from documentledger.identity import normalize_repo_path
+ from documentledger.links import audit_links, current_source_inventory
+ from documentledger.scanner import collect_files, hash_paths
++from documentledger.source_roles import SOURCE_ROLES, classify_source_role, mapping_review_roles
+ from documentledger.storage import (
+     iter_doc_records,
+     latest_scan,
+@@ -273,6 +274,22 @@ def coverage_metrics(workspace: Any) -> dict[str, Any]:
+     inventory = current_source_inventory(workspace)
+     known_ids = set(inventory)
+     linked_known_ids = {source_id for source_id in linked_source_ids if source_id in known_ids}
++    required_roles = mapping_review_roles(workspace)
++    by_role = {
++        role: {"units": 0, "units_linked": 0, "units_unlinked": 0, "mapping_required": role in required_roles}
++        for role in sorted(SOURCE_ROLES)
++    }
++    for source_id, unit in inventory.items():
++        role = classify_source_role(unit)
++        role_counts = by_role[role]
++        role_counts["units"] += 1
++        if source_id in linked_known_ids:
++            role_counts["units_linked"] += 1
++        else:
++            role_counts["units_unlinked"] += 1
++    relevant_units = sum(by_role[role]["units"] for role in required_roles)
++    relevant_units_linked = sum(by_role[role]["units_linked"] for role in required_roles)
++    relevant_units_unlinked = sum(by_role[role]["units_unlinked"] for role in required_roles)
+     source_files = {str(unit.get("path", "")) for unit in inventory.values() if unit.get("path")}
+     linked_files = {path for path in linked_sources if path}
+     sources_total = len(source_files)
+@@ -297,6 +314,10 @@ def coverage_metrics(workspace: Any) -> dict[str, Any]:
+             "units": len(inventory),
+             "units_linked": len(linked_known_ids),
+             "units_unlinked": max(len(inventory) - len(linked_known_ids), 0),
++            "units_relevant": relevant_units,
++            "units_relevant_linked": relevant_units_linked,
++            "units_relevant_unlinked": relevant_units_unlinked,
++            "by_role": by_role,
+         },
+         "issues": [],
+     }
+@@ -484,8 +505,8 @@ def completion_status(
+         and coverage["documents"]["without_records"] == 0
+         and coverage["sections"]["total"] > 0
+         and coverage["documents"]["unresolved"] == 0
+-        and coverage["sources"]["units"] > 0
+-        and coverage["sources"]["units_unlinked"] == 0
++        and coverage["sources"]["units_relevant"] > 0
++        and coverage["sources"]["units_relevant_unlinked"] == 0
+         and linked_count > 0
+     )
+     mapping = {
+diff --git a/scripts/generate_cli_reference.py b/scripts/generate_cli_reference.py
+index edd887b..e021d5c 100755
+--- a/scripts/generate_cli_reference.py
++++ b/scripts/generate_cli_reference.py
+@@ -6,7 +6,7 @@ from __future__ import annotations
+ import argparse
+ import sys
+ from pathlib import Path
+-from typing import Any
++from typing import Any, get_args, get_origin
+
+ from click import Argument, Command
+ from typer.main import get_command
+@@ -30,13 +30,28 @@ def _default(value: Any) -> str:
+     return repr(value)
+
+
+-_CANONICAL_TYPE_NAMES = {"text": "str", "integer": "int"}
++_CANONICAL_TYPE_NAMES = {"text": "str", "integer": "int", "bool": "boolean"}
+
+
+ def _canonical_type_name(name: str) -> str:
+     return _CANONICAL_TYPE_NAMES.get(name, name)
+
+
++def _parameter_type_name(parameter: Any) -> str:
++    parameter_type = getattr(parameter, "type", None)
++    if parameter_type is not None:
++        name = getattr(parameter_type, "name", str(parameter_type))
++    else:
++        annotation = getattr(getattr(parameter, "type_descriptor", None), "annotation", None)
++        if get_origin(annotation) is list:
++            arguments = get_args(annotation)
++            item_name = getattr(arguments[0], "__name__", str(arguments[0])) if arguments else "Any"
++            name = f"list[{item_name}]"
++        else:
++            name = getattr(annotation, "__name__", str(annotation))
++    return _canonical_type_name(name)
++
++
+ def _parameters(command: Command) -> str:
+     if not command.params:
+         return "- None."
+@@ -46,14 +61,14 @@ def _parameters(command: Command) -> str:
+             name = parameter.name
+         else:
+             name = ", ".join(parameter.opts)
+-        kind = _canonical_type_name(getattr(parameter.type, "name", str(parameter.type)))
++        kind = _parameter_type_name(parameter)
+         rows.append(f"| `{name}` | {'yes' if parameter.required else 'no'} | `{_default(parameter.default)}` | `{kind}` |")
+     return "\n".join(rows)
+
+
+ def render() -> str:
+     from documentledger.cli import app
+-    from documentledger.command_catalog import COMMAND_INVENTORY
++    from documentledger.command_catalog import COMMAND_INVENTORY, COMMAND_REFERENCE_DETAILS
+
+     root = get_command(app)
+     canonical_reference_intro = (
+@@ -94,11 +109,19 @@ def render() -> str:
+         command = _command_for(root, entry.path)
+         aliases = ", ".join(f"`{alias}`" for alias in entry.aliases) or "None"
+         workspace = "yes" if entry.requires_workspace else "no"
++        details = COMMAND_REFERENCE_DETAILS.get(entry.path, {})
++        extended_description = details.get("extended_description")
++        json_result = details.get("json_result", json_contract_description)
++        examples = details.get("examples", (f"documentledger {entry.path}",))
++        summary_lines = [entry.summary]
++        if extended_description:
++            summary_lines.extend(["", extended_description])
++        example_lines = [line for example in examples for line in ("```bash", *example.splitlines(), "```", "")]
+         lines.extend(
+             [
+                 f"## {entry.path}",
+                 "",
+-                entry.summary,
++                *summary_lines,
+                 "",
+                 f"- **Effect:** `{entry.effect}`",
+                 f"- **Audience:** `{entry.audience}`",
+@@ -116,12 +139,11 @@ def render() -> str:
+                 "",
+                 "### JSON result and errors",
+                 "",
+-                json_contract_description,
++                json_result,
+                 "",
+-                "### Example",
+-                "",
+-                f"```bash\ndocumentledger {entry.path}\n```",
++                "### Examples",
+                 "",
++                *example_lines,
+             ]
+         )
+     lines.extend(
+diff --git a/skills/documentledger/SKILL.md b/skills/documentledger/SKILL.md
+index 5a46038..879b0b2 100644
+--- a/skills/documentledger/SKILL.md
++++ b/skills/documentledger/SKILL.md
+@@ -1,9 +1,6 @@
+ ---
+ name: documentledger
+ description: Maintain source-backed documentation using Documentledger capabilities, review, and freshness evidence.
+-requires:
+-  capabilities:
+-    - review.v1
+ ---
+
+ # Documentledger documentation workflow
+@@ -14,22 +11,30 @@ Use this skill when changing documentation in a repository that uses Documentled
+
+ ## Capability handshake
+
+-Start by reading the installed CLI's capability contract. Do not assume the package supports an optional workflow mentioned elsewhere.
++Start with the installed CLI contract. Do not infer support from this skill or from another package version.
+
+ ```bash
+ documentledger --json capabilities
+ ```
+
+-Require schema `documentledger.capabilities.v1`. Inspect `features`, `capabilities`, and `commands` before choosing a workflow. The normal path uses `review.v1`; run completion only when `finish.v1` is advertised.
++Require schema `documentledger.capabilities.v1`. Inspect `features`, `capabilities`, and `commands`. Use an optional workflow only when its versioned capability is listed. `finish.v1` includes the configured validation and freshness gate. If a required capability is absent, stop or use only the supported fallback described below.
++For JSON responses, require top-level `ok: true` before trusting `result`. Stop and resolve structured errors rather than continuing with incomplete evidence.
+
+ ## Normal review and finish path
+
+ <!-- docledger-section: skill-incremental -->
+
+-1. Run `documentledger --json status` and `documentledger --json doctor`. Inspect the inner `result`, including issues and storage bindings. Stop on linked missing sections, missing source units, invalid roots, schema errors, invalid bindings, or other link corruption.
+-2. If `review.v1` is advertised, run `documentledger review`. The command runs or reuses the incremental scan, reports affected sections and relevant unmapped changes, and applies only exact policy-approved references. Default JSON is bounded; use `--details` only when the complete arrays are needed.
+-3. Update the listed documentation claims from source evidence. Treat ambiguous matches as review items, not mappings to accept automatically. Use `--doc PATH` to scope a review when useful.
+-4. If `finish.v1` is advertised, run the completion command below after updating the documentation. Use explicit decisions for unchanged reviewed claims and verified generated references.
++1. Run `documentledger --json status` and `documentledger --json doctor`. Inspect each result, including issues and storage bindings. Stop on linked missing sections, missing source units, invalid roots, schema errors, invalid bindings, or other link corruption.
++2. When `review.v1` is advertised, run the incremental review command. It scans incrementally, reports affected sections and relevant unmapped changes, and applies only policy-approved exact references. Default JSON is bounded. Use `--details` only when the complete arrays are needed.
++3. Update documentation claims from source evidence. Treat ambiguous matches as review items, not mappings to accept automatically. Use `--doc PATH` to scope a review when useful.
++
++<!-- requires-capability: review.v1 -->
++
++```bash
++documentledger review
++```
++
++4. When `finish.v1` is advertised, run finish after updating the documentation. Finish audits links, runs canonical configured validation, and writes freshness dispositions only after all gates pass. It fails when required validation is missing or unsuccessful.
+
+ <!-- requires-capability: finish.v1 -->
+
+@@ -37,30 +42,64 @@ Require schema `documentledger.capabilities.v1`. Inspect `features`, `capabiliti
+ documentledger finish
+ ```
+
+-The finish command reconciles sections, audits links, and runs configured validation before writing any freshness dispositions. Pass `--reviewed-no-change DOC#SECTION=REASON` when an affected section remains accurate, or `--generated-verified DOC#SECTION=REASON` for a generated reference. A failed gate leaves freshness unchanged.
++Pass `--reviewed-no-change DOC#SECTION=REASON` only when an affected section remains accurate. Pass `--generated-verified DOC#SECTION=REASON` only after checking a generated reference. A failed validation or a validation command that mutates current content leaves freshness unchanged.
++When Sphinx is configured, require `python -m sphinx -b html -n -W --keep-going docs docs/_build/html` to pass, and verify configured navigation targets before completion. Do not lower warning or validation settings to make the gate pass.
++
++When `finish.v1` is unavailable, require `validation.v1` before using the manual completion path. Run configured validation and `documentledger --json link audit`, record freshness with a truthful scoped `documentledger document mark-fresh` command, then run `documentledger --json check --complete` and inspect `documentledger --json status`. If validation is not advertised, keep the work incomplete. Do not substitute a clean scan for validation or review.
++
++<!-- requires-capability: validation.v1 -->
+
+-If `finish.v1` is unavailable, keep the work incomplete until the supported fallback gates pass: run configured documentation validation, `documentledger --json link audit`, and `documentledger --json check`; then use a scoped `documentledger document mark-fresh --doc PATH --section SECTION_ID --reason "Validated update."` command with a truthful reason and finish with `documentledger --json status`.
++```bash
++documentledger document validate
++documentledger --json link audit
++```
++
++## Bootstrap and mapping
+
+-## Bootstrap and advanced mapping
++<!-- docledger-section: skill-bootstrap -->
+
+-If `review.v1` is unavailable, retain the lower-level workflow rather than using unsupported flags:
++Run a baseline scan before producing proposals. Build bootstrap context and include unlinked-source evidence when deciding what documentation is needed.
+
+ ```bash
+ documentledger --json scan
+-documentledger document build-context --bootstrap
+-documentledger link propose --all-docs --out-dir PATH
+-documentledger link import-map --file PATH --apply
+-documentledger --json link audit
+-documentledger --json coverage
++documentledger document build-context --bootstrap --out -
++```
++
++If context output is truncated and `context_pagination.v1` is advertised, follow every `next_cursor` with another page request until `truncated` is false. Do not treat omitted context as reviewed.
++
++<!-- requires-capability: context_pagination.v1 -->
++
++```bash
++documentledger --json document build-context --bootstrap --page-size 40 --out -
++documentledger --json document build-context --bootstrap --cursor NEXT_CURSOR --page-size 40 --out -
++```
++
++If pagination is unavailable, narrow the requested documents or sections and stop if the result remains truncated.
++
++Generate proposals only after inspecting the source and documentation context. When `proposal_manifest.v1` is advertised, the generator owns a scan-bound manifest. Review each proposal file and the manifest document list before importing.
++
++```bash
++documentledger --json link propose --all-docs --out-dir DIR
+ ```
+
+-Review proposal evidence before applying it. Do not assume proposal manifests, context pagination, or import-map review unless the capability contract advertises them. Test-only changes are not product documentation requirements by default; explicit test links remain meaningful.
++Use reviewed manifest-owned imports only when both `proposal_manifest.v1` and `import_map_review.v1` are advertised. Review the manifest-owned proposals first, then apply the reviewed batch. Never apply a generated directory merely because its files exist.
++
++<!-- requires-capability: proposal_manifest.v1, import_map_review.v1 -->
++
++```bash
++documentledger --json link import-map --directory DIR --review
++documentledger --json link import-map --directory DIR --check-and-apply
++```
++
++If either capability is absent, do not use the directory review path. Inspect the installed `link import-map` help and use only supported file-based validation and apply options. If the installed CLI cannot validate and safely apply the proposals, stop and request an upgrade rather than bypassing review.
++
++Test-only changes are not product documentation requirements by default. Explicit links to test sources remain meaningful for affectedness.
+
+ <!-- docledger-section: skill-precision -->
+
+ ## Precision, portability, and safety
+
+-Prefer `documentledger link add-section` evidence edges over broad file links. Never invent edges to improve coverage. Do not edit `.ledger/` records manually, add timestamps, migrate storage as a side effect, or treat a clean scan as proof that documentation is complete. Preserve user-owned files and use the configured validation environment.
++Prefer `documentledger link add-section` evidence edges over broad file links. Never invent edges to improve coverage. Do not edit `.ledger/` records manually, add timestamps, migrate storage as a side effect, or treat a clean scan as proof that documentation is complete. Preserve user-owned files, keep releaseledger-owned changelog bytes unchanged unless the requested work requires a changelog edit, and use the configured validation environment.
+
+ ## Compatibility
+
+diff --git a/tests/test_bootstrap_workflow.py b/tests/test_bootstrap_workflow.py
+index 60f360f..eef49dc 100644
+--- a/tests/test_bootstrap_workflow.py
++++ b/tests/test_bootstrap_workflow.py
+@@ -29,13 +29,7 @@ def test_documented_bootstrap_workflow_is_executable(project: Path, runner) -> N
+
+     invoke_json(runner, ["init"])
+     config = project / ".ledger" / "documentledger" / "config.toml"
+-    config.write_text(
+-        config.read_text(encoding="utf-8").replace(
+-            'source_roots = ["documentledger", "tests"]',
+-            'source_roots = ["demo", "tests"]',
+-        ),
+-        encoding="utf-8",
+-    )
++    assert 'source_roots = ["demo", "tests"]' in config.read_text(encoding="utf-8")
+
+     assert invoke_json(runner, ["status"])["ok"] is True
+     assert invoke_json(runner, ["doctor"])["result"]["ok"] is True
+@@ -87,7 +81,8 @@ def test_documented_bootstrap_workflow_is_executable(project: Path, runner) -> N
+     assert set(fresh["result"]["selected_docs"]) == {"README.md", "docs/architecture.md", "docs/index.md"}
+     final_status = invoke_json(runner, ["status"])["result"]
+     assert final_status["freshness_state"] == "clean"
+-    assert final_status["coverage_review_required"] is False
++    assert final_status["coverage_review_required"] is (final_status["mapping"]["state"] != "covered")
++    assert final_status["mapping_state"] == ("complete" if final_status["mapping"]["state"] == "covered" else "review_required")
+
+     proposal_sources = {
+         str(link["source_unit"])
+diff --git a/tests/test_documentation_contract.py b/tests/test_documentation_contract.py
+index 6b3c6b4..2eb4ae8 100644
+--- a/tests/test_documentation_contract.py
++++ b/tests/test_documentation_contract.py
+@@ -57,13 +57,36 @@ def test_cli_reference_covers_catalog_exactly_once() -> None:
+     assert "These wrappers remain" in text
+
+
++def test_cli_reference_is_generator_owned_and_contains_extended_workflows() -> None:
++    from scripts.generate_cli_reference import render
++
++    text = (DOCS / "cli.md").read_text(encoding="utf-8")
++
++    assert text == render()
++    assert "Runs or reuses an incremental scan" in text
++    assert "scan-bound manifest for the proposal batch" in text
++    assert "documentledger.capabilities.v1" in text
++    assert "documentledger --json link import-map --directory ./proposals --review" in text
++    assert "documentledger --json document build-context --bootstrap --page-size 40 --out -" in text
++
++
+ def test_cli_generator_normalizes_legacy_click_type_names() -> None:
+-    from scripts.generate_cli_reference import _canonical_type_name
++    from typer.main import get_command
++
++    from documentledger.cli import app
++    from scripts.generate_cli_reference import _canonical_type_name, _parameter_type_name
+
+     assert _canonical_type_name("text") == "str"
+     assert _canonical_type_name("integer") == "int"
+     assert _canonical_type_name("boolean") == "boolean"
+
++    init = get_command(app).get_command(None, "init")
++    assert init is not None
++    source_root = next(parameter for parameter in init.params if parameter.name == "source_roots")
++    hidden_config = next(parameter for parameter in init.params if parameter.name == "hidden_config")
++    assert _parameter_type_name(source_root) == "list[str]"
++    assert _parameter_type_name(hidden_config) == "boolean"
++
+
+ def test_canonical_command_registration_matches_catalog() -> None:
+     from typer.main import get_command
+@@ -189,3 +212,11 @@ def test_strict_build_and_generated_changelog_contracts() -> None:
+     assert "Generated by releaseledger" in changelog
+     assert "<!-- generated by releaseledger -->" in changelog
+     assert "<!-- releaseledger:generated-file -->" in changelog
++
++
++def test_codecrate_snapshot_includes_required_files_without_stale_version_override() -> None:
++    config = tomllib.loads((ROOT / ".codecrate.toml").read_text(encoding="utf-8"))["codecrate"]
++
++    assert "**/*.json" in config["include"]
++    assert "LICENSE*" in config["include"]
++    assert "documentledger/_version.py" not in config.get("gitignore_allow", [])
+diff --git a/tests/test_finish.py b/tests/test_finish.py
+index bf8bfba..6033313 100644
+--- a/tests/test_finish.py
++++ b/tests/test_finish.py
+@@ -13,7 +13,27 @@ from tests.conftest import invoke_json, invoke_json_may_fail, load_yaml, write_p
+ def _setup_linked_project(project: Path, runner: CliRunner, *, generated: bool = False) -> None:
+     invoke_json(runner, ["init"])
+     write_precision_sample(project)
++    (project / "documentledger" / "overview.py").write_text("OVERVIEW = 'stable'\n", encoding="utf-8")
+     invoke_json(runner, ["scan"])
++    invoke_json(
++        runner,
++        [
++            "link",
++            "add-section",
++            "--doc",
++            "README.md",
++            "--section",
++            "docs",
++            "--source-unit",
++            "py:file:documentledger/overview.py",
++            "--coverage",
++            "broad-file-fallback",
++            "--impact",
++            "unknown",
++            "--reason",
++            "Maps the project overview.",
++        ],
++    )
+     for section, source, coverage in (
+         ("usage", "scan", "generated-reference" if generated else "cli-command"),
+         ("usage-run-scan", "scan", "generated-reference" if generated else "cli-command"),
+@@ -169,7 +189,7 @@ def test_finish_validation_failure_does_not_record_freshness(project: Path, runn
+     )
+
+     assert exit_code != 0
+-    assert result["error"]["code"] == "validation-subprocess-failed"
++    assert result["error"]["code"] == "validation-command-failed"
+     assert _section_freshness(project) is None
+
+
+@@ -196,7 +216,7 @@ def test_finish_validation_retry_preserves_edited_section_baseline(project: Path
+     )
+
+     assert exit_code != 0
+-    assert result["error"]["code"] == "validation-subprocess-failed"
++    assert result["error"]["code"] == "validation-command-failed"
+     assert _section_freshness(project) is None
+     failed_record = load_yaml(_record_path(project))
+     failed_section = next(item for item in failed_record["sections"] if item["section_id"].endswith("::usage-run-scan"))
+@@ -214,6 +234,68 @@ def test_finish_validation_retry_preserves_edited_section_baseline(project: Path
+     assert _section_freshness(project)["disposition"] == "updated"
+
+
++def test_finish_creates_current_validation_attestation(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    _change_scan_signature(project)
++    config = project / ".ledger" / "documentledger" / "config.toml"
++    config.write_text(
++        config.read_text(encoding="utf-8").replace(
++            "commands = []",
++            "commands = [\"python -c 'import sys; sys.exit(0)'\"]",
++        ),
++        encoding="utf-8",
++    )
++
++    result = invoke_json(
++        runner,
++        [
++            "finish",
++            "--reviewed-no-change",
++            "docs/usage.md#usage=Overview remains accurate.",
++            "--reviewed-no-change",
++            "docs/usage.md#usage-run-scan=Behavior remains accurate.",
++        ],
++    )["result"]
++    documentation = invoke_json(runner, ["status"])["result"]["documentation"]
++
++    assert result["state"] == "clean"
++    assert len(result["validation"]) == 1
++    assert documentation["validation_state"] == "passed_current"
++    assert documentation["validation_verified_for_current_content"] is True
++
++
++def test_finish_rejects_validation_that_mutates_docs(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    _change_scan_signature(project)
++    (project / "mutate_docs.py").write_text(
++        "from pathlib import Path\npath = Path('docs/usage.md')\npath.write_text(path.read_text() + 'mutated during validation')\n",
++        encoding="utf-8",
++    )
++    config = project / ".ledger" / "documentledger" / "config.toml"
++    config.write_text(
++        config.read_text(encoding="utf-8").replace("commands = []", 'commands = ["python mutate_docs.py"]'),
++        encoding="utf-8",
++    )
++
++    exit_code, result = invoke_json_may_fail(
++        runner,
++        [
++            "finish",
++            "--reviewed-no-change",
++            "docs/usage.md#usage=Overview remains accurate.",
++            "--reviewed-no-change",
++            "docs/usage.md#usage-run-scan=Behavior remains accurate.",
++        ],
++    )
++    documentation = invoke_json(runner, ["status"])["result"]["documentation"]
++
++    assert exit_code != 0
++    assert result["error"]["code"] == "validation-command-failed"
++    assert _section_freshness(project) is None
++    assert documentation["validation_state"] == "failed"
++    assert documentation["validation_verified_for_current_content"] is False
++
++
+ def test_finish_link_audit_failure_does_not_record_freshness(project: Path, runner: CliRunner) -> None:
+     _setup_linked_project(project, runner)
+     (project / "documentledger" / "cli.py").unlink()
+diff --git a/tests/test_init.py b/tests/test_init.py
+index 5b8642b..ea7f2ee 100644
+--- a/tests/test_init.py
++++ b/tests/test_init.py
+@@ -142,6 +142,24 @@ def test_existing_project_source_config_is_not_overwritten(tmp_path: Path, runne
+     assert config_path.read_bytes() == before
+
+
++def test_explicit_source_roots_do_not_expand_after_later_packages_appear(tmp_path: Path, runner: CliRunner, monkeypatch) -> None:
++    _write_package_project(tmp_path, "selected")
++    monkeypatch.chdir(tmp_path)
++    invoke_json(runner, ["init", "--source-root", "selected"])
++
++    config_path = tmp_path / ".ledger" / "documentledger" / "config.toml"
++    assert load_tool_config_v2(config_path).source_roots == ("selected",)
++    later_package = tmp_path / "later_package"
++    later_package.mkdir()
++    (later_package / "__init__.py").write_text("\n", encoding="utf-8")
++    (later_package / "extra.py").write_text("VALUE = 2\n", encoding="utf-8")
++    invoke_json(runner, ["scan"])
++
++    assert load_tool_config_v2(config_path).source_roots == ("selected",)
++    source_ids = invoke_json(runner, ["source", "list", "--ids-only", "--limit", "100"])["result"]["sources"]
++    assert not any("later_package" in source_id for source_id in source_ids)
++
++
+ def test_doctor_reports_exact_package_root_remediation(tmp_path: Path, runner: CliRunner, monkeypatch) -> None:
+     _write_package_project(tmp_path, "audioexport")
+     (tmp_path / "tests").mkdir()
+diff --git a/tests/test_render.py b/tests/test_render.py
+index 74e42e7..665a2be 100644
+--- a/tests/test_render.py
++++ b/tests/test_render.py
+@@ -95,6 +95,17 @@ def test_affected_context_includes_only_target_section_and_source_unit(project:
+     assert "py:function:documentledger/cli.py::doctor" in result.output
+     assert "py:function:documentledger/cli.py::scan" not in result.output
+     assert 'def doctor(ctx: typer.Context, json: bool = typer.Option(False, "--json"))' in result.output
++    counts = invoke_json(runner, ["document", "build-context", "--affected"])["result"]
++    assert counts["source_units"] == 1
++    from documentledger.impact import resolve_affected_sections
++    from documentledger.storage import load_workspace
++
++    internal = resolve_affected_sections(load_workspace(start=project))
++    assert internal[0]["review_action"] == "update_required"
++    assert "action" not in internal[0]
++    boundary = invoke_json(runner, ["document", "affected"])["result"]["affected_sections"][0]
++    assert boundary["review_action"] == "update_required"
++    assert boundary["action"] == "rewrite-section"
+
+
+ def test_doc_and_all_context_resolve_live_source_spans_and_excerpts(project: Path, runner: CliRunner) -> None:
+diff --git a/tests/test_review.py b/tests/test_review.py
+index 0b40a09..78e49f4 100644
+--- a/tests/test_review.py
++++ b/tests/test_review.py
+@@ -6,7 +6,31 @@ from typer.testing import CliRunner
+
+ from documentledger.impact import review_action_for
+ from documentledger.models import ChangedEvidence, MappingSuggestion, ReviewItem, ReviewPlan
+-from tests.conftest import invoke_json
++from tests.conftest import invoke_json, invoke_json_may_fail
++
++
++def _link_readme_to_stable_source(project: Path, runner: CliRunner) -> None:
++    (project / "documentledger" / "review_support.py").write_text("OVERVIEW = 'stable'\n", encoding="utf-8")
++    invoke_json(runner, ["scan"])
++    invoke_json(
++        runner,
++        [
++            "link",
++            "add-section",
++            "--doc",
++            "README.md",
++            "--section",
++            "docs",
++            "--source-unit",
++            "py:file:documentledger/review_support.py",
++            "--coverage",
++            "broad-file-fallback",
++            "--impact",
++            "unknown",
++            "--reason",
++            "Maps the project overview.",
++        ],
++    )
+
+
+ def test_review_auto_links_only_exact_candidates_and_is_idempotent(project: Path, runner: CliRunner) -> None:
+@@ -17,6 +41,7 @@ def test_review_auto_links_only_exact_candidates_and_is_idempotent(project: Path
+         "## Report API\n\nUse `py:function:documentledger/core.py::create_report`.\n",
+         encoding="utf-8",
+     )
++    _link_readme_to_stable_source(project, runner)
+
+     first = invoke_json(runner, ["review"])["result"]
+     second = invoke_json(runner, ["review"])["result"]
+@@ -28,6 +53,92 @@ def test_review_auto_links_only_exact_candidates_and_is_idempotent(project: Path
+     assert second["mapping"]["auto_applied"] == 0
+
+
++def test_review_auto_link_of_changed_unmapped_source_remains_review_required(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    source = project / "documentledger" / "core.py"
++    source.write_text("def create_report():\n    return 1\n", encoding="utf-8")
++    (project / "docs").mkdir()
++    doc = project / "docs" / "api.md"
++    doc.write_text("## Report API\n\nUse `py:function:documentledger/core.py::create_report`.\n", encoding="utf-8")
++    _link_readme_to_stable_source(project, runner)
++
++    source.write_text("def create_report(title: str):\n    return title\n", encoding="utf-8")
++    review = invoke_json(runner, ["review"])["result"]
++
++    assert review["mapping"]["auto_applied"] == 1
++    assert review["affected_total"] == 1
++    assert review["state"] == "review_required"
++    assert review["affected"][0]["section_id"].endswith("::report-api")
++    assert review["affected"][0]["action"] == (
++        "verify-generated-reference" if review["affected"][0]["review_action"] == "generated_verify" else "rewrite-section"
++    )
++
++    exit_code, blocked = invoke_json_may_fail(runner, ["finish"])
++    assert exit_code != 0
++    assert blocked["error"]["code"] == "freshness-decision-required"
++
++    doc.write_text(doc.read_text(encoding="utf-8") + "\nReviewed against the changed source contract.\n", encoding="utf-8")
++    finished = invoke_json(runner, ["finish"])["result"]
++    assert finished["state"] == "clean"
++
++
++def test_manual_link_to_changed_source_remains_review_required(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    source = project / "documentledger" / "core.py"
++    source.write_text("def create_report():\n    return 1\n", encoding="utf-8")
++    (project / "docs").mkdir()
++    (project / "docs" / "api.md").write_text(
++        "## Report API\n\nUse `py:function:documentledger/core.py::create_report`.\n",
++        encoding="utf-8",
++    )
++    _link_readme_to_stable_source(project, runner)
++    source.write_text("def create_report(title: str):\n    return title\n", encoding="utf-8")
++    invoke_json(runner, ["scan"])
++
++    invoke_json(
++        runner,
++        [
++            "link",
++            "add-section",
++            "--doc",
++            "docs/api.md",
++            "--section",
++            "report-api",
++            "--source-unit",
++            "py:function:documentledger/core.py::create_report",
++            "--coverage",
++            "api-autodoc",
++            "--impact",
++            "public-api",
++            "--reason",
++            "Documents create_report.",
++        ],
++    )
++    review = invoke_json(runner, ["review"])["result"]
++
++    assert review["state"] == "review_required"
++    assert review["affected_total"] == 1
++    exit_code, blocked = invoke_json_may_fail(runner, ["finish"])
++    assert exit_code != 0
++    assert blocked["error"]["code"] == "freshness-decision-required"
++
++
++def test_review_keeps_unmapped_sections_without_candidates_visible(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    (project / "docs").mkdir()
++    (project / "docs" / "guide.md").write_text("## Concepts\n\nA general project overview.\n", encoding="utf-8")
++    _link_readme_to_stable_source(project, runner)
++
++    review = invoke_json(runner, ["review"])["result"]
++
++    assert review["state"] == "review_required"
++    assert review["mapping"]["coverage_gaps_total"] == 1
++    assert review["mapping"]["coverage_gaps"][0]["doc"] == "docs/guide.md"
++    exit_code, blocked = invoke_json_may_fail(runner, ["finish"])
++    assert exit_code != 0
++    assert blocked["error"]["code"] == "review-required"
++
++
+ def test_review_surfaces_ambiguous_symbol_candidates_without_linking_them(project: Path, runner: CliRunner) -> None:
+     invoke_json(runner, ["init"])
+     (project / "documentledger" / "first.py").write_text("def convert(value):\n    return value\n", encoding="utf-8")
+@@ -35,6 +146,7 @@ def test_review_surfaces_ambiguous_symbol_candidates_without_linking_them(projec
+     (project / "docs").mkdir()
+     (project / "docs" / "api.md").write_text("## Conversion\n\nUse `convert(value)` here.\n", encoding="utf-8")
+
++    _link_readme_to_stable_source(project, runner)
+     result = invoke_json(runner, ["review"])["result"]
+
+     assert result["mapping"]["auto_applied"] == 0
+@@ -44,11 +156,11 @@ def test_review_surfaces_ambiguous_symbol_candidates_without_linking_them(projec
+
+
+ def test_review_reports_ignored_test_changes_without_mapping_review(project: Path, runner: CliRunner) -> None:
+-    invoke_json(runner, ["init"])
+     (project / "tests").mkdir()
+     test_source = project / "tests" / "test_helpers.py"
+     test_source.write_text("def helper():\n    return 1\n", encoding="utf-8")
+-    invoke_json(runner, ["scan"])
++    invoke_json(runner, ["init"])
++    _link_readme_to_stable_source(project, runner)
+     test_source.write_text("def helper():\n    return 2\n", encoding="utf-8")
+
+     result = invoke_json(runner, ["review"])["result"]
+@@ -103,6 +215,7 @@ def test_review_output_bounds_default_arrays() -> None:
+         "suggestions": 960,
+         "auto_applied_edges": 0,
+         "ambiguous_items": 0,
++        "coverage_gaps": 0,
+     }
+
+
+@@ -110,3 +223,12 @@ def test_review_action_classifies_public_internal_and_generated_changes() -> Non
+     assert review_action_for([{"coverage": "api-autodoc", "changed_hashes": ["signature_hash"]}]) == "generated_verify"
+     assert review_action_for([{"coverage": "architecture", "changed_hashes": ["body_hash"]}]) == "review_required"
+     assert review_action_for([{"coverage": "api", "changed_hashes": ["signature_hash"]}]) == "update_required"
++
++
++def test_review_item_projects_legacy_action_at_output_boundary() -> None:
++    item = ReviewItem("docs/api.md", "api", "API", "generated_verify", "low", (), ("Verify generated output.",))
++
++    record = item.to_record()
++
++    assert record["review_action"] == "generated_verify"
++    assert record["action"] == "verify-generated-reference"
+diff --git a/tests/test_review_fixes.py b/tests/test_review_fixes.py
+index deee8db..b1c08d4 100644
+--- a/tests/test_review_fixes.py
++++ b/tests/test_review_fixes.py
+@@ -70,6 +70,19 @@ def test_build_context_include_unlinked_bootstrap(project: Path, runner: CliRunn
+     assert "documentledger/cli.py" in result.output
+
+
++def test_build_context_affected_include_unlinked_sources_without_stale_sections(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    invoke_json(runner, ["scan"])
++    (project / "documentledger" / "new.py").write_text("x = 1\n", encoding="utf-8")
++    invoke_json(runner, ["scan"])
++
++    result = runner.invoke(app, ["document", "build-context", "--affected", "--include-unlinked", "--print"])
++    assert result.exit_code == 0
++    assert "No sections matched the selector." in result.output
++    assert "Unlinked sources (bootstrap)" in result.output
++    assert "documentledger/new.py" in result.output
++
++
+ def test_error_envelope_preserves_command_name(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:
+     monkeypatch.chdir(tmp_path)
+     result = runner.invoke(app, ["--json", "scan"])
+diff --git a/tests/test_skill_files.py b/tests/test_skill_files.py
+index 1eb8d4d..dfcb55d 100644
+--- a/tests/test_skill_files.py
++++ b/tests/test_skill_files.py
+@@ -7,31 +7,43 @@ from typing import Any
+
+ from documentledger.capabilities import capability_record
+ from documentledger.command_catalog import COMMAND_INVENTORY
++from documentledger.proposal_manifest import PROPOSAL_MANIFEST_SCHEMA
+ from tests.conftest import invoke_json
+
+ SKILL_PATH = Path("skills/documentledger/SKILL.md")
+
+
+-def _skill_invocations(text: str) -> list[tuple[str, str | None]]:
+-    invocations: list[tuple[int, str, str | None]] = []
++def _skill_invocations(text: str) -> list[tuple[str, tuple[str, ...] | None]]:
++    invocations: list[tuple[int, str, tuple[str, ...] | None]] = []
+     masked = list(text)
+     gated_blocks = re.compile(
+-        r"(?m)(?:<!--\s*requires-capability:\s*([\w.-]+)\s*-->\s*\n)?```bash[^\n]*\n(.*?)\n```",
++        r"(?m)(?:<!--\s*requires-capability:\s*([\w.-]+(?:\s*,\s*[\w.-]+)*)\s*-->\s*\n)?```bash[^\n]*\n(.*?)\n```",
+         flags=re.DOTALL,
+     )
+     for match in gated_blocks.finditer(text):
+-        required = match.group(1)
+-        for line in match.group(2).splitlines():
+-            command = line.strip().removeprefix("$ ")
+-            if command.startswith("documentledger "):
+-                invocations.append((match.start(2), command, required))
++        required = tuple(part.strip() for part in match.group(1).split(",")) if match.group(1) else None
++        position = match.start(2)
++        pending = ""
++        pending_position = position
++        for raw_line in match.group(2).splitlines(keepends=True):
++            line = raw_line.strip().removeprefix("$ ")
++            if not pending:
++                pending_position = position
++            if line.endswith("\\"):
++                pending += line[:-1].rstrip() + " "
++            else:
++                command = (pending + line).strip()
++                if command.startswith("documentledger "):
++                    invocations.append((pending_position, command, required))
++                pending = ""
++            position += len(raw_line)
+         masked[match.start() : match.end()] = " " * (match.end() - match.start())
+     masked_text = "".join(masked)
+     for match in re.finditer(r"`([^`\n]+)`", masked_text):
+         command = match.group(1).strip()
+         if command.startswith("documentledger "):
+             invocations.append((match.start(1), command, None))
+-    return [(command, required) for _, command, required in sorted(invocations)]
++    return [(command, required) for _, command, required in sorted(invocations, key=lambda item: item[0])]
+
+
+ def _option_names(command: Any) -> set[str]:
+@@ -88,15 +100,24 @@ def test_capability_contract_matches_package_and_command_catalog(runner) -> None
+     assert result["storage_schema"] > 0
+     assert result["commands"] == catalog_paths
+     assert result["features"]["review"] is ("review" in catalog_paths)
+-    assert result["features"]["finish"] is ("finish" in catalog_paths)
+-    assert result["features"]["proposal_manifest"] is False
+-    assert result["features"]["context_pagination"] is False
+-    assert result["features"]["import_map_review"] is False
++    assert result["features"]["finish"] is ("finish" in catalog_paths and "document validate" in catalog_paths)
++    assert result["features"]["proposal_manifest"] is (
++        PROPOSAL_MANIFEST_SCHEMA == "documentledger.proposal_manifest.v1"
++        and "link propose" in catalog_paths
++        and "link import-map" in catalog_paths
++    )
++    assert result["features"]["context_pagination"] is True
++    assert result["features"]["import_map_review"] is True
++    assert result["features"]["validation"] is ("document validate" in catalog_paths)
+     expected_capabilities = [
+         capability
+         for capability, enabled in (
+             ("review.v1", result["features"]["review"]),
+             ("finish.v1", result["features"]["finish"]),
++            ("proposal_manifest.v1", result["features"]["proposal_manifest"]),
++            ("context_pagination.v1", result["features"]["context_pagination"]),
++            ("import_map_review.v1", result["features"]["import_map_review"]),
++            ("validation.v1", result["features"]["validation"]),
+         )
+         if enabled
+     ]
+@@ -108,13 +129,18 @@ def test_skill_commands_and_options_exist_or_are_capability_gated() -> None:
+
+     from documentledger.cli import app
+
+-    skill_text = SKILL_PATH.read_text(encoding="utf-8")
++    workflow_texts = [
++        SKILL_PATH.read_text(encoding="utf-8"),
++        Path("docs/quickstart.md").read_text(encoding="utf-8"),
++        Path("docs/bootstrap.md").read_text(encoding="utf-8"),
++    ]
+     root = get_command(app)
+     command_paths = {entry.path for entry in COMMAND_INVENTORY.entries}
+     root_options = _option_names(root)
+     supported_capabilities = set(capability_record()["capabilities"])
+
+-    for invocation, required_capability in _skill_invocations(skill_text):
+-        if required_capability is not None and required_capability not in supported_capabilities:
+-            continue
+-        _validate_invocation(invocation, root, command_paths, root_options)
++    for workflow_text in workflow_texts:
++        for invocation, required_capabilities in _skill_invocations(workflow_text):
++            if required_capabilities is not None and not set(required_capabilities) <= supported_capabilities:
++                continue
++            _validate_invocation(invocation, root, command_paths, root_options)
+diff --git a/tests/test_skill_workflow_contract.py b/tests/test_skill_workflow_contract.py
+index 8bfbe85..ae3fb5f 100644
+--- a/tests/test_skill_workflow_contract.py
++++ b/tests/test_skill_workflow_contract.py
+@@ -2,33 +2,71 @@ from __future__ import annotations
+
+ from pathlib import Path
+
++from tests.test_skill_files import _skill_invocations
+
+-def test_skill_enforces_full_documentation_bootstrap_contract() -> None:
+-    text = Path("skills/documentledger/SKILL.md").read_text(encoding="utf-8")
+-
+-    assert "documentledger --json status" in text
+-    assert "documentledger --json doctor" in text
+-    assert "require `result.ok`" in text
+-    assert "documentledger --json scan" in text
+-    assert "--out -" in text
+-    assert "truncated" in text and "omitted" in text and "next_cursor" in text
+-    assert "--cursor NEXT_CURSOR" in text and "--strict" in text
+-    assert "docs/requirements.txt" in text
+-    assert "docs/index.md" in text
+-    assert "include `changelog` in navigation" in text
+-    assert "Preserve releaseledger-owned changelog bytes" in text
++SKILL_PATH = Path("skills/documentledger/SKILL.md")
++QUICKSTART_PATH = Path("docs/quickstart.md")
++BOOTSTRAP_PATH = Path("docs/bootstrap.md")
++
++
++def _invocations_requiring(text: str, fragment: str) -> list[tuple[str, tuple[str, ...] | None]]:
++    return [(command, required) for command, required in _skill_invocations(text) if fragment in command]
++
++
++def test_skill_gates_review_finish_proposals_pagination_and_validation() -> None:
++    text = SKILL_PATH.read_text(encoding="utf-8")
++    invocations = _skill_invocations(text)
++
++    assert invocations[0][0] == "documentledger --json capabilities"
++    assert _invocations_requiring(text, "documentledger review") == [("documentledger review", ("review.v1",))]
++    assert _invocations_requiring(text, "documentledger finish") == [("documentledger finish", ("finish.v1",))]
++    assert _invocations_requiring(text, "documentledger document validate") == [("documentledger document validate", ("validation.v1",))]
++
++    paginated = [(command, required) for command, required in invocations if "--cursor" in command or "--page-size" in command]
++    assert paginated
++    assert all(required == ("context_pagination.v1",) for _, required in paginated)
++
++    directory_imports = [
++        (command, required) for command, required in invocations if "link import-map" in command and "--directory" in command
++    ]
++    assert len(directory_imports) == 2
++    assert all(required == ("proposal_manifest.v1", "import_map_review.v1") for _, required in directory_imports)
++    assert "--review" in directory_imports[0][0]
++    assert "--check-and-apply" in directory_imports[1][0]
++    assert "If either capability is absent, do not use the directory review path." in text
++    assert "stop and request an upgrade rather than bypassing review" in text
++    assert "top-level `ok: true`" in text
+     assert "python -m sphinx -b html -n -W --keep-going docs docs/_build/html" in text
+-    assert "strict documentation-completion gate" in text
+-    assert "Try a supported output alternative and resume" in text
+-    assert "the user's requested documentation work" in text
+-    assert "--allow-unlinked --all` as a default shortcut" in text
+-    assert "/tmp" not in text
+-
+-    assert "--directory DIR --review" in text
+-    assert "--replace-owned-proposals" in text
+-    assert "scan-bound manifest" in text
+-    author_phase = text.index("### 4. Author Markdown and Sphinx pages before linking")
+-    proposal_phase = text.index("### 5. Reconcile headings and review mapping proposals")
+-    validation_phase = text.index("### 6. Validate the actual current docs")
+-    final_phase = text.index("### 7. Freshness, completion gate, and final response")
+-    assert author_phase < proposal_phase < validation_phase < final_phase
++    assert "configured navigation targets" in text
++    assert "releaseledger-owned changelog bytes" in text
++
++
++def test_quickstart_gates_optional_workflows_and_begins_with_capabilities() -> None:
++    text = QUICKSTART_PATH.read_text(encoding="utf-8")
++    invocations = _skill_invocations(text)
++
++    assert invocations[0][0] == "documentledger --json capabilities"
++    assert any(command == "documentledger finish" and required == ("finish.v1",) for command, required in invocations)
++    assert any(command == "documentledger document validate" and required == ("validation.v1",) for command, required in invocations)
++    assert any("link import-map" in command and "--review" in command for command, _ in invocations)
++    assert all(
++        required == ("proposal_manifest.v1", "import_map_review.v1")
++        for command, required in invocations
++        if "link import-map" in command and "--directory" in command
++    )
++    assert all(
++        required == ("context_pagination.v1",) for command, required in invocations if "--cursor" in command or "--page-size" in command
++    )
++    assert "Do not use directory imports when either capability is absent." in text
++
++
++def test_bootstrap_guide_uses_reviewed_manifest_imports() -> None:
++    text = BOOTSTRAP_PATH.read_text(encoding="utf-8")
++    invocations = _skill_invocations(text)
++    directory_imports = [
++        (command, required) for command, required in invocations if "link import-map" in command and "--directory" in command
++    ]
++
++    assert invocations[0][0] == "documentledger --json capabilities"
++    assert len(directory_imports) == 2
++    assert all(required == ("proposal_manifest.v1", "import_map_review.v1") for _, required in directory_imports)
+diff --git a/tests/test_source_roles.py b/tests/test_source_roles.py
+index 1c59561..56e8f43 100644
+--- a/tests/test_source_roles.py
++++ b/tests/test_source_roles.py
+@@ -53,18 +53,23 @@ def _link_production_section(project: Path, runner: CliRunner) -> None:
+
+
+ def test_unmapped_test_changes_do_not_require_mapping_by_default(project: Path, runner: CliRunner) -> None:
+-    invoke_json(runner, ["init"])
+-    _link_production_section(project, runner)
+     tests_dir = project / "tests"
+     tests_dir.mkdir()
+-    (tests_dir / "test_behavior.py").write_text("def behavior_check():\n    return True\n", encoding="utf-8")
++    test_source = tests_dir / "test_behavior.py"
++    test_source.write_text("def behavior_check():\n    return True\n", encoding="utf-8")
++    invoke_json(runner, ["init"])
++    _link_production_section(project, runner)
++    test_source.write_text("def behavior_check():\n    return False\n", encoding="utf-8")
+
+     scan = invoke_json(runner, ["scan"])["result"]
+     status = invoke_json(runner, ["status"])["result"]
+
+     assert scan["unlinked_changed_sources"] == ["tests/test_behavior.py"]
+-    assert status["mapping_state"] == "complete"
+-    assert status["coverage_review_required"] is False
++    assert status["change_mapping_state"] == "clean"
++    assert status["mapping_state"] == ("complete" if status["mapping"]["state"] == "covered" else "review_required")
++    if status["mapping_state"] == "complete":
++        assert "mapping_coverage_incomplete" not in status["completion"]["blocking_reasons"]
++    assert status["coverage_review_required"] is (status["mapping"]["state"] != "covered")
+     assert status["ignored_change_counts"]["test"] >= 1
+
+
+@@ -76,17 +81,18 @@ def test_production_unmapped_change_still_requires_mapping_review(project: Path,
+     invoke_json(runner, ["scan"])
+     status = invoke_json(runner, ["status"])["result"]
+
+-    assert status["mapping_state"] == "review_required"
++    assert status["change_mapping_state"] == "review_required"
++    assert status["mapping_state"] == ("complete" if status["mapping"]["state"] == "covered" else "review_required")
+     assert status["relevant_unmapped_changed_unit_count"] > 0
+
+
+ def test_explicit_test_link_still_affects_documentation(project: Path, runner: CliRunner) -> None:
+-    invoke_json(runner, ["init"])
+-    write_precision_sample(project)
+     tests_dir = project / "tests"
+     tests_dir.mkdir()
+     test_source = tests_dir / "test_behavior.py"
+     test_source.write_text("def behavior_check():\n    return True\n", encoding="utf-8")
++    invoke_json(runner, ["init"])
++    write_precision_sample(project)
+     invoke_json(
+         runner,
+         [
+@@ -116,6 +122,10 @@ def test_explicit_test_link_still_affects_documentation(project: Path, runner: C
+
+
+ def test_config_can_opt_tests_into_mapping_review(project: Path, runner: CliRunner) -> None:
++    tests_dir = project / "tests"
++    tests_dir.mkdir()
++    test_source = tests_dir / "test_behavior.py"
++    test_source.write_text("def behavior_check():\n    return True\n", encoding="utf-8")
+     invoke_json(runner, ["init"])
+     _link_production_section(project, runner)
+     config_path = project / ".ledger" / "documentledger" / "config.toml"
+@@ -124,12 +134,10 @@ def test_config_can_opt_tests_into_mapping_review(project: Path, runner: CliRunn
+         config.replace('mapping_review_roles = ["production"]', 'mapping_review_roles = ["production", "test"]'),
+         encoding="utf-8",
+     )
+-    tests_dir = project / "tests"
+-    tests_dir.mkdir()
+-    (tests_dir / "test_behavior.py").write_text("def behavior_check():\n    return True\n", encoding="utf-8")
+-
++    test_source.write_text("def behavior_check():\n    return False\n", encoding="utf-8")
+     invoke_json(runner, ["scan"])
+     status = invoke_json(runner, ["status"])["result"]
+
+-    assert status["mapping_state"] == "review_required"
++    assert status["change_mapping_state"] == "review_required"
++    assert status["mapping_state"] == ("complete" if status["mapping"]["state"] == "covered" else "review_required")
+     assert status["relevant_unmapped_changed_unit_count"] > 0
+diff --git a/tests/test_status.py b/tests/test_status.py
+index c1c7230..8185e2c 100644
+--- a/tests/test_status.py
++++ b/tests/test_status.py
+@@ -29,7 +29,8 @@ def test_status_recommendations_use_canonical_commands_and_separate_freshness(pr
+     before_scan = invoke_json(runner, ["status"])["result"]
+     assert before_scan["recommended_command"] == "documentledger scan"
+     assert before_scan["freshness_state"] == "clean"
+-    assert before_scan["mapping_state"] == "bootstrap_required"
++    assert before_scan["mapping_state"] == "review_required"
++    assert before_scan["change_mapping_state"] == "bootstrap_required"
+     invoke_json(runner, ["scan"])
+     after_scan = invoke_json(runner, ["status"])["result"]
+     assert ".ledger/documentledger/data" not in after_scan["recommended_command"]
+diff --git a/tests/test_verification.py b/tests/test_verification.py
+index e896b68..7b1d25e 100644
+--- a/tests/test_verification.py
++++ b/tests/test_verification.py
+@@ -2,7 +2,9 @@ from __future__ import annotations
+
+ import re
+ from pathlib import Path
++from types import SimpleNamespace
+
++from documentledger import verification
+ from tests.conftest import invoke_json, invoke_json_may_fail
+
+
+@@ -183,6 +185,11 @@ def test_sphinx_completion_gate_requires_navigation_coverage_and_current_validat
+     assert checked["readiness"]["mapping"]["state"] == "covered"
+     assert checked["readiness"]["documentation"]["navigation_ready"] is True
+     assert checked["readiness"]["completion"]["ready"] is True
++    status = invoke_json(runner, ["status"])["result"]
++    assert status["mapping_state"] == "complete"
++    assert status["mapping"]["state"] == "covered"
++    assert status["coverage_review_required"] is False
++    assert "mapping_coverage_incomplete" not in status["completion"]["blocking_reasons"]
+     assert (project / "docs" / "changelog.md").read_bytes() == changelog_before
+
+
+@@ -198,3 +205,59 @@ def test_skipped_sphinx_validation_cannot_attest_completion(project: Path, runne
+     assert exit_code != 0
+     assert checked["error"]["code"] == "check-failed"
+     assert "validation_not_configured" in checked["error"]["details"]["readiness"]["completion"]["blocking_reasons"]
++
++
++def test_mapping_coverage_uses_configured_source_roles(monkeypatch, tmp_path: Path) -> None:
++    section = SimpleNamespace(section_id="api")
++    record = {
++        "doc_path": "docs/api.md",
++        "sections": [{"section_id": "api", "links": [{"source_id": "production-unit", "source_path": "package/api.py"}]}],
++    }
++    inventory = {
++        "production-unit": {"source_id": "production-unit", "path": "package/api.py", "kind": "function", "qualname": "api"},
++        "test-unit": {"source_id": "test-unit", "path": "tests/test_api.py", "kind": "function", "qualname": "test_api"},
++        "private-unit": {"source_id": "private-unit", "path": "package/private/helper.py", "kind": "function", "qualname": "helper"},
++        "generated-unit": {"source_id": "generated-unit", "path": "package/generated/schema.py", "kind": "function", "qualname": "schema"},
++    }
++    workspace = SimpleNamespace(
++        config=SimpleNamespace(
++            root=tmp_path,
++            doc_roots=["docs"],
++            doc_extensions=[".md"],
++            mapping_review_roles=["production"],
++        ),
++        metadata={},
++    )
++    monkeypatch.setattr(verification, "collect_files", lambda *_args: ["docs/api.md"])
++    monkeypatch.setattr(verification, "doc_sections_for_file", lambda *_args: [section])
++    monkeypatch.setattr(verification, "iter_doc_records", lambda _workspace: [record])
++    monkeypatch.setattr(verification, "current_source_inventory", lambda _workspace: inventory)
++    monkeypatch.setattr(verification, "latest_scan", lambda _workspace: {"version": 1})
++    monkeypatch.setattr(
++        verification,
++        "documentation_status",
++        lambda *_args, **_kwargs: {
++            "scan_matches_current": True,
++            "issues": [],
++            "validation_required": False,
++            "validation_configured": False,
++            "validation_verified_for_current_content": False,
++        },
++    )
++    monkeypatch.setattr(verification, "audit_links", lambda _workspace: {"ok": True})
++    monkeypatch.setattr("documentledger.impact.resolve_affected_sections", lambda _workspace: [])
++
++    default_status = verification.completion_status(workspace)
++    assert default_status["mapping"]["state"] == "covered"
++    assert default_status["completion"]["ready"] is True
++    assert default_status["mapping"]["sources"]["units_relevant"] == 1
++    assert default_status["mapping"]["sources"]["units_relevant_unlinked"] == 0
++    assert default_status["mapping"]["sources"]["by_role"]["test"]["units_unlinked"] == 1
++    assert default_status["mapping"]["sources"]["by_role"]["private"]["units_unlinked"] == 1
++    assert default_status["mapping"]["sources"]["by_role"]["generated"]["units_unlinked"] == 1
++
++    workspace.config.mapping_review_roles = ["production", "test"]
++    configured_status = verification.completion_status(workspace)
++    assert configured_status["mapping"]["state"] == "review_required"
++    assert configured_status["completion"]["ready"] is False
++    assert configured_status["mapping"]["sources"]["units_relevant_unlinked"] == 1

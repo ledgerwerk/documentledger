@@ -1,0 +1,41 @@
+rows:
+  - sha: ef495f54e42c3c03eda4d7a61c1de37f8240ee62
+    inspected: true
+    inspected_paths:
+      - documentledger/review.py
+      - documentledger/finish.py
+      - documentledger/links.py
+      - documentledger/impact.py
+      - documentledger/freshness.py
+      - documentledger/source_roles.py
+      - documentledger/storage.py
+      - documentledger/render.py
+      - docs/cli.md
+      - README.md
+    observed_behavior: "Added incremental review and finish workflows that surface affected documentation and mapping gaps, then record freshness only after link and validation checks pass"
+    public_impact: public
+    decision: accepted
+    target_entry_key: null
+    target_entry_id: null
+    notes: ""
+    stale: false
+  - sha: 09fa1fb3a151cdcae3b7cb583e7847152d59b2c4
+    inspected: true
+    inspected_paths:
+      - documentledger/capabilities.py
+      - documentledger/command_catalog.py
+      - documentledger/finish.py
+      - documentledger/impact.py
+      - documentledger/links.py
+      - documentledger/models.py
+      - documentledger/review.py
+      - documentledger/verification.py
+      - docs/bootstrap.md
+      - docs/cli.md
+    observed_behavior: "Expanded review with explicit coverage gaps, made completion coverage source-role-aware, and required current validation attestations before freshness updates"
+    public_impact: public
+    decision: accepted
+    target_entry_key: null
+    target_entry_id: null
+    notes: ""
+    stale: false

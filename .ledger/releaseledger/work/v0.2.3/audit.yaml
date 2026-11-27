@@ -1,0 +1,118 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 1
+release_version: v0.2.3
+git_base_ref: v0.2.2
+git_base_sha: cb6e19559142d93cf57e83fdca1fa7a43ffc3cd6
+git_head_ref: HEAD
+git_head_sha: 09fa1fb3a151cdcae3b7cb583e7847152d59b2c4
+git_range: cb6e19559142d93cf57e83fdca1fa7a43ffc3cd6..09fa1fb3a151cdcae3b7cb583e7847152d59b2c4
+commit_count: 2
+rows:
+  - sha: ef495f54e42c3c03eda4d7a61c1de37f8240ee62
+    source_ref: git:ef495f54e42c3c03eda4d7a61c1de37f8240ee62
+    short_sha: ef495f5
+    changed_paths:
+      - README.md
+      - docs/bootstrap.md
+      - docs/cli.md
+      - docs/configuration.md
+      - docs/development.md
+      - docs/incremental-workflow.md
+      - docs/index.md
+      - docs/quickstart.md
+      - docs/schemas.md
+      - docs/storage.md
+      - docs/troubleshooting.md
+      - docs/usage.md
+      - documentledger/capabilities.py
+      - documentledger/command_catalog.py
+      - documentledger/commands/root.py
+      - documentledger/commands/schema.py
+      - documentledger/config.py
+      - documentledger/doc_index.py
+      - documentledger/doc_records.py
+      - documentledger/finish.py
+      - documentledger/freshness.py
+      - documentledger/impact.py
+      - documentledger/legacy.py
+      - documentledger/links.py
+      - documentledger/migration.py
+      - documentledger/models.py
+      - documentledger/project.py
+      - documentledger/render.py
+      - documentledger/review.py
+      - documentledger/scanner.py
+      - documentledger/source_roles.py
+      - documentledger/storage.py
+      - skills/documentledger/SKILL.md
+      - tests/test_doc_record_reconciliation.py
+      - tests/test_docs.py
+      - tests/test_finish.py
+      - tests/test_link_proposal_specificity.py
+      - tests/test_links.py
+      - tests/test_render.py
+      - tests/test_review.py
+      - tests/test_skill_files.py
+      - tests/test_source_roles.py
+      - tests/test_status.py
+    stats:
+      files_changed: 43
+      insertions: 2577
+      deletions: 260
+    inspected: false
+    inspected_paths: []
+    observed_behavior: ""
+    public_impact: unknown
+    decision: needs_review
+    stale: false
+    evidence_subject: "feat: several improvements"
+  - sha: 09fa1fb3a151cdcae3b7cb583e7847152d59b2c4
+    source_ref: git:09fa1fb3a151cdcae3b7cb583e7847152d59b2c4
+    short_sha: 09fa1fb
+    changed_paths:
+      - .codecrate.toml
+      - .github/workflows/tests.yml
+      - docs/bootstrap.md
+      - docs/cli.md
+      - docs/configuration.md
+      - docs/quickstart.md
+      - documentledger/capabilities.py
+      - documentledger/cli.py
+      - documentledger/command_catalog.py
+      - documentledger/commands/document.py
+      - documentledger/commands/root.py
+      - documentledger/finish.py
+      - documentledger/impact.py
+      - documentledger/links.py
+      - documentledger/models.py
+      - documentledger/render.py
+      - documentledger/review.py
+      - documentledger/verification.py
+      - scripts/generate_cli_reference.py
+      - skills/documentledger/SKILL.md
+      - tests/test_bootstrap_workflow.py
+      - tests/test_documentation_contract.py
+      - tests/test_finish.py
+      - tests/test_init.py
+      - tests/test_render.py
+      - tests/test_review.py
+      - tests/test_review_fixes.py
+      - tests/test_skill_files.py
+      - tests/test_skill_workflow_contract.py
+      - tests/test_source_roles.py
+      - tests/test_status.py
+      - tests/test_verification.py
+    stats:
+      files_changed: 32
+      insertions: 1158
+      deletions: 366
+    inspected: false
+    inspected_paths: []
+    observed_behavior: "Expanded review with explicit coverage gaps, made completion coverage source-role-aware, and required current validation attestations before freshness updates"
+    public_impact: unknown
+    decision: needs_review
+    stale: false
+    evidence_subject: "feat: improve commands"

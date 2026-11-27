@@ -66,6 +66,33 @@ def _parameters(command: Command) -> str:
     return "\n".join(rows)
 
 
+def _align_markdown_tables(text: str) -> str:
+    lines = text.splitlines()
+    result: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not line.startswith("|") or not line.endswith("|"):
+            result.append(line)
+            index += 1
+            continue
+
+        table: list[list[str]] = []
+        while index < len(lines) and lines[index].startswith("|") and lines[index].endswith("|"):
+            table.append([cell.strip() for cell in lines[index].strip("|").split("|")])
+            index += 1
+
+        widths = [max(3, max(len(row[column]) for row in table)) for column in range(len(table[0]))]
+        for row in table:
+            if all(cell and set(cell) <= {"-", ":"} and "-" in cell for cell in row):
+                cells = ["-" * width for width in widths]
+            else:
+                cells = [cell.ljust(widths[column]) for column, cell in enumerate(row)]
+            result.append("| " + " | ".join(cells) + " |")
+
+    return "\n".join(result) + ("\n" if text.endswith("\n") else "")
+
+
 def render() -> str:
     from documentledger.cli import app
     from documentledger.command_catalog import COMMAND_INVENTORY, COMMAND_REFERENCE_DETAILS
@@ -170,7 +197,7 @@ def render() -> str:
             "",
         ]
     )
-    return "\n".join(lines)
+    return _align_markdown_tables("\n".join(lines))
 
 
 def main() -> int:

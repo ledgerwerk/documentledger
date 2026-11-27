@@ -1,0 +1,3865 @@
+ README.md                               |  38 +--
+ docs/bootstrap.md                       |   2 +-
+ docs/cli.md                             |  79 ++++++
+ docs/configuration.md                   |  24 +-
+ docs/development.md                     |   2 +-
+ docs/incremental-workflow.md            |  24 +-
+ docs/index.md                           |  16 +-
+ docs/quickstart.md                      |  23 +-
+ docs/schemas.md                         |   2 +-
+ docs/storage.md                         |   2 +-
+ docs/troubleshooting.md                 |   2 +-
+ docs/usage.md                           |  41 +++-
+ documentledger/capabilities.py          |  42 ++++
+ documentledger/command_catalog.py       |  19 ++
+ documentledger/commands/root.py         |  96 +++++++-
+ documentledger/commands/schema.py       |   4 +-
+ documentledger/config.py                |  13 +-
+ documentledger/doc_index.py             |   5 +
+ documentledger/doc_records.py           | 132 +++++++++-
+ documentledger/finish.py                | 183 ++++++++++++++
+ documentledger/freshness.py             |  66 ++++-
+ documentledger/impact.py                |  33 ++-
+ documentledger/legacy.py                |   5 +-
+ documentledger/links.py                 | 415 ++++++++++++++++++++++++++------
+ documentledger/migration.py             |   1 +
+ documentledger/models.py                | 210 +++++++++++++++-
+ documentledger/project.py               |   2 +
+ documentledger/render.py                |  63 +++--
+ documentledger/review.py                | 231 ++++++++++++++++++
+ documentledger/scanner.py               |  14 ++
+ documentledger/source_roles.py          |  52 ++++
+ documentledger/storage.py               |  40 ++-
+ skills/documentledger/SKILL.md          | 113 +++------
+ tests/test_doc_record_reconciliation.py | 112 +++++++++
+ tests/test_docs.py                      |   4 +-
+ tests/test_finish.py                    | 244 +++++++++++++++++++
+ tests/test_link_proposal_specificity.py | 107 ++++++++
+ tests/test_links.py                     |   2 +-
+ tests/test_render.py                    |   1 +
+ tests/test_review.py                    | 112 +++++++++
+ tests/test_skill_files.py               | 123 +++++++++-
+ tests/test_source_roles.py              | 135 +++++++++++
+ tests/test_status.py                    |   3 +-
+ 43 files changed, 2577 insertions(+), 260 deletions(-)
+
+diff --git a/README.md b/README.md
+index 4003c3e..711c01a 100644
+--- a/README.md
++++ b/README.md
+@@ -16,41 +16,45 @@ For development, install `python -m pip install -e ".[test,docs,dev]"`. Document
+
+ ## Quickstart
+
++Initialize the project and inspect the capability contract before selecting a workflow:
++
+ ```bash
+ documentledger init --project-name example
++documentledger --json capabilities
+ documentledger --json status
+-documentledger --json scan
+-documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md
+-documentledger link propose --all-docs --out-dir /tmp/documentledger-maps
+-documentledger --json link import-map --directory /tmp/documentledger-maps --check-and-apply
+-documentledger --json link audit
+-documentledger --json coverage
+ ```
+
+-After updating and validating an affected section:
++For incremental documentation updates, use the capability-aware review and finish path:
+
+ ```bash
+-documentledger document mark-fresh --doc docs/usage.md --section usage-scan --reason "Updated after scan version VERSION."
++documentledger review
++# edit the affected documentation sections
++documentledger finish
++documentledger --json status
+ ```
+
++`review` scans current files, reports affected sections and relevant mapping work, and applies only safe exact mappings. `finish` audits links, runs configured validation commands, and records freshness only when all gates pass. For an unchanged section, provide a reason with `--reviewed-no-change DOC#SECTION=REASON`; use `--generated-verified DOC#SECTION=REASON` for verified generated references.
++
+ ## Canonical storage
+
+ The shared authority is `.ledger/ledger.toml` schema 3. Documentledger's tool config is `.ledger/documentledger/config.toml` version 2. Durable state is in the resolved `data` mount; rendered context and proposals use the resolved cache `artifacts` mount. Legacy root configs are migration inputs only.
+
+ ## Workflow
+
+-1. Initialize the canonical project.
+-2. Scan to establish or update the deterministic baseline.
+-3. Inspect `document affected` and bounded `document build-context` output.
+-4. Link sections to source units with `link add-section` or review deterministic proposals.
+-5. Update affected documentation and run validation.
+-6. Mark updated sections fresh, audit links, and run `documentledger --json check`.
++1. Initialize the canonical project and inspect `documentledger --json capabilities`.
++2. Use `documentledger review` for incremental changes. It scans, summarizes affected sections and relevant unmapped production changes, and links only deterministic exact candidates.
++3. Inspect `documentledger review --details` or bounded `documentledger document build-context --affected` when more evidence is needed. Resolve ambiguous mappings deliberately.
++4. Edit affected documentation and run the configured validation commands.
++5. Run `documentledger finish`, supplying an explicit no-change or generated-reference decision when needed. It writes freshness only after mapping review, link audit, and configured validation succeed.
++6. Inspect `documentledger --json status` and `documentledger --json check`.
++
++For bootstrapping or manual control, the lower-level `scan`, `document affected`, `document build-context`, `link propose`/`link import-map`, `link audit`, and `document mark-fresh` commands remain available. `document mark-fresh` is the explicit low-level freshness operation; use it only after reviewing mappings and completing validation.
+
+ <!-- docledger-section: status -->
+
+ ## Status
+
+-`documentledger --json status` reports initialization, storage bindings, latest scan counts, and the recommended next action.
++`documentledger --json status` reports workspace initialization, storage bindings, scan counts, mapping/freshness state, and a recommended next action. The top-level `state` distinguishes `bootstrap_required`, `mapping_incomplete`, `incremental_affected`, and `incremental_clean`. The `freshness_state` is `affected` or `clean`; `mapping_state` is `bootstrap_required`, `review_required`, or `complete`. Test, private, and generated changes are excluded from mapping review by default unless `mapping_review_roles` opts them in.
+
+ <!-- docledger-section: commands -->
+
+@@ -72,7 +76,7 @@ Use `documentledger migrate status`, `migrate plan`, `migrate apply`, `migrate r
+
+ ## Bootstrapping a new repository
+
+-The first scan is a baseline; use `documentledger document build-context --bootstrap`, review deterministic link proposals and coverage (including intentional no-op mappings), then apply them before marking all configured documents fresh with `--allow-unlinked`.
++The first scan is a baseline. For bootstrap, use `documentledger document build-context --bootstrap`, review deterministic proposals and coverage (including intentional no-op mappings), then apply them. `document mark-fresh --all --allow-unlinked` remains an explicit low-level bootstrap operation when its broader scope is intentional; the normal incremental path uses `review` and `finish`.
+
+ ## Documentation and development
+
+@@ -87,7 +91,7 @@ Run tests with `python -m pytest -q` and compile checks with `python -m compilea
+
+ ## Compatibility
+
+-`docledger`, plural command groups, root `mark-fresh`, and legacy storage migration wrappers remain temporary compatibility interfaces. New automation must use `documentledger` and canonical singular command paths.
++`docledger`, plural command groups, root `mark-fresh`, and legacy storage migration wrappers remain compatibility interfaces. New automation should probe `documentledger --json capabilities` and use canonical singular command paths. `document mark-fresh` remains available for explicit low-level workflows; prefer `review` and `finish` when their capabilities are advertised.
+
+ ## License
+
+diff --git a/docs/bootstrap.md b/docs/bootstrap.md
+index 1610463..4eb6c0d 100644
+--- a/docs/bootstrap.md
++++ b/docs/bootstrap.md
+@@ -52,7 +52,7 @@ documentledger --json link audit
+ documentledger --json coverage
+ ```
+
+-Review coverage before freshness marking: every configured document must be linked or explicitly accepted as intentionally unlinked, while internal and test source units may remain intentionally omitted. Run configured tests and documentation validation before freshness marking. For a reviewed bootstrap batch, finish with:
++Review coverage before freshness marking: every configured document must be linked or explicitly accepted as intentionally unlinked, while internal and test source units may remain intentionally omitted. Run configured tests, documentation validation, and the link audit. For a regular affected-document update, use `documentledger finish` after resolving mappings and recording any required no-change decisions. For this broad bootstrap-only transition, the explicit low-level `mark-fresh --all --allow-unlinked` command remains available:
+
+ ```bash
+ documentledger document mark-fresh --all --allow-unlinked \
+diff --git a/docs/cli.md b/docs/cli.md
+index 590afa6..db26224 100644
+--- a/docs/cli.md
++++ b/docs/cli.md
+@@ -240,6 +240,60 @@ With `--json`, the command returns `ok`, `command`, a command-specific `result`,
+ documentledger scan
+ ```
+
++## review
++
++Review changed source, affected documentation, and safe exact mappings.
++
++- **Effect:** `workspace-write`
++- **Audience:** `agent`
++- **Workspace required:** `yes`
++- **Targeting:** `none`
++- **Compatibility aliases:** None
++
++### Syntax
++
++```bash
++documentledger review
++documentledger review --doc docs/api.md
++documentledger review --details
++```
++
++### Arguments and options
++
++- `--doc PATH`: Limit review to one documentation path.
++- `--details`: Include complete review arrays in JSON output.
++
++### JSON result and errors
++
++With `--json`, returns `documentledger.review.v1` with bounded affected sections, relevant unmapped changes, mapping candidates, ignored counts, and a next action. `--details` disables array limits.
++
++## finish
++
++Audit links, run configured validation, and record section freshness dispositions.
++
++- **Effect:** `workspace-write`
++- **Audience:** `agent`
++- **Workspace required:** `yes`
++- **Targeting:** `none`
++- **Compatibility aliases:** None
++
++### Syntax
++
++```bash
++documentledger finish
++documentledger finish --reviewed-no-change docs/usage.md#usage-run-scan="Claims remain accurate."
++documentledger finish --generated-verified docs/api.md#api-client="Generated reference verified."
++```
++
++### Arguments and options
++
++- `--reviewed-no-change DOC#SECTION=REASON`: Record an explicit no-change review for an affected section.
++- `--generated-verified DOC#SECTION=REASON`: Verify an affected generated-reference section.
++
++### JSON result and errors
++
++With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and configured validation results. Freshness is written only after mappings are resolved, the link audit passes, and all configured validation commands succeed. Changed sections are recorded as `updated`; unchanged sections require an explicit decision.
++
+ ## coverage
+
+ Compute documentation coverage metrics.
+@@ -270,6 +324,31 @@ With `--json`, the command returns `ok`, `command`, a command-specific `result`,
+ documentledger coverage
+ ```
+
++## capabilities
++
++Report versioned features and the canonical command surface.
++
++- **Effect:** `read`
++- **Audience:** `agent`
++- **Workspace required:** `no`
++- **Targeting:** `none`
++- **Compatibility aliases:** None
++
++### Syntax
++
++```bash
++documentledger capabilities
++documentledger --json capabilities
++```
++
++### Arguments and options
++
++- None.
++
++### JSON result
++
++Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, capability identifiers, and canonical command paths.
++
+ ## commands
+
+ List all registered commands.
+diff --git a/docs/configuration.md b/docs/configuration.md
+index 2ffa4f9..865515c 100644
+--- a/docs/configuration.md
++++ b/docs/configuration.md
+@@ -27,25 +27,29 @@ commands = [
+
+ [policy]
+ require_doc_frontmatter = false
++mapping_review_roles = ["production"]
+ ```
+
+ <!-- docledger-section: configuration-fields -->
+
+ ## Fields
+
+-| Field                            | Type and default                | Normalization and validation                   | Effect                                           |
+-| -------------------------------- | ------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+-| `config_version`                 | integer, required, `2`          | Must be exactly 2; unknown versions fail       | Selects the tool schema.                         |
+-| `ledger.code`                    | non-empty string, default `dl`  | Must be a string                               | Prefix used by project-local ledger conventions. |
+-| `scan.source_roots`              | array of strings, default empty | Paths are interpreted relative to project root | Files collected for source indexing.             |
+-| `scan.doc_roots`                 | array of strings, default empty | Paths are interpreted relative to project root | Files collected and parsed as documentation.     |
+-| `scan.source_extensions`         | array of strings, default empty | Extension filters are explicit                 | Limits source collection.                        |
+-| `scan.doc_extensions`            | array of strings, default empty | Extension filters are explicit                 | Limits documentation collection.                 |
+-| `validation.commands`            | array of strings, default empty | Preserved as ordered commands                  | Commands used by context and `check`.            |
+-| `policy.require_doc_frontmatter` | boolean, default `false`        | Non-boolean values fail                        | Requires front matter during validation.         |
++| Field                            | Type and default                     | Normalization and validation                   | Effect                                                     |
++| -------------------------------- | ------------------------------------ | ---------------------------------------------- | ---------------------------------------------------------- |
++| `config_version`                 | integer, required, `2`               | Must be exactly 2; unknown versions fail       | Selects the tool schema.                                   |
++| `ledger.code`                    | non-empty string, default `dl`       | Must be a string                               | Prefix used by project-local ledger conventions.           |
++| `scan.source_roots`              | array of strings, default empty      | Paths are interpreted relative to project root | Files collected for source indexing.                       |
++| `scan.doc_roots`                 | array of strings, default empty      | Paths are interpreted relative to project root | Files collected and parsed as documentation.               |
++| `scan.source_extensions`         | array of strings, default empty      | Extension filters are explicit                 | Limits source collection.                                  |
++| `scan.doc_extensions`            | array of strings, default empty      | Extension filters are explicit                 | Limits documentation collection.                           |
++| `validation.commands`            | array of strings, default empty      | Preserved as ordered commands                  | Commands used by context and `check`.                      |
++| `policy.require_doc_frontmatter` | boolean, default `false`             | Non-boolean values fail                        | Requires front matter during validation.                   |
++| `policy.mapping_review_roles`    | string array, default ["production"] | Supported role names only                      | Unmapped changes in selected roles require mapping review. |
+
+ Unknown tables and fields fail with `unsupported_tool_config_field`; wrong types fail with `invalid_tool_config`; unsupported versions fail with `unsupported_tool_config_version`.
+
++The supported source roles are `production`, `test`, `private`, `generated`, `documentation-support`, and `unknown`. The default selects only `production`; opt additional roles in when their changes should require documentation mappings.
++
+ <!-- docledger-section: configuration-commands -->
+
+ ## Inspect and validate
+diff --git a/docs/development.md b/docs/development.md
+index 0815588..b5bf6da 100644
+--- a/docs/development.md
++++ b/docs/development.md
+@@ -36,4 +36,4 @@ Use repository-unique lowercase kebab-case `docledger-section` markers immediate
+
+ ## Releases and self-maintenance
+
+-The changelog is generated by Releaseledger. Update release records rather than editing `docs/changelog.md` manually. After source/docs changes, run the scan, affected-context, proposal review, link audit, coverage, strict build, and final `documentledger --json check` workflow before marking documentation fresh.
++The changelog is generated by Releaseledger. Update release records rather than editing `docs/changelog.md` manually. After source/docs changes, use `documentledger review`, resolve mappings, update docs, run configured validation and the strict Sphinx build, then complete `documentledger finish` and `documentledger --json check`. Use lower-level scan and mapping commands for bootstrap or manual workflows.
+diff --git a/docs/incremental-workflow.md b/docs/incremental-workflow.md
+index 79e104c..23c0e83 100644
+--- a/docs/incremental-workflow.md
++++ b/docs/incremental-workflow.md
+@@ -6,19 +6,15 @@ This is the normal agent operation after bootstrap.
+
+ ## Sequence
+
+-1. `documentledger --json status`
+-2. `documentledger --json doctor`
+-3. `documentledger --json scan`
+-4. `documentledger --json document affected`
+-5. `documentledger document build-context --affected --out -`
+-6. Inspect source-unit evidence and section links.
+-7. Edit affected sections unless consistency requires a broader update.
+-8. Run configured validation commands.
+-9. Mark updated sections fresh.
+-10. Run `documentledger --json link audit`.
+-11. Run `documentledger --json check`.
+-12. Finish with `documentledger --json status`.
+-
++1. `documentledger --json capabilities`
++2. `documentledger --json status` and `documentledger --json doctor`
++3. `documentledger review` to scan, summarize affected sections, and inspect relevant mapping candidates.
++4. Resolve ambiguous mappings and render bounded context with `documentledger document build-context --affected --out -` when needed.
++5. Edit affected sections and run configured validation commands.
++6. Run `documentledger finish`, supplying `--reviewed-no-change` or `--generated-verified` decisions for unchanged affected sections.
++7. Inspect `documentledger --json status`, `documentledger --json link audit`, and `documentledger --json check`.
++
++The capability contract is the source of truth for optional workflow commands. The lower-level `scan`, `document affected`, `link propose`/`link import-map`, and `document mark-fresh` commands remain available for bootstrap and manual control.
+ `scan` reconciles each existing durable document record with the current Markdown section
+ index before deciding that the scan is unchanged. It adds new headings, refreshes structural
+ metadata for surviving sections, prunes removed sections with empty `links`, and retains
+@@ -29,7 +25,7 @@ the scan result. `doctor` and `link audit` remain read-only.
+
+ ## Live freshness projection
+
+-Section-level `documentledger document mark-fresh` updates affectedness from the current scan without another scan. It refreshes section hashes and the tracked source-unit hash set at the latest scan version. A reason is required so the state transition remains reviewable.
++`documentledger finish` is the normal freshness gate: it requires resolved mappings, a passing link audit, and successful configured validation before recording section dispositions. Changed sections are recorded as `updated`; unchanged affected sections need a `reviewed-no-change` or `generated-verified` decision. The lower-level section-specific `documentledger document mark-fresh` remains available for manual workflows and updates the live affected projection without another scan.
+
+ <!-- docledger-section: incremental-scope -->
+
+diff --git a/docs/index.md b/docs/index.md
+index a812cdb..1d6df56 100644
+--- a/docs/index.md
++++ b/docs/index.md
+@@ -48,13 +48,13 @@ changelog
+
+ ## Documentation freshness workflow
+
+-The supported workflow is:
++Use the capability-aware workflow:
+
+-1. Run `documentledger --json status` to inspect the canonical workspace.
+-2. Run `documentledger --json scan` to compare current source and documentation hashes with the latest baseline.
+-3. Run `documentledger --json document affected` to find sections affected by linked source-unit changes.
+-4. Run `documentledger document build-context --affected --out /tmp/documentledger-context.md` to render bounded update context.
+-5. Inspect the affected sections and linked source evidence before editing.
+-6. Update the affected sections, run configured validation commands, then mark them fresh with `documentledger document mark-fresh --doc DOC --section SECTION --reason "Docs updated after scan version VERSION."`.
++1. Run `documentledger --json capabilities` to discover advertised commands and features.
++2. Run `documentledger --json status` to inspect workspace state and the recommended action.
++3. Run `documentledger review` to scan current files and inspect affected documentation and relevant mapping candidates.
++4. Resolve ambiguous mappings and edit the affected sections with the bounded context you need.
++5. Run configured validation, then `documentledger finish`. Supply an explicit `--reviewed-no-change` or `--generated-verified` decision for affected sections whose text did not change.
++6. Check `documentledger --json status` and `documentledger --json check` before committing.
+
+-Documentledger stores durable state in the resolved `data` mount under `.ledger/documentledger/`. Do not edit canonical `.ledger/` records directly.
++`finish` audits links and runs configured validation before writing freshness. If capabilities do not advertise both `review.v1` and `finish.v1`, or for bootstrap and manual control, use the lower-level `scan`, `document affected`, `document build-context`, link commands, and `document mark-fresh`. Documentledger stores durable state in the resolved `data` mount under `.ledger/documentledger/`. Do not edit canonical `.ledger/` records directly.
+diff --git a/docs/quickstart.md b/docs/quickstart.md
+index 391d822..4235147 100644
+--- a/docs/quickstart.md
++++ b/docs/quickstart.md
+@@ -4,8 +4,11 @@
+
+ ## Canonical path
+
++Probe capabilities before using optional workflow commands. To bootstrap a new repository, establish a baseline, create and review mappings, then inspect coverage:
++
+ ```bash
+ documentledger init --project-name example
++documentledger --json capabilities
+ documentledger --json status
+ documentledger --json scan
+ documentledger document build-context --bootstrap --out /tmp/documentledger-bootstrap.md
+@@ -15,22 +18,22 @@ documentledger --json link audit
+ documentledger --json coverage
+ ```
+
+-Review generated proposals before applying them. The first scan creates a baseline and therefore reports no deltas.
++The first scan creates a baseline and reports no source deltas. See [Bootstrap](bootstrap.md) for deliberate no-op mappings and validation gates.
+
+ <!-- docledger-section: quickstart-incremental-path -->
+
+ ## Incremental path
+
++For normal source changes, let `review` scan and summarize the work, edit affected docs, then finish through the configured gates:
++
+ ```bash
+-documentledger --json scan
+-documentledger --json document affected
+-documentledger document build-context --affected --out /tmp/documentledger-context.md
+-# edit and validate documentation
+-documentledger document mark-fresh \
+-  --doc docs/usage.md \
+-  --section usage-scan \
+-  --reason "Updated after scan version VERSION."
++documentledger --json capabilities
++documentledger --json status
++documentledger review
++# edit affected documentation and run configured validation
++documentledger finish
++documentledger --json status
+ documentledger --json check
+ ```
+
+-The section-level freshness operation updates the live affected projection and records the current tracked hashes.
++If an affected section is unchanged, record why with `--reviewed-no-change DOC#SECTION=REASON`; use `--generated-verified` for a checked generated reference. `finish` audits links and runs configured validation before writing freshness. For bootstrap and manual control, the lower-level scan, affected, build-context, link, and `document mark-fresh` commands remain available.
+diff --git a/docs/schemas.md b/docs/schemas.md
+index 2f2151a..43f5d3b 100644
+--- a/docs/schemas.md
++++ b/docs/schemas.md
+@@ -18,7 +18,7 @@ Owner: Documentledger durable data mount. Committed source of truth. Required ke
+
+ ## Document records and section links
+
+-Document records use `documentledger.doc_record.v4`. A record contains `doc_path`, section records, section hashes, `linked_sources`, `last_fresh_scan_version`, `last_fresh_hash`, notes, and integer `version`. Section links identify a source unit and carry coverage, impact, reason, and tracked hash dimensions. Missing sections or source units fail link audits.
++Document records use `documentledger.doc_record.v5`; v4 records remain readable and are normalized on write. A record contains `doc_path`, section records, section hashes, `linked_sources`, `last_fresh_scan_version`, `last_fresh_hash`, notes, and integer `version`. Section records include heading-independent `body_hash` and `body_length` for conservative rename reconciliation, plus optional freshness dispositions (`updated`, `reviewed-no-change`, or `generated-verified`) and a pending section hash used to preserve failed finish retries. Section links identify a source unit and carry coverage, impact, reason, and tracked hash dimensions. Missing sections or source units fail link audits.
+
+ <!-- docledger-section: schemas-mapping-migration -->
+
+diff --git a/docs/storage.md b/docs/storage.md
+index ec649d8..9e227b4 100644
+--- a/docs/storage.md
++++ b/docs/storage.md
+@@ -13,7 +13,7 @@ The shared `.ledger/ledger.toml` uses schema version 3. Its Documentledger regis
+ - `storage.yaml` stores schema metadata, project UUID, state version, and compact scan counts.
+ - `scan.yaml` stores the current `documentledger.scan.v5` baseline and deltas.
+ - `source-index.json` stores the deterministic source-unit inventory.
+-- `docs/*.yaml` stores `documentledger.doc_record.v4` records and section links.
++- `docs/*.yaml` stores `documentledger.doc_record.v5` records and section links; v4 records remain readable and are normalized on write.
+ - `artifacts` stores rendered context and link proposals as derived cache output.
+
+ <!-- docledger-section: storage-invariants -->
+diff --git a/docs/troubleshooting.md b/docs/troubleshooting.md
+index e5720fd..bb6167b 100644
+--- a/docs/troubleshooting.md
++++ b/docs/troubleshooting.md
+@@ -40,7 +40,7 @@ Use `documentledger document build-context --affected --out -` for raw stdout. D
+
+ ## Check reports stale sections
+
+-Run `documentledger document affected`, inspect bounded context, update the affected sections, run validation, and use section-level `documentledger document mark-fresh`. `--all` means all configured documents; use `--affected` for only affected documents. Do not mark fresh before validation or weaken validation settings merely to pass.
++Run `documentledger review`, inspect bounded context, resolve ambiguous mappings, update affected sections, and run `documentledger finish`. Finish audits links and runs configured validation before recording freshness. For bootstrap or manual control, use `document affected`, `document build-context`, and section-level `document mark-fresh`; `--all` means all configured docs and `--affected` selects affected docs. Do not record freshness before validation or weaken validation settings merely to pass.
+
+ ## Audit reports a missing section
+
+diff --git a/docs/usage.md b/docs/usage.md
+index ed9268e..48c4258 100644
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -19,12 +19,13 @@ Initialization creates `.ledger/ledger.toml`, the Documentledger tool config, th
+ ## Inspect status and next action
+
+ ```bash
++documentledger --json capabilities
+ documentledger --json status
+ documentledger --json doctor
+ documentledger --json next-action
+ ```
+
+-`uninitialized` means no resolvable canonical project or its required metadata, not simply that a legacy root TOML file is absent. Diagnostics distinguish missing bindings, missing data, invalid configuration, and link/index problems.
++Probe `capabilities` before relying on optional workflow commands. Status distinguishes an `uninitialized` workspace from a ready workspace and includes a recommended next action. Its `state` is `bootstrap_required` when no baseline or links exist, `incremental_affected` when linked sections need updating, `mapping_incomplete` when relevant changed units have no mappings, and `incremental_clean` otherwise. The separate `freshness_state` and `mapping_state` fields describe those dimensions directly. Production changes trigger mapping review by default; test, private, and generated roles are ignored unless `mapping_review_roles` opts them in.
+
+ <!-- docledger-section: scan-source-and-documentation-files -->
+
+@@ -82,6 +83,20 @@ documentledger --json coverage
+
+ Proposal files are deterministic suggestions. Review them before applying a batch; `--check-and-apply` validates the complete batch before one logical write.
+
++<!-- docledger-section: review-current-changes -->
++
++## Review current changes
++
++Use the capability-aware review command for the normal incremental path:
++
++```bash
++documentledger review
++documentledger review --doc docs/usage.md
++documentledger review --details
++```
++
++Review scans current files and returns a bounded summary of affected sections, relevant unmapped changes, mapping candidates, and the next action. Safe exact mappings may be applied automatically; ambiguous candidates remain review items. Resolve mappings deliberately with `link add-section` or reviewed `link import-map`. Use `--details` when full evidence arrays are needed. The lower-level `scan`, `document affected`, and `link propose` commands remain available for bootstrap and manual workflows.
++
+ <!-- docledger-section: find-and-update-stale-documentation -->
+
+ ## Build context, update, and validate
+@@ -97,18 +112,26 @@ Edit affected sections, run configured validation commands, and inspect the resu
+
+ <!-- docledger-section: mark-documentation-fresh -->
+
+-## Mark fresh
++## Finish freshness
++
++After editing, run `documentledger finish`. It checks mappings, audits links, runs configured validation commands, and writes section-level freshness dispositions only after every gate passes:
+
+ ```bash
+-documentledger document mark-fresh \
+-  --doc docs/usage.md \
+-  --section usage-scan \
+-  --reason "Updated after scan version VERSION."
++documentledger finish
++documentledger finish --reviewed-no-change "docs/usage.md#usage-scan=The instructions remain accurate."
++documentledger finish --generated-verified "docs/api.md#api-client=Generated reference verified."
+ ```
+
+-Mark fresh only after validation. Section-level marking updates the live affected projection without requiring another scan. Unlinked documents are rejected unless `--allow-unlinked` is explicitly appropriate.
++Changed sections are recorded as `updated`. An unchanged affected section requires an explicit `reviewed-no-change` reason or `generated-verified` decision. If mapping review, link audit, or configured validation fails, freshness is not written. Review the returned results and finish with `documentledger --json status`.
++
++For bootstrap and manual workflows, the lower-level freshness command remains available:
++
++```bash
++documentledger document mark-fresh --doc docs/usage.md --section usage-scan \
++  --reason "Updated after scan version VERSION."
++```
+
+-`--all` selects all configured documents; `--affected` selects only currently affected documents. For bootstrap, use `--all --allow-unlinked` only after reviewing coverage and explicitly accepting any remaining unlinked documents.
++Section-level `mark-fresh` updates the live affected projection without another scan. `--all` selects all configured documents and `--affected` selects currently affected documents. Use `--allow-unlinked` only when intentionally accepting unlinked documents after reviewing coverage.
+
+ <!-- docledger-section: json-and-human-output -->
+
+@@ -134,7 +157,7 @@ Use `documentledger storage where` to inspect resolved mounts and `documentledge
+
+ ## Validate ledger state
+
+-Run `documentledger --json doctor`, `documentledger --json link audit`, and `documentledger --json check` before committing documentation updates.
++Run `documentledger finish` as the normal documentation gate, then inspect `documentledger --json doctor`, `documentledger --json status`, and `documentledger --json check` before committing. `finish` includes the link audit and configured validation when its advertised capability is available.
+
+ `doctor` and `link audit` are read-only. If audit reports a linked missing section, move its links to a current section or remove them with `documentledger link remove-section --doc DOC --section SECTION_ID --source-unit SOURCE_ID`; after the final obsolete link is removed, the orphan record is pruned. Unlinked structural churn is repaired by the next `scan`.
+
+diff --git a/documentledger/capabilities.py b/documentledger/capabilities.py
+new file mode 100644
+index 0000000..d43ff39
+--- /dev/null
++++ b/documentledger/capabilities.py
+@@ -0,0 +1,42 @@
++from __future__ import annotations
++
++from typing import Any
++
++from documentledger import __version__
++from documentledger.command_catalog import COMMAND_INVENTORY
++from documentledger.storage import STORAGE_SCHEMA_VERSION
++
++
++def _command_options(command_path: str) -> set[str]:
++    from typer.main import get_command
++
++    from documentledger.cli import app
++
++    command: Any = get_command(app)
++    for part in command_path.split():
++        command = command.get_command(None, part)
++        if command is None:
++            return set()
++    return {
++        option for parameter in command.params for option in (*getattr(parameter, "opts", []), *getattr(parameter, "secondary_opts", []))
++    }
++
++
++def capability_record() -> dict[str, Any]:
++    command_paths = sorted(entry.path for entry in COMMAND_INVENTORY.entries)
++    features = {
++        "review": "review" in command_paths,
++        "finish": "finish" in command_paths,
++        "proposal_manifest": "--manifest" in _command_options("link propose"),
++        "context_pagination": {"--cursor", "--page-size"} <= _command_options("document build-context"),
++        "import_map_review": "--review" in _command_options("link import-map"),
++    }
++    capabilities = sorted(f"{name}.v1" for name in ("review", "finish") if features[name])
++    return {
++        "schema": "documentledger.capabilities.v1",
++        "version": __version__,
++        "storage_schema": STORAGE_SCHEMA_VERSION,
++        "features": features,
++        "capabilities": capabilities,
++        "commands": command_paths,
++    }
+diff --git a/documentledger/command_catalog.py b/documentledger/command_catalog.py
+index 09daef2..12bc882 100644
+--- a/documentledger/command_catalog.py
++++ b/documentledger/command_catalog.py
+@@ -56,12 +56,31 @@ _COMMANDS: tuple[CommandMetadata, ...] = (
+         audience="agent",
+         effect="workspace-write",
+     ),
++    CommandMetadata(
++        path="review",
++        summary="Review changed source, affected documentation, and safe exact mappings.",
++        audience="agent",
++        effect="workspace-write",
++    ),
++    CommandMetadata(
++        path="finish",
++        summary="Audit links, run configured validation, and record section freshness dispositions.",
++        audience="agent",
++        effect="workspace-write",
++    ),
+     CommandMetadata(
+         path="coverage",
+         summary="Compute documentation coverage metrics.",
+         audience="both",
+         effect="read",
+     ),
++    CommandMetadata(
++        path="capabilities",
++        summary="Report versioned features and the canonical command surface.",
++        audience="agent",
++        effect="read",
++        requires_workspace=False,
++    ),
+     CommandMetadata(
+         path="commands",
+         summary="List all registered commands.",
+diff --git a/documentledger/commands/root.py b/documentledger/commands/root.py
+index 8608c84..f68fe9b 100644
+--- a/documentledger/commands/root.py
++++ b/documentledger/commands/root.py
+@@ -90,11 +90,12 @@ def _scan_diagnostics(workspace: Any) -> list[dict[str, Any]]:
+
+
+ def _status_classification(workspace: Any) -> tuple[str, str, str]:
++    from documentledger.impact import relevant_unmapped_changed_units
+     from documentledger.storage import iter_doc_records
+
+     last_scan_version = coerce_int(workspace.metadata.get("last_scan_version"), 0)
+     affected_count = coerce_int(workspace.metadata.get("last_scan_affected_section_count"), 0)
+-    unlinked_changed = coerce_int(workspace.metadata.get("last_scan_unlinked_changed_source_count"), 0)
++    relevant_unmapped = relevant_unmapped_changed_units(workspace, latest_scan(workspace))
+     linked_sections = sum(
+         1 for record in iter_doc_records(workspace) for section in (record.get("sections", []) or []) if section.get("links")
+     )
+@@ -104,19 +105,19 @@ def _status_classification(workspace: Any) -> tuple[str, str, str]:
+         return (
+             "bootstrap_required",
+             "A baseline scan exists but no documentation links exist.",
+-            "documentledger document build-context --bootstrap",
++            "documentledger review",
+         )
+     if affected_count > 0:
+         return (
+             "incremental_affected",
+             "Linked documentation sections are affected by the latest source changes.",
+-            "documentledger document build-context --affected",
++            "documentledger review",
+         )
+-    if unlinked_changed > 0:
++    if relevant_unmapped:
+         return (
+             "mapping_incomplete",
+-            "Changed source files are not fully linked to documentation.",
+-            "documentledger link propose --all-docs",
++            "Relevant changed source units are not mapped to documentation.",
++            "documentledger review",
+         )
+     return ("incremental_clean", "No affected linked sections remain after the latest scan.", "documentledger scan")
+
+@@ -217,12 +218,15 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
+     issues = _scan_diagnostics(workspace)
+     state, reason, command = _status_classification(workspace)
+     affected_count = coerce_int(workspace.metadata.get("last_scan_affected_section_count"), 0)
+-    unlinked_changed = coerce_int(workspace.metadata.get("last_scan_unlinked_changed_source_count"), 0)
++    from documentledger.impact import ignored_changed_unit_counts, relevant_unmapped_changed_units
++
++    relevant_unmapped = relevant_unmapped_changed_units(workspace, latest_scan(workspace))
++    ignored_counts = ignored_changed_unit_counts(workspace, latest_scan(workspace))
+     linked_sections = sum(
+         1 for record in iter_doc_records(workspace) for section in (record.get("sections", []) or []) if section.get("links")
+     )
+     freshness_state = "clean" if affected_count == 0 else "affected"
+-    coverage_review_required = linked_sections <= 0 or unlinked_changed > 0
++    coverage_review_required = linked_sections <= 0 or bool(relevant_unmapped)
+     result = {
+         "initialized": True,
+         "state": state,
+@@ -242,8 +246,10 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
+         "recommended_command": command,
+         "recommended_reason": reason,
+         "freshness_state": freshness_state,
+-        "mapping_state": "review_required" if coverage_review_required else "not_stale",
++        "mapping_state": "bootstrap_required" if linked_sections <= 0 else "review_required" if relevant_unmapped else "complete",
+         "coverage_review_required": coverage_review_required,
++        "relevant_unmapped_changed_unit_count": len(relevant_unmapped),
++        "ignored_change_counts": ignored_counts,
+         "coverage": {
+             "documents_with_records": len(iter_doc_records(workspace)),
+             "sections_linked": linked_sections,
+@@ -480,6 +486,70 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
+         )
+         emit_success(ctx, "scan", result, human, _profile_events(ctx, "scan", started_at))
+
++    @app.command()
++    @handle_command_error("review")
++    def review(
++        ctx: typer.Context,
++        doc: str | None = typer.Option(None, "--doc", help="Limit review to one documentation path."),
++        details: bool = typer.Option(False, "--details", help="Include complete review arrays in JSON output."),
++    ) -> None:
++        started_at = perf_counter()
++        state = get_state(ctx)
++        workspace = load_workspace(start=state.root)
++        from documentledger.review import build_review_plan, review_human_summary
++
++        plan = build_review_plan(workspace, doc_path=doc)
++        emit_success(
++            ctx,
++            "review",
++            plan.to_record(details=details),
++            review_human_summary(plan),
++            _profile_events(ctx, "review", started_at),
++        )
++
++    @app.command()
++    @handle_command_error("finish")
++    def finish(
++        ctx: typer.Context,
++        reviewed_no_change: Annotated[
++            list[str] | None,
++            typer.Option("--reviewed-no-change", help="DOC#SECTION=REASON for an unchanged reviewed section."),
++        ] = None,
++        generated_verified: Annotated[
++            list[str] | None,
++            typer.Option("--generated-verified", help="DOC#SECTION=REASON for verified generated-reference evidence."),
++        ] = None,
++    ) -> None:
++        started_at = perf_counter()
++        state = get_state(ctx)
++        workspace = load_workspace(start=state.root)
++        from documentledger.finish import finish_review
++        from documentledger.models import ReviewDecision
++
++        decisions: list[ReviewDecision] = []
++        for disposition, entries in (
++            ("reviewed-no-change", reviewed_no_change or []),
++            ("generated-verified", generated_verified or []),
++        ):
++            for entry in entries:
++                selector, separator, reason = entry.partition("=")
++                doc_path, marker, section_id = selector.partition("#")
++                if not separator or not marker or not doc_path or not section_id or not reason.strip():
++                    raise DocumentledgerError(
++                        "decision_invalid",
++                        f"Invalid --{disposition} value {entry!r}. Expected DOC#SECTION=REASON.",
++                    )
++                decisions.append(ReviewDecision(doc_path, section_id, disposition, reason.strip()))
++
++        result = finish_review(workspace, tuple(decisions)).to_record()
++        emit_success(
++            ctx,
++            "finish",
++            result,
++            f"Finish passed at scan {result['scan_version']}; recorded {len(result['freshness'])} section disposition(s).",
++            _profile_events(ctx, "finish", started_at),
++        )
++
+     @app.command("coverage")
+     @handle_command_error("coverage")
+     def coverage(ctx: typer.Context) -> None:
+@@ -493,6 +563,14 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
+         result.update(readiness)
+         emit_success(ctx, "coverage", result, "Coverage computed.", _profile_events(ctx, "coverage", started_at))
+
++    @app.command()
++    @handle_command_error("capabilities")
++    def capabilities(ctx: typer.Context) -> None:
++        from documentledger.capabilities import capability_record
++
++        result = capability_record()
++        emit_success(ctx, "capabilities", result, "Documentledger capabilities reported.")
++
+     @app.command("commands")
+     @handle_command_error("commands")
+     def commands(ctx: typer.Context) -> None:
+diff --git a/documentledger/commands/schema.py b/documentledger/commands/schema.py
+index 34f00a0..fb35c19 100644
+--- a/documentledger/commands/schema.py
++++ b/documentledger/commands/schema.py
+@@ -64,13 +64,15 @@ _SCHEMAS: dict[str, dict[str, Any]] = {
+     },
+     "doc-record": {
+         "name": "doc-record",
+-        "schema_id": "documentledger.doc_record.v4",
++        "schema_id": "documentledger.doc_record.v5",
+         "description": "Documentation record schema for tracked documents.",
+         "fields": [
+             "schema",
+             "doc_path",
+             "linked_sources",
+             "sections",
++            "section.freshness",
++            "section.pending_section_hash",
+             "last_fresh_scan_version",
+             "last_fresh_hash",
+             "notes",
+diff --git a/documentledger/config.py b/documentledger/config.py
+index a5a1914..6f28615 100644
+--- a/documentledger/config.py
++++ b/documentledger/config.py
+@@ -16,12 +16,13 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
+
+ from documentledger.errors import DocumentledgerError
+ from documentledger.models import ToolConfig
++from documentledger.source_roles import SOURCE_ROLES
+
+ _TOP_LEVEL = {"config_version", "ledger", "scan", "validation", "policy"}
++_POLICY = {"require_doc_frontmatter", "mapping_review_roles"}
+ _LEDGER = {"code"}
+ _SCAN = {"source_roots", "doc_roots", "source_extensions", "doc_extensions"}
+ _VALIDATION = {"commands"}
+-_POLICY = {"require_doc_frontmatter"}
+
+
+ def _table(data: Mapping[str, Any], name: str) -> Mapping[str, Any]:
+@@ -71,6 +72,13 @@ def parse_tool_config(data: Mapping[str, Any], *, path: Path | None = None) -> T
+     frontmatter = policy.get("require_doc_frontmatter", False)
+     if not isinstance(frontmatter, bool):
+         raise DocumentledgerError("invalid_tool_config", "policy.require_doc_frontmatter must be boolean.")
++    review_roles = _strings(policy.get("mapping_review_roles", ["production"]), "policy.mapping_review_roles")
++    invalid_roles = sorted(set(review_roles) - SOURCE_ROLES)
++    if invalid_roles:
++        raise DocumentledgerError(
++            "invalid_tool_config",
++            f"policy.mapping_review_roles contains unsupported role(s): {', '.join(invalid_roles)}.",
++        )
+     return ToolConfig(
+         config_version=2,
+         ledger_code=code,
+@@ -79,6 +87,7 @@ def parse_tool_config(data: Mapping[str, Any], *, path: Path | None = None) -> T
+         source_extensions=_strings(scan.get("source_extensions", ()), "scan.source_extensions"),
+         doc_extensions=_strings(scan.get("doc_extensions", ()), "scan.doc_extensions"),
+         validation_commands=_strings(validation.get("commands", ()), "validation.commands"),
++        mapping_review_roles=review_roles,
+         require_doc_frontmatter=frontmatter,
+     )
+
+@@ -109,6 +118,7 @@ def tool_config_document(config: ToolConfig) -> str:
+             "",
+             "[policy]",
+             f"require_doc_frontmatter = {str(config.require_doc_frontmatter).lower()}",
++            f"mapping_review_roles = {list(config.mapping_review_roles)!r}",
+             "",
+         ]
+     )
+@@ -125,6 +135,7 @@ def tool_config_document(config: ToolConfig) -> str:
+         ("source_extensions", config.source_extensions),
+         ("doc_extensions", config.doc_extensions),
+         ("commands", config.validation_commands),
++        ("mapping_review_roles", config.mapping_review_roles),
+     ):
+         text = text.replace(f"{key} = {list(values)!r}", f"{key} = {json.dumps(list(values))}")
+     return text
+diff --git a/documentledger/doc_index.py b/documentledger/doc_index.py
+index 195438d..69edddd 100644
+--- a/documentledger/doc_index.py
++++ b/documentledger/doc_index.py
+@@ -37,6 +37,8 @@ def whole_doc_section(doc_path: str, text: str) -> DocSection:
+         heading_slug="whole-doc",
+         line_span=(1, max(len(lines), 1)),
+         section_hash=sha256_text(content),
++        body_hash=sha256_text(content),
++        body_length=len(content),
+         summary="Whole document.",
+         text=content,
+     )
+@@ -129,6 +131,7 @@ def markdown_sections(doc_path: str, text: str) -> list[DocSection]:
+         start_line = int(heading["line"])
+         next_line = int(headings[index + 1]["line"]) - 1 if index + 1 < len(headings) else len(lines)
+         content = "\n".join(lines[start_line - 1 : next_line]).strip("\n")
++        body_content = "\n".join(lines[start_line:next_line]).strip("\n")
+         title = str(heading["title"])
+         slug = str(heading["slug"])
+         marker = str(heading["marker"]) if heading["marker"] is not None else None
+@@ -140,6 +143,8 @@ def markdown_sections(doc_path: str, text: str) -> list[DocSection]:
+                 heading_slug=marker or slug,
+                 line_span=(start_line, max(start_line, next_line)),
+                 section_hash=sha256_text(content),
++                body_hash=sha256_text(body_content),
++                body_length=len(body_content.strip()),
+                 summary=summarize_section(title, content),
+                 text=content,
+             )
+diff --git a/documentledger/doc_records.py b/documentledger/doc_records.py
+index b9dc2f4..2059e08 100644
+--- a/documentledger/doc_records.py
++++ b/documentledger/doc_records.py
+@@ -4,6 +4,7 @@ from __future__ import annotations
+
+ from copy import deepcopy
+ from dataclasses import dataclass, field
++from difflib import SequenceMatcher
+ from typing import Any
+
+ from documentledger.doc_index import doc_sections_for_file, whole_doc_section
+@@ -17,6 +18,8 @@ SECTION_METADATA_KEYS = (
+     "heading_slug",
+     "line_span",
+     "section_hash",
++    "body_hash",
++    "body_length",
+     "summary",
+ )
+
+@@ -29,6 +32,8 @@ class ReconciliationReport:
+     sections_refreshed: tuple[str, ...] = ()
+     unlinked_sections_pruned: tuple[str, ...] = ()
+     linked_orphans: tuple[str, ...] = ()
++    sections_renamed: tuple[tuple[str, str], ...] = ()
++    possible_renames: tuple[tuple[str, str, str], ...] = ()
+
+
+ @dataclass
+@@ -38,15 +43,20 @@ class ReconciliationSummary:
+     sections_refreshed: int = 0
+     unlinked_sections_pruned: int = 0
+     linked_orphans: int = 0
++    sections_renamed: int = 0
++    possible_section_renames: list[dict[str, str]] = field(default_factory=list)
+     reports: list[ReconciliationReport] = field(default_factory=list)
+
+-    def to_record(self) -> dict[str, int]:
++    def to_record(self) -> dict[str, Any]:
+         return {
+             "documents_changed": self.documents_changed,
+             "sections_added": self.sections_added,
+             "sections_refreshed": self.sections_refreshed,
+             "unlinked_sections_pruned": self.unlinked_sections_pruned,
+             "linked_orphans": self.linked_orphans,
++            "sections_renamed": self.sections_renamed,
++            "possible_section_rename_count": len(self.possible_section_renames),
++            "possible_section_renames": list(self.possible_section_renames),
+         }
+
+
+@@ -65,6 +75,96 @@ def _linked_sources(record: dict[str, Any]) -> list[str]:
+     )
+
+
++def _section_rename_matches(
++    stored_sections: list[dict[str, Any]],
++    current_sections: list[dict[str, Any]],
++    stored_by_id: dict[str, dict[str, Any]],
++) -> tuple[dict[str, dict[str, Any]], set[str], tuple[tuple[str, str, str], ...]]:
++    missing = [
++        (index, section)
++        for index, section in enumerate(stored_sections)
++        if str(section.get("section_id", "")) not in {str(item.get("section_id", "")) for item in current_sections}
++        and (section.get("links") or section.get("freshness") or section.get("pending_section_hash"))
++    ]
++    candidates = [
++        (index, section) for index, section in enumerate(current_sections) if str(section.get("section_id", "")) not in stored_by_id
++    ]
++    old_body_counts: dict[str, int] = {}
++    current_body_counts: dict[str, int] = {}
++    for _, section in missing:
++        body_hash = str(section.get("body_hash", ""))
++        if body_hash:
++            old_body_counts[body_hash] = old_body_counts.get(body_hash, 0) + 1
++    for section in current_sections:
++        body_hash = str(section.get("body_hash", ""))
++        if body_hash:
++            current_body_counts[body_hash] = current_body_counts.get(body_hash, 0) + 1
++
++    proposals: dict[str, list[tuple[str, str, bool]]] = {}
++    for old_index, old in missing:
++        old_id = str(old.get("section_id", ""))
++        old_path = list(old.get("heading_path", []) or [])
++        old_heading = old_path[-1] if old_path else str(old.get("heading_slug", ""))
++        old_hash = str(old.get("body_hash", ""))
++        for new_index, current in candidates:
++            new_id = str(current.get("section_id", ""))
++            new_path = list(current.get("heading_path", []) or [])
++            new_heading = new_path[-1] if new_path else str(current.get("heading_slug", ""))
++            body_match = bool(old_hash) and old_hash == str(current.get("body_hash", ""))
++            previous_match = (
++                old_index > 0
++                and new_index > 0
++                and str(stored_sections[old_index - 1].get("section_id", "")) == str(current_sections[new_index - 1].get("section_id", ""))
++            )
++            next_match = (
++                old_index + 1 < len(stored_sections)
++                and new_index + 1 < len(current_sections)
++                and str(stored_sections[old_index + 1].get("section_id", "")) == str(current_sections[new_index + 1].get("section_id", ""))
++            )
++            neighbor_matches = int(previous_match) + int(next_match)
++            order_close = abs((old_index + 0.5) / max(len(stored_sections), 1) - (new_index + 0.5) / max(len(current_sections), 1)) <= 0.25
++            same_parent = old_path[:-1] == new_path[:-1]
++            title_similarity = SequenceMatcher(None, old_heading.casefold(), new_heading.casefold()).ratio()
++            if not body_match and not (neighbor_matches and same_parent) and not (same_parent and order_close and title_similarity >= 0.45):
++                continue
++
++            if body_match:
++                reason = "Body hash matches, but rename evidence is not unique enough to reconcile automatically."
++            elif neighbor_matches:
++                reason = "Neighboring headings suggest a rename, but the section body changed."
++            else:
++                reason = "Heading and source order suggest a rename, but the section body changed."
++            proposals.setdefault(old_id, []).append((new_id, reason, False))
++
++            unique_body = old_body_counts.get(old_hash, 0) == 1 and current_body_counts.get(old_hash, 0) == 1
++            substantial_body = int(old.get("body_length", 0)) >= 32
++            high_confidence = body_match and (
++                (unique_body and substantial_body and (order_close or neighbor_matches > 0)) or neighbor_matches == 2
++            )
++            if high_confidence:
++                proposals[old_id][-1] = (new_id, "Exact body and neighboring section identity confirm the rename.", True)
++
++    eligible_targets: dict[str, int] = {}
++    for matches in proposals.values():
++        eligible_ids = {new_id for new_id, _, eligible in matches if eligible}
++        for new_id in eligible_ids:
++            eligible_targets[new_id] = eligible_targets.get(new_id, 0) + 1
++
++    renamed_by_current: dict[str, dict[str, Any]] = {}
++    renamed_old: set[str] = set()
++    possible: list[tuple[str, str, str]] = []
++    for old_id, matches in proposals.items():
++        eligible = [(new_id, reason) for new_id, reason, is_eligible in matches if is_eligible and eligible_targets.get(new_id) == 1]
++        if len(eligible) == 1:
++            new_id, _ = eligible[0]
++            renamed_by_current[new_id] = next(section for section in stored_sections if str(section.get("section_id", "")) == old_id)
++            renamed_old.add(old_id)
++            continue
++        for new_id, reason, _ in matches:
++            possible.append((old_id, new_id, reason))
++    return renamed_by_current, renamed_old, tuple(possible)
++
++
+ def reconcile_doc_record(
+     workspace: Workspace,
+     record: dict[str, Any],
+@@ -83,15 +183,17 @@ def reconcile_doc_record(
+         current_sections = [section.to_record() for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path)]
+     current_by_id = {str(section["section_id"]): section for section in current_sections}
+     stored_by_id = {str(section.get("section_id")): section for section in stored_sections if str(section.get("section_id", ""))}
++    renamed_by_current, renamed_old, possible_renames = _section_rename_matches(stored_sections, current_sections, stored_by_id)
+     reconciled: list[dict[str, Any]] = []
+     added: list[str] = []
+     refreshed: list[str] = []
+     pruned: list[str] = []
+     orphans: list[str] = []
++    renamed: list[tuple[str, str]] = []
+
+     for current in current_sections:
+         section_id = str(current["section_id"])
+-        stored = stored_by_id.get(section_id)
++        stored = stored_by_id.get(section_id) or renamed_by_current.get(section_id)
+         if stored is None:
+             new_section = deepcopy(current)
+             new_section["links"] = []
+@@ -99,13 +201,27 @@ def reconcile_doc_record(
+             added.append(section_id)
+             continue
+         merged = deepcopy(current)
++        if str(current.get("section_hash", "")) != str(stored.get("section_hash", "")):
++            previous_freshness = dict(stored.get("freshness", {}) or {})
++            merged["pending_section_hash"] = str(
++                stored.get("pending_section_hash") or previous_freshness.get("section_hash") or stored.get("section_hash", "")
++            )
++        elif stored.get("pending_section_hash"):
++            merged["pending_section_hash"] = str(stored["pending_section_hash"])
+         merged["links"] = deepcopy(list(stored.get("links", []) or []))
++        if "freshness" in stored:
++            merged["freshness"] = deepcopy(stored["freshness"])
+         reconciled.append(merged)
++        stored_section_id = str(stored.get("section_id", ""))
++        if stored_section_id != section_id:
++            renamed.append((stored_section_id, section_id))
+         if _metadata(stored) != _metadata(merged):
+             refreshed.append(section_id)
+
+     for section_id in sorted(set(stored_by_id) - set(current_by_id)):
+         stored = stored_by_id[section_id]
++        if section_id in renamed_old:
++            continue
+         if stored.get("links", []) or []:
+             reconciled.append(deepcopy(stored))
+             orphans.append(section_id)
+@@ -123,6 +239,8 @@ def reconcile_doc_record(
+         sections_refreshed=tuple(refreshed),
+         unlinked_sections_pruned=tuple(pruned),
+         linked_orphans=tuple(orphans),
++        sections_renamed=tuple(renamed),
++        possible_renames=possible_renames,
+     )
+
+
+@@ -139,6 +257,16 @@ def reconcile_doc_records(workspace: Workspace) -> ReconciliationSummary:
+         summary.sections_refreshed += len(report.sections_refreshed)
+         summary.unlinked_sections_pruned += len(report.unlinked_sections_pruned)
+         summary.linked_orphans += len(report.linked_orphans)
++        summary.sections_renamed += len(report.sections_renamed)
++        summary.possible_section_renames.extend(
++            {
++                "doc_path": doc_path,
++                "old_section_id": old_id,
++                "candidate_section_id": candidate_id,
++                "reason": reason,
++            }
++            for old_id, candidate_id, reason in report.possible_renames
++        )
+         if report.changed:
+             summary.documents_changed += 1
+             changed_records.append(updated)
+diff --git a/documentledger/finish.py b/documentledger/finish.py
+new file mode 100644
+index 0000000..d8fbd57
+--- /dev/null
++++ b/documentledger/finish.py
+@@ -0,0 +1,183 @@
++"""Review, validate, audit, and record section freshness."""
++
++from __future__ import annotations
++
++import shlex
++import subprocess
++from typing import Any
++
++from documentledger.errors import DocumentledgerError
++from documentledger.freshness import record_freshness_resolutions
++from documentledger.identity import normalize_repo_path
++from documentledger.impact import relevant_unmapped_changed_units, resolve_affected_sections
++from documentledger.links import audit_links
++from documentledger.models import FinishResult, FreshnessResolution, ReviewDecision, ValidationResult, Workspace
++from documentledger.review import build_review_plan
++from documentledger.storage import doc_record_path, iter_doc_records, latest_scan, read_yaml
++
++_VALID_DECISIONS = {"reviewed-no-change", "generated-verified"}
++
++
++def _decision_key(decision: ReviewDecision) -> tuple[str, str]:
++    if decision.disposition not in _VALID_DECISIONS:
++        raise DocumentledgerError("decision_invalid", f"Unsupported freshness decision: {decision.disposition!r}.")
++    if not decision.reason.strip():
++        raise DocumentledgerError("reason_required", f"{decision.disposition} requires a non-empty reason.")
++    doc_path = normalize_repo_path(decision.doc_path)
++    section_id = decision.section_id.strip()
++    if not section_id.startswith("md:section:"):
++        section_id = f"md:section:{doc_path}::{section_id}"
++    return doc_path, section_id
++
++
++def _run_validation(workspace: Workspace) -> tuple[ValidationResult, ...]:
++    results: list[ValidationResult] = []
++    for command in workspace.config.validation_commands:
++        try:
++            argv = shlex.split(command)
++            if not argv:
++                continue
++            completed = subprocess.run(
++                argv,
++                cwd=workspace.config.root,
++                check=False,
++                capture_output=True,
++                text=True,
++            )
++            output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
++            results.append(ValidationResult(command, completed.returncode, output[-4000:], len(output) > 4000))
++        except OSError as exc:
++            results.append(ValidationResult(command, 127, str(exc)[:4000], len(str(exc)) > 4000))
++    return tuple(results)
++
++
++def _section_hashes(records: list[dict[str, Any]]) -> dict[tuple[str, str], tuple[str, str]]:
++    hashes: dict[tuple[str, str], tuple[str, str]] = {}
++    for record in records:
++        doc_path = str(record.get("doc_path", ""))
++        for section in record.get("sections", []) or []:
++            section_id = str(section.get("section_id", ""))
++            freshness = dict(section.get("freshness", {}) or {})
++            baseline = str(freshness.get("section_hash") or section.get("section_hash", ""))
++            hashes[(doc_path, section_id)] = (baseline, str(section.get("section_hash", "")))
++    return hashes
++
++
++def _stored_section_hashes(workspace: Workspace) -> dict[tuple[str, str], str]:
++    hashes: dict[tuple[str, str], str] = {}
++    for record in iter_doc_records(workspace):
++        doc_path = str(record.get("doc_path", ""))
++        stored = read_yaml(doc_record_path(workspace, doc_path))
++        for section in stored.get("sections", []) or []:
++            section_id = str(section.get("section_id", ""))
++            freshness = dict(section.get("freshness", {}) or {})
++            baseline = str(section.get("pending_section_hash") or freshness.get("section_hash") or section.get("section_hash", ""))
++            if baseline:
++                hashes[(doc_path, section_id)] = baseline
++    return hashes
++
++
++def finish_review(workspace: Workspace, decisions: tuple[ReviewDecision, ...] = ()) -> FinishResult:
++    """Run the finish gate and atomically record freshness only after all checks pass."""
++    previous_scan = latest_scan(workspace)
++    previous_hashes = _stored_section_hashes(workspace)
++    previous_affected = resolve_affected_sections(workspace, scan=previous_scan) if previous_scan else []
++    previous_unmapped = relevant_unmapped_changed_units(workspace, scan=previous_scan) if previous_scan else []
++
++    plan = build_review_plan(workspace, auto_link="none")
++    scan = latest_scan(workspace)
++    if scan is None:
++        raise DocumentledgerError("scan_missing", "Finish could not load the current source scan.")
++
++    pending_unmapped = {
++        str(item.get("source_id", "")): item for item in [*previous_unmapped, *relevant_unmapped_changed_units(workspace, scan=scan)]
++    }
++    unresolved_mappings = {
++        "unmapped_changed_units": list(pending_unmapped.values()),
++        "suggestions": [item.to_record() for item in plan.mapping_suggestions],
++        "ambiguous_evidence": [item.to_record() for item in plan.ambiguous_items],
++    }
++    if any(unresolved_mappings.values()):
++        raise DocumentledgerError(
++            "review_required",
++            "Finish cannot record freshness while required mapping review remains unresolved.",
++            ["Run `documentledger review`, resolve the remaining mappings, and retry finish."],
++            details=unresolved_mappings,
++        )
++
++    audit = audit_links(workspace)
++    if not audit.get("ok", False):
++        raise DocumentledgerError(
++            "link_audit_failed",
++            "Finish link audit failed; no freshness dispositions were recorded.",
++            ["Resolve the reported link audit issues and retry finish."],
++            details={"issues": list(audit.get("issues", []))},
++        )
++
++    current_hashes = _section_hashes(iter_doc_records(workspace))
++    actions: dict[tuple[str, str], str] = {}
++    for item in previous_affected:
++        key = (str(item.get("doc_path", "")), str(item.get("section_id", "")))
++        actions[key] = str(item.get("review_action", "review_required"))
++    for item in plan.affected:
++        actions[(item.doc_path, item.section_id)] = item.action
++
++    decision_map: dict[tuple[str, str], ReviewDecision] = {}
++    for decision in decisions:
++        key = _decision_key(decision)
++        if key in decision_map:
++            raise DocumentledgerError("decision_invalid", f"More than one decision was supplied for {key[0]} [{key[1]}].")
++        decision_map[key] = decision
++
++    resolutions: list[FreshnessResolution] = []
++    unused_decisions = dict(decision_map)
++    scan_version = int(scan.get("version", 0))
++    for key, action in sorted(actions.items()):
++        doc_path, section_id = key
++        if key not in current_hashes:
++            raise DocumentledgerError("section_not_found", f"Affected section no longer exists: {doc_path} [{section_id}].")
++        baseline_hash = previous_hashes.get(key, current_hashes[key][1])
++        current_hash = current_hashes[key][1]
++        if baseline_hash != current_hash:
++            disposition = "updated"
++            reason = ""
++        else:
++            decision = decision_map.get(key)
++            if decision is None:
++                raise DocumentledgerError(
++                    "freshness_decision_required",
++                    f"Affected section needs an explicit freshness decision: {doc_path} [{section_id}].",
++                    ["Edit the section or pass --reviewed-no-change / --generated-verified with a reason."],
++                    details={"doc_path": doc_path, "section_id": section_id, "review_action": action},
++                )
++            expected = "generated-verified" if action == "generated_verify" else "reviewed-no-change"
++            if decision.disposition != expected:
++                raise DocumentledgerError(
++                    "decision_invalid",
++                    f"{doc_path} [{section_id}] requires the {expected} disposition.",
++                )
++            disposition = decision.disposition
++            reason = decision.reason
++            unused_decisions.pop(key, None)
++        resolutions.append(FreshnessResolution(doc_path, section_id, disposition, reason, scan_version, current_hash))
++
++    if unused_decisions:
++        key = min(unused_decisions)
++        raise DocumentledgerError(
++            "decision_not_applicable",
++            f"No unchanged affected section requires the supplied decision: {key[0]} [{key[1]}].",
++        )
++
++    validation = _run_validation(workspace)
++    failures = [item.to_record() for item in validation if item.exit_code != 0]
++    if failures:
++        raise DocumentledgerError(
++            "validation_subprocess_failed",
++            "Configured validation failed; no freshness dispositions were recorded.",
++            ["Fix the reported validation failures and retry finish."],
++            details={"validation": failures},
++        )
++
++    resolved = tuple(resolutions)
++    record_freshness_resolutions(workspace, resolved)
++    return FinishResult(scan_version, resolved, validation, True)
+diff --git a/documentledger/freshness.py b/documentledger/freshness.py
+index c3d9a86..7916c59 100644
+--- a/documentledger/freshness.py
++++ b/documentledger/freshness.py
+@@ -11,13 +11,14 @@ from documentledger.errors import DocumentledgerError
+ from documentledger.identity import normalize_repo_path
+ from documentledger.impact import resolve_affected_sections
+ from documentledger.links import current_source_inventory
++from documentledger.models import FreshnessResolution
+ from documentledger.scanner import collect_files, file_hash
+-from documentledger.storage import latest_scan, load_doc_record, save_doc_records_batch
++from documentledger.storage import DOC_RECORD_SCHEMA, latest_scan, load_doc_record, save_doc_records_batch
+
+
+ def _new_doc_record(workspace: Any, doc_path: str) -> dict[str, Any]:
+     return {
+-        "schema": "documentledger.doc_record.v4",
++        "schema": DOC_RECORD_SCHEMA,
+         "doc_path": doc_path,
+         "linked_sources": [],
+         "sections": [section.to_record() | {"links": []} for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path)],
+@@ -93,6 +94,7 @@ def _refresh_record(
+             selected["line_span"] = [current_section.line_span[0], current_section.line_span[1]]
+             selected["section_hash"] = current_section.section_hash
+             selected["summary"] = current_section.summary
++        selected.pop("pending_section_hash", None)
+         for link in selected.get("links", []) or []:
+             source_id = str(link.get("source_id", ""))
+             if source_id not in inventory:
+@@ -116,6 +118,47 @@ def _refresh_record(
+     return refreshed, updated_sections
+
+
++def record_freshness_resolutions(workspace: Any, resolutions: tuple[FreshnessResolution, ...]) -> None:
++    if not resolutions:
++        return
++    scan_record = latest_scan(workspace)
++    if scan_record is None:
++        raise DocumentledgerError("scan_missing", "Freshness resolution requires a latest source scan.")
++
++    grouped: dict[str, list[FreshnessResolution]] = {}
++    for resolution in resolutions:
++        grouped.setdefault(resolution.doc_path, []).append(resolution)
++
++    inventory = current_source_inventory(workspace)
++    records: list[dict[str, Any]] = []
++    for doc_path, doc_resolutions in sorted(grouped.items()):
++        record = load_doc_record(workspace, doc_path)
++        if record is None:
++            raise DocumentledgerError("doc_record_missing", f"No document record exists for {doc_path}.")
++        selected_ids = {item.section_id for item in doc_resolutions}
++        selected = [section for section in (record.get("sections", []) or []) if str(section.get("section_id", "")) in selected_ids]
++        if {str(section.get("section_id", "")) for section in selected} != selected_ids:
++            raise DocumentledgerError("section_not_found", f"A freshness section no longer exists in {doc_path}.")
++        reason = "Documentledger finish passed link audit and configured validation."
++        refreshed, _ = _refresh_record(workspace, record, selected, inventory, int(scan_record["version"]), reason)
++        refreshed_sections = {str(section.get("section_id", "")): section for section in refreshed.get("sections", []) or []}
++        for resolution in doc_resolutions:
++            section = refreshed_sections[resolution.section_id]
++            if resolution.disposition != "updated" and not resolution.reason.strip():
++                raise DocumentledgerError("reason_required", f"{resolution.disposition} requires a non-empty reason.")
++            section["freshness"] = {
++                "source_scan_version": resolution.scan_version,
++                "section_hash": str(section.get("section_hash", "")),
++                "disposition": resolution.disposition,
++                "reason": resolution.reason,
++            }
++        records.append(refreshed)
++
++    workspace.metadata["last_scan_affected_section_count"] = 0
++    workspace.metadata["last_scan_stale_doc_count"] = 0
++    save_doc_records_batch(workspace, records)
++
++
+ def mark_fresh(
+     workspace: Any,
+     *,
+@@ -168,6 +211,25 @@ def mark_fresh(
+             allow_unlinked=allow_unlinked,
+         )
+         refreshed, section_ids = _refresh_record(workspace, record, selected_sections, inventory, int(scan_record["version"]), reason)
++        old_sections = {str(item.get("section_id", "")): item for item in record.get("sections", []) or []}
++        selected_ids = {str(item.get("section_id", "")) for item in selected_sections}
++        for refreshed_section in refreshed.get("sections", []) or []:
++            section_id = str(refreshed_section.get("section_id", ""))
++            if section_id not in selected_ids:
++                continue
++            old_section = old_sections.get(section_id, {})
++            previous_freshness = dict(old_section.get("freshness", {}) or {})
++            baseline_hash = str(
++                old_section.get("pending_section_hash") or previous_freshness.get("section_hash") or old_section.get("section_hash", "")
++            )
++            section_hash = str(refreshed_section.get("section_hash", ""))
++            disposition = "updated" if baseline_hash != section_hash else "reviewed-no-change"
++            refreshed_section["freshness"] = {
++                "source_scan_version": int(scan_record["version"]),
++                "section_hash": section_hash,
++                "disposition": disposition,
++                "reason": reason,
++            }
+         updated_sections.extend(section_ids)
+         if json.dumps(record, sort_keys=True) != json.dumps(refreshed, sort_keys=True):
+             changed_records.append(refreshed)
+diff --git a/documentledger/impact.py b/documentledger/impact.py
+index ffb91fb..cd72a1a 100644
+--- a/documentledger/impact.py
++++ b/documentledger/impact.py
+@@ -4,10 +4,21 @@ from typing import Any
+
+ from documentledger.models import Workspace
+ from documentledger.source_index import file_unit_id
++from documentledger.source_roles import classify_source_role, mapping_review_roles
+ from documentledger.storage import iter_doc_records, latest_scan
+
+ GENERATED_COVERAGE = {"api-autodoc", "generated-reference"}
+
++PUBLIC_CHANGE_HASHES = {"decorator_hash", "docstring_hash", "file_hash", "public_contract_hash", "signature_hash"}
++
++
++def review_action_for(changed_links: list[dict[str, Any]]) -> str:
++    if changed_links and all(link["coverage"] in GENERATED_COVERAGE for link in changed_links):
++        return "generated_verify"
++    if any(link.get("change_type") == "deleted" or set(link.get("changed_hashes", [])) & PUBLIC_CHANGE_HASHES for link in changed_links):
++        return "update_required"
++    return "review_required"
++
+
+ def link_mismatches(
+     link: dict[str, Any],
+@@ -82,6 +93,7 @@ def resolve_affected_sections(
+             action = (
+                 "verify-generated-reference" if all(link["coverage"] in GENERATED_COVERAGE for link in changed_links) else "rewrite-section"
+             )
++            review_action = review_action_for(changed_links)
+             affected.append(
+                 {
+                     "doc_path": doc_path,
+@@ -92,6 +104,7 @@ def resolve_affected_sections(
+                     "section_hash": str(section.get("section_hash", "")),
+                     "summary": str(section.get("summary", "")),
+                     "action": action,
++                    "review_action": review_action,
+                     "changed_units": changed_links,
+                 }
+             )
+@@ -113,6 +126,7 @@ def stale_doc_details(workspace: Workspace, scan: dict[str, Any] | None = None)
+                 "heading_path": item["heading_path"],
+                 "line_span": item["line_span"],
+                 "action": item["action"],
++                "review_action": item.get("review_action", ""),
+             }
+         )
+         for unit in item.get("changed_units", []) or []:
+@@ -147,10 +161,27 @@ def unmapped_changed_units(workspace: Workspace, scan: dict[str, Any] | None = N
+         path = str(item.get("path", ""))
+         if source_id in linked_source_ids or file_unit_id(path) in linked_source_ids:
+             continue
+-        unmapped.append(dict(item))
++        record = dict(item)
++        record["source_role"] = classify_source_role(record)
++        unmapped.append(record)
+     return unmapped
+
+
++def relevant_unmapped_changed_units(workspace: Workspace, scan: dict[str, Any] | None = None) -> list[dict[str, Any]]:
++    review_roles = mapping_review_roles(workspace)
++    return [item for item in unmapped_changed_units(workspace, scan) if item["source_role"] in review_roles]
++
++
++def ignored_changed_unit_counts(workspace: Workspace, scan: dict[str, Any] | None = None) -> dict[str, int]:
++    review_roles = mapping_review_roles(workspace)
++    counts: dict[str, int] = {}
++    for item in unmapped_changed_units(workspace, scan):
++        role = str(item["source_role"])
++        if role not in review_roles:
++            counts[role] = counts.get(role, 0) + 1
++    return dict(sorted(counts.items()))
++
++
+ def linked_source_map(workspace: Workspace) -> dict[str, list[str]]:
+     mapping: dict[str, set[str]] = {}
+     for record in iter_doc_records(workspace):
+diff --git a/documentledger/legacy.py b/documentledger/legacy.py
+index e329908..6d56f38 100644
+--- a/documentledger/legacy.py
++++ b/documentledger/legacy.py
+@@ -21,10 +21,10 @@ from documentledger.identity import doc_record_filename, normalize_repo_path
+ from documentledger.models import Config
+ from documentledger.source_index import source_inventory
+ from documentledger.storage import (
+-    DOC_RECORD_SCHEMA,
+     SCAN_SCHEMA,
+     SOURCE_INDEX_FILENAME,
+     SOURCE_INDEX_SCHEMA,
++    SUPPORTED_DOC_RECORD_SCHEMAS,
+     normalize_source_index_payload,
+     read_json,
+     read_yaml,
+@@ -145,6 +145,7 @@ def load_legacy_project(path: Path) -> LegacyProject:
+         doc_extensions=_strings(scan.get("doc_extensions", []), "scan.doc_extensions"),
+         validation_commands=_strings(validation.get("commands", []), "validation.commands"),
+         require_doc_frontmatter=bool(policy.get("require_doc_frontmatter", False)),
++        mapping_review_roles=_strings(policy.get("mapping_review_roles", ["production"]), "policy.mapping_review_roles"),
+     )
+     return LegacyProject(root=root, config_path=path.resolve(), data_dir=data_dir, config=config, raw=raw)
+
+@@ -258,7 +259,7 @@ def validate_legacy_state(project: LegacyProject, inventory: LegacyInventory) ->
+         if item.relative_path.startswith("docs/") and item.relative_path.endswith(".yaml"):
+             record = read_yaml(project.data_dir / item.relative_path)
+             _check_no_timestamps(record, item.relative_path)
+-            if record.get("schema") != DOC_RECORD_SCHEMA:
++            if record.get("schema") not in SUPPORTED_DOC_RECORD_SCHEMAS:
+                 raise DocumentledgerError("schema_mismatch", f"Document record {item.relative_path} has an incompatible schema.")
+             doc_path = normalize_repo_path(str(record.get("doc_path", "")))
+             if doc_record_filename(doc_path) != Path(item.relative_path).name:
+diff --git a/documentledger/links.py b/documentledger/links.py
+index 653d6da..8168baf 100644
+--- a/documentledger/links.py
++++ b/documentledger/links.py
+@@ -23,7 +23,9 @@ from documentledger.proposal_manifest import (
+ )
+ from documentledger.scanner import collect_files, file_hash
+ from documentledger.source_index import file_unit_id, source_inventory
++from documentledger.source_roles import classify_source_role
+ from documentledger.storage import (
++    DOC_RECORD_SCHEMA,
+     iter_doc_records,
+     latest_scan,
+     load_doc_record,
+@@ -130,9 +132,7 @@ GENERIC_PROPOSAL_NAMES = {"main", "build", "entry", "run", "get", "set", "metada
+
+
+ def _source_role(unit: dict[str, Any]) -> str:
+-    path = str(unit.get("path", "")).replace("\\", "/")
+-    parts = path.split("/")
+-    return "test" if "tests" in parts or path.startswith("test") or Path(path).name.startswith("test_") else "production"
++    return classify_source_role(unit)
+
+
+ def _markdown_evidence(section_text: str) -> tuple[str, str]:
+@@ -148,72 +148,341 @@ def _token_in(text: str, token: str) -> bool:
+     return re.search(rf"(?<![\w]){re.escape(token)}(?![\w])", text) is not None
+
+
++@dataclass(frozen=True)
++class LinkCandidate:
++    doc_path: str
++    section_id: str
++    source_id: str
++    source_path: str
++    confidence: str
++    evidence_kind: str
++    evidence_text: str
++    evidence_group: str
++    coverage: str
++    impact: str
++    tracked_hashes: tuple[str, ...]
++    specificity: int
++    reason: str
++
++
++@dataclass(frozen=True)
++class CandidateSelection:
++    exact: tuple[LinkCandidate, ...]
++    review: tuple[LinkCandidate, ...]
++    dominated_count: int
++
++
++@dataclass(frozen=True)
++class _EvidenceSpan:
++    text: str
++    kind: str
++    start: int
++    end: int
++
++
++def _evidence_spans(section_text: str) -> list[_EvidenceSpan]:
++    spans: list[_EvidenceSpan] = []
++    occupied: list[tuple[int, int]] = []
++    patterns = (
++        (r"<!--\s*documentledger:\s*(.*?)-->", "directive"),
++        (r"```[^\n]*\n(.*?)```", "code"),
++        (r"(?<!`)`([^`\n]+)`(?!`)", "code"),
++    )
++    for pattern, kind in patterns:
++        for match in re.finditer(pattern, section_text, flags=re.DOTALL):
++            if any(match.start() < end and match.end() > start for start, end in occupied):
++                continue
++            text = match.group(1)
++            spans.append(_EvidenceSpan(text.strip(), kind, match.start(), match.end()))
++            occupied.append((match.start(), match.end()))
++    for match in re.finditer(r"[^\n]+", section_text):
++        if any(match.start() < end and match.end() > start for start, end in occupied):
++            continue
++        text = match.group(0).strip()
++        if text:
++            spans.append(_EvidenceSpan(text, "prose", match.start(), match.end()))
++    return sorted(spans, key=lambda item: (item.start, item.end, item.kind))
++
++
++def _candidate_ancestors(source_id: str) -> tuple[str, ...]:
++    if not source_id.startswith("py:"):
++        return ()
++    unit_ref = source_id[3:]
++    unit_kind_path, _, qualname = unit_ref.partition("::")
++    kind, separator, source_path = unit_kind_path.partition(":")
++    if not separator:
++        return ()
++    ancestors: list[str] = []
++    if kind == "method" and "." in qualname:
++        ancestors.append(f"py:class:{source_path}::{qualname.rsplit('.', 1)[0]}")
++    if kind in {"method", "function", "class"}:
++        ancestors.append(f"py:module:{source_path}")
++    if kind == "module" or kind in {"method", "function", "class"}:
++        ancestors.append(f"py:file:{source_path}")
++    return tuple(ancestors)
++
++
++def _specificity(unit: dict[str, Any]) -> int:
++    return {"file": 0, "module": 1, "class": 2, "function": 3, "method": 3}.get(str(unit.get("kind", "")), 0)
++
++
++def _confidence_rank(confidence: str) -> int:
++    return {"medium": 1, "high": 2, "exact": 3}.get(confidence, 0)
++
++
++def _class_claim(text: str, qualname: str) -> bool:
++    match = re.search(rf"(?<![\w]){re.escape(qualname)}(?![\w])", text, flags=re.IGNORECASE)
++    if match is None:
++        return False
++    context = text[max(0, match.start() - 80) : match.end() + 100].lower()
++    return any(word in context for word in ("class", "facade", "owns", "provides", "responsible", "implements"))
++
++
++def _candidate_semantics(
++    section_text: str,
++    unit: dict[str, Any],
++    evidence_kind: str,
++    evidence_text: str,
++) -> tuple[str, str, tuple[str, ...], str]:
++    text = section_text.lower()
++    kind = str(unit.get("kind", ""))
++    if evidence_kind == "dependency-directive":
++        directive = re.search(r"watch\s*=\s*['\"]([^'\"]+)['\"]", evidence_text)
++        watch = directive.group(1) if directive else "public_contract"
++        tracked = {
++            "public_contract": ("public_contract_hash",),
++            "public_contract_hash": ("public_contract_hash",),
++            "signature": ("signature_hash",),
++            "body": ("body_hash",),
++            "implementation": ("body_hash",),
++        }.get(watch, ("public_contract_hash",))
++        return "api-autodoc", "public-api", tracked, "Explicit Documentledger dependency directive."
++    if evidence_kind == "class-level-claim":
++        return (
++            "architecture",
++            "implementation-note",
++            ("body_hash", "public_contract_hash"),
++            "Prose makes a class-level implementation claim.",
++        )
++    if kind == "file":
++        return (
++            "broad-file-fallback",
++            "unknown",
++            ("file_hash",),
++            f"Documentation names source path `{unit.get('path', '')}`.",
++        )
++    if any(word in text for word in ("troubleshoot", "error", "exception")):
++        return (
++            "troubleshooting",
++            "behavior",
++            ("public_contract_hash",),
++            "Evidence appears in troubleshooting or error-contract documentation.",
++        )
++    if any(word in text for word in ("json", "schema", "field")):
++        return "json-contract", "schema", ("public_contract_hash",), "Evidence appears in schema or data-contract documentation."
++    if any(word in text for word in ("example", "sample output", "demonstrates")):
++        return "example", "example-output", ("public_contract_hash",), "Evidence appears in a documented example."
++    if any(word in text for word in ("cli", "command", "option", "flag")):
++        return (
++            "cli-command",
++            "behavior",
++            ("signature_hash", "decorator_hash", "public_contract_hash"),
++            "Evidence documents a CLI command or option.",
++        )
++    if any(word in text for word in ("workflow", "sequence", "step")):
++        return "workflow", "behavior", ("public_contract_hash",), "Evidence documents a user workflow."
++    if kind in {"function", "method", "class"}:
++        return (
++            "api-autodoc",
++            "public-api",
++            ("signature_hash", "docstring_hash", "public_contract_hash"),
++            "Exact public Python symbol reference.",
++        )
++    return "architecture", "implementation-note", ("body_hash", "public_contract_hash"), "Scoped source implementation reference."
++
++
++def _select_link_candidates(candidates: list[LinkCandidate]) -> CandidateSelection:
++    dominated = {
++        candidate
++        for candidate in candidates
++        if any(
++            other.evidence_group == candidate.evidence_group
++            and candidate.source_id in _candidate_ancestors(other.source_id)
++            and _confidence_rank(other.confidence) >= _confidence_rank(candidate.confidence)
++            for other in candidates
++            if other.source_id != candidate.source_id
++        )
++    }
++    unique: dict[str, LinkCandidate] = {}
++    for candidate in candidates:
++        if candidate in dominated:
++            continue
++        current = unique.get(candidate.source_id)
++        if current is None or _confidence_rank(candidate.confidence) > _confidence_rank(current.confidence):
++            unique[candidate.source_id] = candidate
++    selected = tuple(sorted(unique.values(), key=lambda item: (item.source_path, item.source_id)))
++    return CandidateSelection(
++        exact=tuple(item for item in selected if item.confidence == "exact"),
++        review=tuple(item for item in selected if item.confidence != "exact"),
++        dominated_count=len(dominated),
++    )
++
++
++def _match_evidence(
++    span: _EvidenceSpan,
++    unit: dict[str, Any],
++    symbols: dict[str, list[dict[str, Any]]],
++) -> tuple[str | None, str, str, str | None]:
++    kind = str(unit.get("kind", ""))
++    source_id = str(unit.get("source_id", ""))
++    source_path = str(unit.get("path", ""))
++    qualname = str(unit.get("qualname", ""))
++    if source_id and _token_in(span.text, source_id):
++        return "source-id-reference", source_id, "exact", None
++    if kind in {"file", "module"} and source_path and _token_in(span.text, source_path):
++        return "source-path-reference", source_path, "exact", None
++    if kind in {"function", "method"} and qualname and "." in qualname and _token_in(span.text, qualname):
++        return "qualified-symbol-reference", qualname, "exact", None
++    if kind in {"function", "method"} and qualname:
++        name = qualname.rsplit(".", 1)[-1]
++        if name in GENERIC_PROPOSAL_NAMES and span.kind == "prose" and _token_in(span.text, name):
++            return None, name, "", "generic"
++        matches = symbols.get(name, [])
++        call = re.search(rf"(?<![\w]){re.escape(name)}\s*\(", span.text)
++        if call and len(matches) == 1 and matches[0].get("source_id") == source_id:
++            confidence = "exact" if _token_in(span.text, source_path) else "high"
++            return "unique-call-reference", call.group(0).strip(), confidence, None
++        if call and len(matches) > 1:
++            return None, name, "", "ambiguous"
++        if kind == "function" and _token_in(span.text, name) and len(matches) == 1:
++            return "unique-symbol-reference", name, "high", None
++        if kind == "function" and _token_in(span.text, name) and len(matches) > 1:
++            return None, name, "", "ambiguous"
++    if kind == "class" and qualname and _token_in(span.text, qualname):
++        claim = span.kind == "prose" and _class_claim(span.text, qualname)
++        if span.kind == "prose" and not claim:
++            return None, qualname, "", "low-confidence"
++        evidence_kind = "class-level-claim" if claim else "class-name-mention"
++        confidence = "high" if claim or span.kind == "code" else "medium"
++        return evidence_kind, qualname, confidence, None
++    return None, "", "", None
++
++
+ def _proposal_links_for_section(
+     section_text: str,
+     inventory: dict[str, dict[str, Any]],
+     *,
++    doc_path: str = "",
++    section_id: str = "",
+     include_tests: bool = False,
+-) -> tuple[list[dict[str, Any]], dict[str, int]]:
+-    """Generate conservative deterministic proposals and rejection counters."""
+-    proposals: list[dict[str, Any]] = []
+-    seen: set[tuple[str, str, str]] = set()
+-    code, prose = _markdown_evidence(section_text)
+-    stats = {"excluded_test_units": 0, "generic_matches_rejected": 0, "low_confidence_rejected": 0}
+-    for unit in sorted(inventory.values(), key=lambda item: (str(item.get("path", "")), str(item.get("source_id", "")))):
+-        if _source_role(unit) == "test" and not include_tests:
+-            stats["excluded_test_units"] += 1
+-            continue
+-        source_path = str(unit.get("path", ""))
+-        qualname = str(unit.get("qualname", ""))
+-        source_id = str(unit.get("source_id", ""))
+-        match_text: str | None = None
+-        reason: str | None = None
+-        evidence_kind: str | None = None
+-        confidence = "medium"
+-        if source_id and _token_in(code, source_id):
+-            match_text = source_id
+-            reason = f"Code contains stable source id `{source_id}`."
+-            evidence_kind, confidence = "source-id-in-code", "high"
+-        elif source_path and _token_in(code, source_path):
+-            match_text = source_path
+-            reason = f"Code contains exact source path `{source_path}`."
+-            evidence_kind = "exact-source-reference"
+-            confidence = "high"
+-        elif qualname and qualname != source_path and "." in qualname and _token_in(code, qualname):
+-            match_text = qualname
+-            reason = f"Code contains exact qualified symbol `{qualname}`."
+-            evidence_kind = "exact-qualified-symbol"
+-            confidence = "high"
+-        elif unit.get("kind") == "class" and qualname and qualname[:1].isupper() and _token_in(code, qualname):
+-            match_text = qualname
+-            reason = f"Code contains public class `{qualname}`."
+-            evidence_kind = "public-class-in-code"
+-        elif qualname and "." not in qualname and qualname not in GENERIC_PROPOSAL_NAMES and _token_in(code, qualname):
+-            module_context = source_path and (_token_in(code, source_path) or _token_in(section_text, source_path))
+-            if module_context:
+-                match_text = qualname
+-                reason = f"Code contains public symbol `{qualname}` with source path context `{source_path}`."
+-                evidence_kind = "public-symbol-with-path-context"
+-            else:
++) -> tuple[list[dict[str, Any]], dict[str, Any]]:
++    """Generate evidence-ranked proposals and reject ambiguous symbol guesses."""
++    units = list(inventory.values())
++    symbols: dict[str, list[dict[str, Any]]] = {}
++    for unit in units:
++        if str(unit.get("kind", "")) in {"function", "method"}:
++            name = str(unit.get("qualname", "")).rsplit(".", 1)[-1]
++            if name and not name.startswith("_"):
++                symbols.setdefault(name, []).append(unit)
++    stats = {
++        "excluded_test_units": sum(1 for unit in units if _source_role(unit) == "test") if not include_tests else 0,
++        "generic_matches_rejected": 0,
++        "low_confidence_rejected": 0,
++        "ambiguous_matches": 0,
++        "dominated_ancestors": 0,
++    }
++    candidates: list[LinkCandidate] = []
++    ambiguous_seen: set[tuple[str, int, int]] = set()
++    for span in _evidence_spans(section_text):
++        if span.kind == "directive":
++            source_match = re.search(r"depends-on\s*=\s*['\"]([^'\"]+)['\"]", span.text)
++            if source_match is None:
++                continue
++            source_id = source_match.group(1)
++            unit = inventory.get(source_id)
++            if unit is None:
+                 stats["low_confidence_rejected"] += 1
+-        elif qualname in GENERIC_PROPOSAL_NAMES and _token_in(prose, qualname):
+-            stats["generic_matches_rejected"] += 1
+-        if match_text is None:
+-            continue
+-        key = (source_id, "implementation-note", "unknown")
+-        if key in seen:
++                continue
++            if _source_role(unit) == "test" and not include_tests:
++                continue
++            coverage, impact, tracked, reason = _candidate_semantics(section_text, unit, "dependency-directive", span.text)
++            candidates.append(
++                LinkCandidate(
++                    doc_path,
++                    section_id,
++                    source_id,
++                    str(unit.get("path", "")),
++                    "exact",
++                    "dependency-directive",
++                    span.text,
++                    f"{span.start}:{span.end}",
++                    coverage,
++                    impact,
++                    tracked,
++                    _specificity(unit),
++                    reason,
++                )
++            )
+             continue
+-        seen.add(key)
+-        proposals.append(
+-            {
+-                "source_unit": source_id,
+-                "coverage": "implementation-note",
+-                "impact": "unknown",
+-                "reason": reason,
+-                "confidence": confidence,
+-                "evidence": {"kind": evidence_kind, "text": match_text, "source_role": _source_role(unit)},
+-            }
+-        )
++        for unit in units:
++            role = _source_role(unit)
++            if role == "test" and not include_tests:
++                continue
++            if role in {"private", "documentation-support"}:
++                continue
++            source_id = str(unit.get("source_id", ""))
++            source_path = str(unit.get("path", ""))
++            evidence_kind, evidence_text, confidence, issue = _match_evidence(span, unit, symbols)
++            if issue == "ambiguous":
++                ambiguous_seen.add((evidence_text, span.start, span.end))
++                continue
++            if issue == "generic":
++                stats["generic_matches_rejected"] += 1
++                continue
++            if issue == "low-confidence":
++                stats["low_confidence_rejected"] += 1
++                continue
++            if evidence_kind is None:
++                continue
++            coverage, impact, tracked, reason = _candidate_semantics(section_text, unit, evidence_kind, evidence_text)
++            candidates.append(
++                LinkCandidate(
++                    doc_path,
++                    section_id,
++                    source_id,
++                    source_path,
++                    confidence,
++                    evidence_kind,
++                    evidence_text,
++                    f"{span.start}:{span.end}",
++                    coverage,
++                    impact,
++                    tracked,
++                    _specificity(unit),
++                    reason,
++                )
++            )
++    stats["ambiguous_matches"] = len(ambiguous_seen)
++    stats["ambiguous_evidence"] = [{"text": text, "span": [start, end]} for text, start, end in sorted(ambiguous_seen)]
++    selection = _select_link_candidates(candidates)
++    stats["dominated_ancestors"] = selection.dominated_count
++    proposals = [
++        {
++            "source_unit": candidate.source_id,
++            "coverage": candidate.coverage,
++            "impact": candidate.impact,
++            "tracked_hashes": list(candidate.tracked_hashes),
++            "reason": candidate.reason,
++            "confidence": candidate.confidence,
++            "auto_applicable": candidate.confidence == "exact",
++            "evidence": {
++                "kind": candidate.evidence_kind,
++                "text": candidate.evidence_text,
++                "source_role": _source_role(inventory[candidate.source_id]),
++            },
++        }
++        for candidate in (*selection.exact, *selection.review)
++    ]
+     return proposals, stats
+
+
+@@ -299,17 +568,29 @@ def propose_mappings(
+     proposal_payloads: list[tuple[str, Path, dict[str, Any], list[dict[str, Any]], dict[str, str]]] = []
+     proposed_sections = 0
+     proposed_edges = 0
+-    rejected = {"excluded_test_units": 0, "generic_matches_rejected": 0, "low_confidence_rejected": 0}
+-    documents_without_candidates: list[str] = []
++    rejected = {
++        "excluded_test_units": 0,
++        "generic_matches_rejected": 0,
++        "low_confidence_rejected": 0,
++        "ambiguous_matches": 0,
++        "dominated_ancestors": 0,
++    }
+     events: list[dict[str, Any]] = []
+
+     for doc_path in docs:
+         sections_payload: list[dict[str, Any]] = []
+         linked_source_paths: set[str] = set()
+         for section in doc_sections_for_file(workspace.config.root / doc_path, doc_path):
+-            links, stats = _proposal_links_for_section(section.text, inventory, include_tests=include_tests)
++            links, stats = _proposal_links_for_section(
++                section.text,
++                inventory,
++                doc_path=doc_path,
++                section_id=section.heading_slug,
++                include_tests=include_tests,
++            )
+             for key, value in stats.items():
+-                rejected[key] += value
++                if isinstance(value, int):
++                    rejected[key] += value
+             if not links:
+                 continue
+             for link in links:
+@@ -438,7 +719,7 @@ def find_section(workspace: Workspace, doc_path: str, section_ref: str) -> dict[
+
+ def record_for_doc(workspace: Workspace, doc_path: str) -> dict[str, Any]:
+     return load_doc_record(workspace, doc_path) or {
+-        "schema": "documentledger.doc_record.v4",
++        "schema": DOC_RECORD_SCHEMA,
+         "doc_path": doc_path,
+         "linked_sources": [],
+         "sections": [],
+diff --git a/documentledger/migration.py b/documentledger/migration.py
+index 73f587b..445d4d9 100644
+--- a/documentledger/migration.py
++++ b/documentledger/migration.py
+@@ -156,6 +156,7 @@ def plan_migration(start: Path | None = None, *, adopt_project_uuid: bool = Fals
+         doc_extensions=tuple(legacy.config.doc_extensions),
+         validation_commands=tuple(legacy.config.validation_commands),
+         require_doc_frontmatter=legacy.config.require_doc_frontmatter,
++        mapping_review_roles=tuple(legacy.config.mapping_review_roles),
+     )
+     seed = {
+         "source_config": sha256_bytes(legacy.config_path.read_bytes()),
+diff --git a/documentledger/models.py b/documentledger/models.py
+index 30e1fa0..5aee2e0 100644
+--- a/documentledger/models.py
++++ b/documentledger/models.py
+@@ -18,6 +18,7 @@ class Config:
+     doc_extensions: list[str]
+     validation_commands: list[str]
+     require_doc_frontmatter: bool = False
++    mapping_review_roles: list[str] = field(default_factory=lambda: ["production"])
+
+
+ LayoutSource = Literal["canonical", "legacy"]
+@@ -38,6 +39,7 @@ class ToolConfig:
+     source_extensions: tuple[str, ...]
+     doc_extensions: tuple[str, ...]
+     validation_commands: tuple[str, ...]
++    mapping_review_roles: tuple[str, ...] = ("production",)
+     require_doc_frontmatter: bool = False
+
+
+@@ -103,6 +105,8 @@ class DocSection:
+     heading_slug: str
+     line_span: tuple[int, int]
+     section_hash: str
++    body_hash: str
++    body_length: int
+     summary: str
+     text: str
+
+@@ -114,10 +118,214 @@ class DocSection:
+             "heading_slug": self.heading_slug,
+             "line_span": [self.line_span[0], self.line_span[1]],
+             "section_hash": self.section_hash,
++            "body_hash": self.body_hash,
++            "body_length": self.body_length,
+             "summary": self.summary,
+         }
+
+
++@dataclass(frozen=True)
++class ChangedEvidence:
++    source_id: str
++    source_path: str
++    changed_hashes: tuple[str, ...]
++    role: str
++
++    def to_record(self) -> dict[str, Any]:
++        return {
++            "source_id": self.source_id,
++            "source_path": self.source_path,
++            "changed_hashes": list(self.changed_hashes),
++            "role": self.role,
++        }
++
++
++@dataclass(frozen=True)
++class ReviewItem:
++    doc_path: str
++    section_id: str
++    section_title: str
++    action: Literal["update_required", "review_required", "generated_verify"]
++    severity: Literal["high", "medium", "low"]
++    evidence: tuple[ChangedEvidence, ...]
++    reasons: tuple[str, ...]
++
++    def to_record(self, *, limit: int | None = 40) -> dict[str, Any]:
++        evidence = list(self.evidence)
++        changed_units = evidence if limit is None else evidence[:limit]
++        return {
++            "doc": self.doc_path,
++            "section_id": self.section_id,
++            "title": self.section_title,
++            "action": self.action,
++            "severity": self.severity,
++            "changed_units": [item.to_record() for item in changed_units],
++            "changed_units_total": len(evidence),
++            "changed_units_omitted": max(len(evidence) - len(changed_units), 0),
++            "reasons": list(self.reasons),
++        }
++
++
++@dataclass(frozen=True)
++class MappingSuggestion:
++    doc_path: str
++    section_id: str
++    source_id: str
++    confidence: str
++    coverage: str
++    impact: str
++    reason: str
++    evidence_text: str
++    auto_applied: bool = False
++
++    def to_record(self) -> dict[str, Any]:
++        return {
++            "doc": self.doc_path,
++            "section_id": self.section_id,
++            "source_id": self.source_id,
++            "confidence": self.confidence,
++            "coverage": self.coverage,
++            "impact": self.impact,
++            "reason": self.reason,
++            "evidence": self.evidence_text[:200],
++            "evidence_truncated": len(self.evidence_text) > 200,
++            "auto_applied": self.auto_applied,
++        }
++
++
++@dataclass(frozen=True)
++class AmbiguousMatch:
++    doc_path: str
++    section_id: str
++    evidence_text: str
++    span: tuple[int, int]
++
++    def to_record(self) -> dict[str, Any]:
++        return {
++            "doc": self.doc_path,
++            "section_id": self.section_id,
++            "evidence": self.evidence_text[:200],
++            "evidence_truncated": len(self.evidence_text) > 200,
++            "span": list(self.span),
++        }
++
++
++@dataclass(frozen=True)
++class ReviewPlan:
++    scan_version: int
++    state: str
++    affected: tuple[ReviewItem, ...]
++    unmapped_relevant: tuple[ChangedEvidence, ...]
++    mapping_suggestions: tuple[MappingSuggestion, ...]
++    auto_applied: tuple[MappingSuggestion, ...]
++    ambiguous_items: tuple[AmbiguousMatch, ...]
++    ambiguous_match_count: int
++    ignored_change_counts: dict[str, int]
++    next_action: dict[str, str]
++
++    def to_record(self, *, details: bool = False, limit: int = 40) -> dict[str, Any]:
++        cap = None if details else limit
++        affected = list(self.affected)
++        unmapped = list(self.unmapped_relevant)
++        suggestions = list(self.mapping_suggestions)
++        applied = list(self.auto_applied)
++        ambiguous = list(self.ambiguous_items)
++        pending_count = len(self.unmapped_relevant) + len(self.mapping_suggestions) + self.ambiguous_match_count
++        return {
++            "schema": "documentledger.review.v1",
++            "state": self.state,
++            "scan_version": self.scan_version,
++            "affected": [item.to_record(limit=cap) for item in affected[:cap]],
++            "affected_total": len(affected),
++            "unmapped_relevant": [item.to_record() for item in unmapped[:cap]],
++            "unmapped_relevant_total": len(unmapped),
++            "mapping": {
++                "auto_applied": len(applied),
++                "auto_applied_edges": [item.to_record() for item in applied[:cap]],
++                "review_required": pending_count,
++                "suggestions": [item.to_record() for item in suggestions[:cap]],
++                "ambiguous_matches": self.ambiguous_match_count,
++                "ambiguous_items": [item.to_record() for item in ambiguous[:cap]],
++            },
++            "ignored_changes": dict(self.ignored_change_counts),
++            "next_action": dict(self.next_action),
++            "omitted": {
++                "affected": max(len(affected) - len(affected[:cap]), 0) if cap is not None else 0,
++                "unmapped_relevant": max(len(unmapped) - len(unmapped[:cap]), 0) if cap is not None else 0,
++                "suggestions": max(len(suggestions) - len(suggestions[:cap]), 0) if cap is not None else 0,
++                "auto_applied_edges": max(len(applied) - len(applied[:cap]), 0) if cap is not None else 0,
++                "ambiguous_items": max(len(ambiguous) - len(ambiguous[:cap]), 0) if cap is not None else 0,
++            },
++        }
++
++
++FreshnessDisposition = Literal["updated", "reviewed-no-change", "generated-verified"]
++ReviewDecisionDisposition = Literal["reviewed-no-change", "generated-verified"]
++
++
++@dataclass(frozen=True)
++class ReviewDecision:
++    doc_path: str
++    section_id: str
++    disposition: ReviewDecisionDisposition
++    reason: str
++
++
++@dataclass(frozen=True)
++class FreshnessResolution:
++    doc_path: str
++    section_id: str
++    disposition: FreshnessDisposition
++    reason: str
++    scan_version: int
++    section_hash: str
++
++    def to_record(self) -> dict[str, Any]:
++        return {
++            "doc": self.doc_path,
++            "section_id": self.section_id,
++            "disposition": self.disposition,
++            "reason": self.reason,
++            "source_scan_version": self.scan_version,
++            "section_hash": self.section_hash,
++        }
++
++
++@dataclass(frozen=True)
++class ValidationResult:
++    command: str
++    exit_code: int
++    output: str
++    output_truncated: bool = False
++
++    def to_record(self) -> dict[str, Any]:
++        return {
++            "command": self.command,
++            "exit_code": self.exit_code,
++            "passed": self.exit_code == 0,
++            "output": self.output,
++            "output_truncated": self.output_truncated,
++        }
++
++
++@dataclass(frozen=True)
++class FinishResult:
++    scan_version: int
++    resolutions: tuple[FreshnessResolution, ...]
++    validation: tuple[ValidationResult, ...]
++    audit_ok: bool
++
++    def to_record(self) -> dict[str, Any]:
++        return {
++            "schema": "documentledger.finish.v1",
++            "state": "clean",
++            "scan_version": self.scan_version,
++            "freshness": [item.to_record() for item in self.resolutions],
++            "audit": {"ok": self.audit_ok},
++            "validation": [item.to_record() for item in self.validation],
++        }
++
++
+ @dataclass
+ class ScanResult:
+     version: int
+@@ -133,5 +341,5 @@ class ScanResult:
+     source_units: dict[str, dict[str, Any]] = field(default_factory=dict)
+     source_hashes: dict[str, str] = field(default_factory=dict)
+     doc_hashes: dict[str, str] = field(default_factory=dict)
+-    reconciliation: dict[str, int] = field(default_factory=dict)
++    reconciliation: dict[str, Any] = field(default_factory=dict)
+     unchanged: bool = False
+diff --git a/documentledger/project.py b/documentledger/project.py
+index 90bc75a..0d8b5aa 100644
+--- a/documentledger/project.py
++++ b/documentledger/project.py
+@@ -250,6 +250,7 @@ def default_tool_config(source_roots: tuple[str, ...] = ()) -> ToolConfig:
+         doc_extensions=(".md", ".rst"),
+         validation_commands=(),
+         require_doc_frontmatter=False,
++        mapping_review_roles=("production",),
+     )
+
+
+@@ -370,6 +371,7 @@ def canonical_workspace(start: Path | None = None, *, require_data: bool = False
+         doc_extensions=list(project.config.doc_extensions),
+         validation_commands=list(project.config.validation_commands),
+         require_doc_frontmatter=project.config.require_doc_frontmatter,
++        mapping_review_roles=list(project.config.mapping_review_roles),
+     )
+     return Workspace(
+         config=compatibility_config,
+diff --git a/documentledger/render.py b/documentledger/render.py
+index f211cfe..f4f274b 100644
+--- a/documentledger/render.py
++++ b/documentledger/render.py
+@@ -12,7 +12,8 @@ from documentledger.errors import DocumentledgerError
+ from documentledger.impact import resolve_affected_sections, stale_doc_details
+ from documentledger.links import current_source_inventory
+ from documentledger.models import Workspace
+-from documentledger.storage import iter_doc_records, latest_scan, state_version, workspace_root
++from documentledger.source_roles import classify_source_role
++from documentledger.storage import iter_doc_records, latest_scan, workspace_root
+
+
+ def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
+@@ -45,6 +46,11 @@ def trim_lines(text: str, *, max_lines: int) -> list[str]:
+     return lines or ["(empty)"]
+
+
++def review_action_lines(section: dict[str, Any]) -> list[str]:
++    action = str(section.get("review_action", ""))
++    return [f"Review action: {action}"] if action else []
++
++
+ def linked_sections(workspace: Workspace, docs: list[str] | None = None, section_id: str | None = None) -> list[dict[str, Any]]:
+     selected_docs = set(docs) if docs is not None else None
+     items: list[dict[str, Any]] = []
+@@ -152,9 +158,7 @@ def bootstrap_inventory(workspace: Workspace, scan: dict[str, Any] | None) -> tu
+
+
+ def source_role(source_path: str) -> str:
+-    normalized = source_path.replace("\\", "/")
+-    parts = normalized.split("/")
+-    return "test" if "tests" in parts or normalized.startswith("test") or Path(normalized).name.startswith("test_") else "production"
++    return classify_source_role(source_path)
+
+
+ def bootstrap_source_records(workspace: Workspace) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+@@ -552,16 +556,47 @@ def render_context(  # noqa: C901
+                 specs.append({"unit_id": source_id, "unit_type": "source", "role": role, "source_unit": unit})
+     else:
+         for item in selected_sections:
+-            specs.append(
+-                {
+-                    "unit_id": f"section:{item['doc_path']}::{item['section_id']}",
+-                    "unit_type": "section",
+-                    "section": item,
+-                }
+-            )
+-        if include_unlinked:
+-            for source_path in bootstrap_sources:
+-                specs.append({"unit_id": f"unlinked-source:{source_path}", "unit_type": "unlinked-source", "source_path": source_path})
++            doc_path = str(item["doc_path"])
++            heading_path = " / ".join(item.get("heading_path", []) or []) or str(item["section_id"])
++            block = [
++                f"### {doc_path} :: {heading_path}",
++                "",
++                f"Section id: {item['section_id']}",
++                f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
++                f"Action: {item['action']}",
++                *review_action_lines(item),
++                "",
++                "Linked source units:",
++                "",
++            ]
++            for unit in item.get("changed_units", []) or []:
++                source_unit_count += 1
++                block.extend(
++                    [
++                        f"- {unit['source_id']}",
++                        f"  - path: {unit['source_path']}",
++                        f"  - status: {'missing' if unit.get('missing') else 'live'}",
++                        *([f"  - kind: {unit['kind']}", f"  - signature: `{unit['signature']}`"] if not unit.get("missing") else []),
++                        f"  - lines: {unit['line_span'][0]}-{unit['line_span'][1]}",
++                        f"  - changed: {', '.join(unit.get('changed_hashes', []) or ['file_hash'])}",
++                        f"  - reason: {unit['reason'] or 'No recorded reason.'}",
++                        "",
++                        "  Current relevant source:",
++                        "",
++                    ]
++                )
++                snippet = source_snippet(
++                    workspace_root(workspace),
++                    str(unit["source_path"]),
++                    list(unit.get("line_span", [0, 0])),
++                    max_lines=max_source_lines,
++                )
++                block.extend(f"  {line}" for line in trim_lines(snippet, max_lines=max_source_lines))
++                block.append("")
++            block.extend(["Current section text:", ""])
++            block.extend(trim_lines(str(item.get("text", "")).strip("\n"), max_lines=max_section_lines))
++            block.append("")
++            append_block(f"section:{item['doc_path']}::{item['section_id']}", block)
+
+     manifest_hash = _context_manifest_hash(workspace, specs, [*bootstrap_sources, *bootstrap_docs])
+     request_offset = _context_offset(
+diff --git a/documentledger/review.py b/documentledger/review.py
+new file mode 100644
+index 0000000..644decd
+--- /dev/null
++++ b/documentledger/review.py
+@@ -0,0 +1,231 @@
++from __future__ import annotations
++
++from typing import Any
++
++from documentledger.doc_index import doc_sections_for_file
++from documentledger.errors import DocumentledgerError
++from documentledger.impact import (
++    ignored_changed_unit_counts,
++    relevant_unmapped_changed_units,
++    resolve_affected_sections,
++)
++from documentledger.links import (
++    _candidate_ancestors,
++    _proposal_links_for_section,
++    add_section_link,
++    current_source_inventory,
++)
++from documentledger.models import AmbiguousMatch, ChangedEvidence, MappingSuggestion, ReviewItem, ReviewPlan, Workspace
++from documentledger.scanner import collect_files, run_scan
++from documentledger.source_roles import classify_source_role
++from documentledger.storage import iter_doc_records, latest_scan
++
++REVIEW_OUTPUT_LIMIT = 40
++
++
++def _evidence(record: dict[str, Any]) -> ChangedEvidence:
++    return ChangedEvidence(
++        source_id=str(record.get("source_id", "")),
++        source_path=str(record.get("source_path", record.get("path", ""))),
++        changed_hashes=tuple(sorted(str(value) for value in record.get("changed_hashes", []) or [])),
++        role=classify_source_role({**record, "path": record.get("source_path", record.get("path", ""))}),
++    )
++
++
++def _review_item(record: dict[str, Any]) -> ReviewItem:
++    action = str(record.get("review_action", "review_required"))
++    if action not in {"update_required", "review_required", "generated_verify"}:
++        action = "review_required"
++    severity = {"update_required": "high", "review_required": "medium", "generated_verify": "low"}[action]
++    reasons = {
++        "update_required": "Public contract or linked source changed. Update the section and its claims.",
++        "review_required": "Tracked implementation changed. Verify that the section remains accurate.",
++        "generated_verify": "Generated-reference evidence changed. Rebuild or verify the generated output.",
++    }
++    return ReviewItem(
++        doc_path=str(record.get("doc_path", "")),
++        section_id=str(record.get("section_id", "")),
++        section_title=str(record.get("summary", "")),
++        action=action,  # type: ignore[arg-type]
++        severity=severity,  # type: ignore[arg-type]
++        evidence=tuple(_evidence(item) for item in record.get("changed_units", []) or []),
++        reasons=(reasons[action],),
++    )
++
++
++def _mapping_suggestion(doc_path: str, section_id: str, proposal: dict[str, Any]) -> MappingSuggestion:
++    evidence = dict(proposal.get("evidence", {}))
++    return MappingSuggestion(
++        doc_path=doc_path,
++        section_id=section_id,
++        source_id=str(proposal.get("source_unit", "")),
++        confidence=str(proposal.get("confidence", "")),
++        coverage=str(proposal.get("coverage", "")),
++        impact=str(proposal.get("impact", "")),
++        reason=str(proposal.get("reason", "")),
++        evidence_text=str(evidence.get("text", "")),
++    )
++
++
++def _changed_candidate_ids(scan: dict[str, Any]) -> set[str]:
++    changed = {str(item.get("source_id", "")) for item in [*(scan.get("changed_units", []) or []), *(scan.get("added_units", []) or [])]}
++    result = set(changed)
++    for source_id in changed:
++        result.update(_candidate_ancestors(source_id))
++    return result
++
++
++def build_review_plan(
++    workspace: Workspace,
++    *,
++    doc_path: str | None = None,
++    auto_link: str = "exact",
++) -> ReviewPlan:
++    if auto_link not in {"exact", "none"}:
++        raise DocumentledgerError("invalid_auto_link_policy", "Auto-link policy must be 'exact' or 'none'.")
++
++    run_scan(workspace)
++    scan = latest_scan(workspace)
++    if scan is None:
++        raise DocumentledgerError("scan_missing", "Review could not load the current source scan.")
++
++    doc_paths = collect_files(workspace, workspace.config.doc_roots, workspace.config.doc_extensions)
++    if doc_path is not None:
++        if doc_path not in doc_paths:
++            raise DocumentledgerError("doc_not_found", f"Document is not in the configured documentation roots: {doc_path}")
++        doc_paths = [doc_path]
++
++    affected_records = resolve_affected_sections(workspace, scan=scan, docs=doc_paths)
++    affected_by_id = {str(item.get("section_id", "")): item for item in affected_records}
++    affected_items = tuple(_review_item(item) for item in affected_records)
++    unmapped_records = relevant_unmapped_changed_units(workspace, scan=scan)
++    ignored_counts = ignored_changed_unit_counts(workspace, scan=scan)
++    changed_candidate_ids = _changed_candidate_ids(scan)
++    changed_doc_paths = set(scan.get("changed_docs", []) or []) | set(scan.get("added_docs", []) or [])
++    inventory = current_source_inventory(workspace)
++
++    section_links: dict[str, list[dict[str, Any]]] = {}
++    for record in iter_doc_records(workspace):
++        for section in record.get("sections", []) or []:
++            section_links[str(section.get("section_id", ""))] = list(section.get("links", []) or [])
++
++    ambiguous_matches = 0
++    auto_applied: list[MappingSuggestion] = []
++    suggestions: dict[tuple[str, str, str], MappingSuggestion] = {}
++    ambiguous_items: dict[tuple[str, str, str, int, int], AmbiguousMatch] = {}
++
++    for path in doc_paths:
++        sections = doc_sections_for_file(workspace.config.root / path, path)
++        for section in sections:
++            existing_links = section_links.get(section.section_id, [])
++            is_unlinked = not existing_links
++
++            doc_changed = path in changed_doc_paths
++            is_affected = section.section_id in affected_by_id
++            should_review_mappings = bool(unmapped_records)
++            if doc_path is None and not (doc_changed or is_affected or is_unlinked or should_review_mappings):
++                continue
++
++            proposals, stats = _proposal_links_for_section(
++                section.text,
++                inventory,
++                doc_path=path,
++                section_id=section.section_id,
++            )
++            ambiguous_matches += int(stats.get("ambiguous_matches", 0))
++            for match in stats.get("ambiguous_evidence", []):
++                span = tuple(int(value) for value in match["span"])
++                item = AmbiguousMatch(path, section.section_id, str(match["text"]), span)
++                key = (path, section.section_id, item.evidence_text, span[0], span[1])
++                ambiguous_items[key] = item
++            linked_ids = {str(link.get("source_id", "")) for link in existing_links}
++            for proposal in proposals:
++                source_id = str(proposal.get("source_unit", ""))
++                if source_id in linked_ids:
++                    continue
++                proposal_is_changed = source_id in changed_candidate_ids
++                if not (doc_changed or is_unlinked or doc_path is not None) and not proposal_is_changed:
++                    continue
++                suggestion = _mapping_suggestion(path, section.section_id, proposal)
++                if auto_link == "exact" and proposal.get("auto_applicable") is True:
++                    add_section_link(
++                        workspace,
++                        path,
++                        section.heading_slug,
++                        source_id,
++                        suggestion.coverage,
++                        suggestion.impact,
++                        suggestion.reason,
++                        list(proposal.get("tracked_hashes", []) or []),
++                    )
++                    auto_applied.append(
++                        MappingSuggestion(
++                            doc_path=suggestion.doc_path,
++                            section_id=suggestion.section_id,
++                            source_id=suggestion.source_id,
++                            confidence=suggestion.confidence,
++                            coverage=suggestion.coverage,
++                            impact=suggestion.impact,
++                            reason=suggestion.reason,
++                            evidence_text=suggestion.evidence_text,
++                            auto_applied=True,
++                        )
++                    )
++                    linked_ids.add(source_id)
++                else:
++                    suggestions[(path, section.section_id, source_id)] = suggestion
++
++    unmapped_records = relevant_unmapped_changed_units(workspace, scan=scan)
++    ignored_counts = ignored_changed_unit_counts(workspace, scan=scan)
++    state = "review_required" if affected_items or unmapped_records or suggestions or ambiguous_matches else "clean"
++    if affected_items and (unmapped_records or suggestions or ambiguous_matches):
++        next_action = {
++            "kind": "review_and_update",
++            "command": "resolve mapping suggestions, update affected sections, then run `documentledger finish`",
++        }
++    elif affected_items:
++        next_action = {
++            "kind": "update_docs",
++            "command": "update affected sections, then run `documentledger finish`",
++        }
++    elif unmapped_records or suggestions or ambiguous_matches:
++        next_action = {
++            "kind": "review_mappings",
++            "command": "review mapping suggestions, then run `documentledger finish`",
++        }
++    else:
++        next_action = {"kind": "finish", "command": "run `documentledger finish`"}
++
++    return ReviewPlan(
++        scan_version=int(scan.get("version", 0)),
++        state=state,
++        affected=affected_items,
++        unmapped_relevant=tuple(_evidence(item) for item in unmapped_records),
++        mapping_suggestions=tuple(suggestions[key] for key in sorted(suggestions)),
++        auto_applied=tuple(auto_applied),
++        ambiguous_items=tuple(ambiguous_items[key] for key in sorted(ambiguous_items)),
++        ambiguous_match_count=ambiguous_matches,
++        ignored_change_counts=ignored_counts,
++        next_action=next_action,
++    )
++
++
++def review_human_summary(plan: ReviewPlan) -> str:
++    lines = [f"Review: {plan.state} (scan {plan.scan_version})"]
++    lines.append(
++        f"Affected sections: {len(plan.affected)}. Relevant unmapped changes: {len(plan.unmapped_relevant)}. "
++        f"Exact links added: {len(plan.auto_applied)}. Suggestions requiring review: {len(plan.mapping_suggestions)}."
++    )
++    for item in plan.affected[:REVIEW_OUTPUT_LIMIT]:
++        lines.append(f"  {item.action}: {item.doc_path} [{item.section_title}]")
++    for suggestion in plan.mapping_suggestions[:REVIEW_OUTPUT_LIMIT]:
++        lines.append(f"  mapping review: {suggestion.doc_path} -> {suggestion.source_id} ({suggestion.confidence})")
++    if plan.ambiguous_match_count:
++        lines.append(f"Ambiguous symbol matches: {plan.ambiguous_match_count}.")
++        for item in plan.ambiguous_items[:REVIEW_OUTPUT_LIMIT]:
++            lines.append(f"  ambiguous symbol: {item.doc_path} [{item.evidence_text}]")
++    if plan.ignored_change_counts:
++        ignored = ", ".join(f"{role}={count}" for role, count in sorted(plan.ignored_change_counts.items()))
++        lines.append(f"Ignored changed units: {ignored}.")
++    lines.append(f"Next: {plan.next_action['command']}")
++    return "\n".join(lines)
+diff --git a/documentledger/scanner.py b/documentledger/scanner.py
+index 1ca6a3d..c2ece8d 100644
+--- a/documentledger/scanner.py
++++ b/documentledger/scanner.py
+@@ -70,6 +70,16 @@ def changed_source_paths(previous: dict[str, Any] | None, current_hashes: dict[s
+     return changed, added, deleted
+
+
++def changed_doc_paths(previous: dict[str, Any] | None, current_hashes: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
++    if previous is None:
++        return [], [], []
++    old_hashes = dict(previous.get("doc_hashes", {}))
++    changed = sorted(path for path, value in current_hashes.items() if path in old_hashes and old_hashes.get(path) != value)
++    added = sorted(path for path in current_hashes if path not in old_hashes)
++    deleted = sorted(path for path in old_hashes if path not in current_hashes)
++    return changed, added, deleted
++
++
+ def scan_state_changed(previous: dict[str, Any] | None, source_hashes: dict[str, str], doc_hashes: dict[str, str]) -> bool:
+     if previous is None:
+         return True
+@@ -186,6 +196,7 @@ def run_scan(workspace: Workspace) -> ScanResult:
+     previous = latest_scan(workspace) if previous_summary is not None else None
+     changed, added, deleted = changed_source_paths(previous_summary, source_hashes)
+     source_units: dict[str, dict[str, Any]]
++    changed_docs, added_docs, deleted_docs = changed_doc_paths(previous_summary, doc_hashes)
+     if previous is None:
+         source_units = source_inventory(workspace_root(workspace), source_paths)
+     elif changed or added or deleted:
+@@ -218,6 +229,9 @@ def run_scan(workspace: Workspace) -> ScanResult:
+         "schema": "documentledger.scan.v5",
+         "source_hashes": source_hashes,
+         "doc_hashes": doc_hashes,
++        "changed_docs": changed_docs,
++        "added_docs": added_docs,
++        "deleted_docs": deleted_docs,
+         "source_units": source_units,
+         "changed_sources": sorted([*changed, *added]),
+         "deleted_sources": deleted,
+diff --git a/documentledger/source_roles.py b/documentledger/source_roles.py
+new file mode 100644
+index 0000000..d43a4f8
+--- /dev/null
++++ b/documentledger/source_roles.py
+@@ -0,0 +1,52 @@
++from __future__ import annotations
++
++from pathlib import Path
++from typing import Any
++
++SOURCE_ROLES = frozenset({"production", "test", "private", "generated", "documentation-support", "unknown"})
++DEFAULT_MAPPING_REVIEW_ROLES = ("production",)
++
++
++def classify_source_role(unit: dict[str, Any] | str) -> str:
++    if isinstance(unit, dict):
++        path = str(unit.get("path", ""))
++        qualname = str(unit.get("qualname", ""))
++        kind = str(unit.get("kind", ""))
++    else:
++        path = unit
++        qualname = ""
++        kind = ""
++
++    normalized = path.replace("\\", "/")
++    parts = [part.lower() for part in normalized.split("/") if part]
++    filename = Path(normalized).name.lower()
++    if "tests" in parts or "test" in parts or filename.startswith("test_") or filename.endswith("_test.py"):
++        return "test"
++    if any(part in {"generated", "_generated", "gen"} for part in parts):
++        return "generated"
++    if any(
++        part
++        in {
++            "docs_support",
++            "documentation_support",
++            "doc_tools",
++            "docs_tools",
++            "doc_tooling",
++        }
++        for part in parts
++    ) or parts[:2] in (["scripts", "docs"], ["scripts", "documentation"]):
++        return "documentation-support"
++    if any(part in {"private", "internal"} or part.startswith("_") for part in parts):
++        return "private"
++    if any(part.startswith("_") for part in qualname.split(".")):
++        return "private"
++    if kind == "file" and Path(filename).suffix != ".py":
++        return "unknown"
++    if not normalized:
++        return "unknown"
++    return "production"
++
++
++def mapping_review_roles(workspace: Any) -> frozenset[str]:
++    configured = getattr(workspace.config, "mapping_review_roles", DEFAULT_MAPPING_REVIEW_ROLES)
++    return frozenset(configured)
+diff --git a/documentledger/storage.py b/documentledger/storage.py
+index 38919aa..c3187ce 100644
+--- a/documentledger/storage.py
++++ b/documentledger/storage.py
+@@ -29,7 +29,9 @@ DEFAULT_STORAGE_DIR = ".ledger"
+ STORAGE_SCHEMA_VERSION = 5
+ SCAN_SCHEMA = "documentledger.scan.v5"
+ SOURCE_INDEX_SCHEMA = "documentledger.source_index.v1"
+-DOC_RECORD_SCHEMA = "documentledger.doc_record.v4"
++DOC_RECORD_SCHEMA = "documentledger.doc_record.v5"
++FRESHNESS_DISPOSITIONS = {"updated", "reviewed-no-change", "generated-verified"}
++SUPPORTED_DOC_RECORD_SCHEMAS = frozenset({DOC_RECORD_SCHEMA, "documentledger.doc_record.v4"})
+ SCAN_FILENAME = "scan.yaml"
+ SOURCE_INDEX_FILENAME = "source-index.json"
+ TIMESTAMP_KEYS = {f"{prefix}_at" for prefix in ("created", "updated", "generated")}
+@@ -57,7 +59,7 @@ DEFAULT_CONFIG = {
+         "doc_extensions": [".md", ".rst"],
+     },
+     "validation": {"commands": []},
+-    "policy": {"require_doc_frontmatter": False},
++    "policy": {"require_doc_frontmatter": False, "mapping_review_roles": ["production"]},
+ }
+
+
+@@ -129,6 +131,7 @@ def load_config(path: Path) -> Config:
+         doc_extensions=list(scan_data.get("doc_extensions", [".md", ".rst"])),
+         validation_commands=list(validation_data.get("commands", [])),
+         require_doc_frontmatter=bool(policy_data.get("require_doc_frontmatter", False)),
++        mapping_review_roles=list(policy_data.get("mapping_review_roles", ["production"])),
+     )
+
+
+@@ -338,6 +341,21 @@ def normalize_section_link(record: dict[str, Any]) -> dict[str, Any]:
+     }
+
+
++def normalize_section_freshness(record: dict[str, Any]) -> dict[str, Any]:
++    disposition = str(record.get("disposition", ""))
++    if disposition not in FRESHNESS_DISPOSITIONS:
++        raise DocumentledgerError("invalid_freshness", f"Unknown section freshness disposition: {disposition!r}.")
++    reason = str(record.get("reason", ""))
++    if disposition != "updated" and not reason.strip():
++        raise DocumentledgerError("invalid_freshness", f"{disposition} freshness requires a non-empty reason.")
++    return {
++        "source_scan_version": coerce_int(record.get("source_scan_version"), 0),
++        "section_hash": str(record.get("section_hash", "")),
++        "disposition": disposition,
++        "reason": reason,
++    }
++
++
+ def normalize_doc_record(
+     workspace: Workspace,
+     record: dict[str, Any],
+@@ -366,9 +384,21 @@ def normalize_doc_record(
+             "heading_slug": str(section.get("heading_slug") or "whole-doc"),
+             "line_span": normalize_line_span(section.get("line_span")),
+             "section_hash": str(section.get("section_hash") or ""),
++            "body_hash": str(section.get("body_hash") or ""),
++            "body_length": coerce_int(section.get("body_length"), 0),
+             "summary": str(section.get("summary") or ""),
+         }
+         base["links"] = [normalize_section_link(link) for link in (section.get("links", []) or [])]
++        freshness_record = section.get("freshness")
++        if freshness_record is not None:
++            base["freshness"] = normalize_section_freshness(dict(freshness_record))
++        else:
++            base.pop("freshness", None)
++        pending_section_hash = str(section.get("pending_section_hash") or "")
++        if pending_section_hash:
++            base["pending_section_hash"] = pending_section_hash
++        else:
++            base.pop("pending_section_hash", None)
+         sections.append(base)
+     linked_sources = sorted(
+         {link["source_path"] for section in sections for link in (section.get("links", []) or []) if str(link.get("source_path", ""))}
+@@ -428,6 +458,9 @@ def normalize_scan_summary(record: dict[str, Any], *, source_unit_count: int | N
+         "doc_file_count": coerce_int(normalized.get("doc_file_count"), len(doc_hashes)),
+         "source_hashes": source_hashes,
+         "doc_hashes": doc_hashes,
++        "changed_docs": sorted(str(value) for value in (normalized.get("changed_docs", []) or [])),
++        "added_docs": sorted(str(value) for value in (normalized.get("added_docs", []) or [])),
++        "deleted_docs": sorted(str(value) for value in (normalized.get("deleted_docs", []) or [])),
+         "changed_sources": sorted(str(value) for value in (normalized.get("changed_sources", []) or [])),
+         "deleted_sources": sorted(str(value) for value in (normalized.get("deleted_sources", []) or [])),
+         "changed_units": [normalize_changed_unit(dict(item)) for item in (normalized.get("changed_units", []) or [])],
+@@ -456,6 +489,9 @@ def build_scan_summary(scan: dict[str, Any], *, version: int, source_index_hash:
+             "doc_file_count": len(dict(scan.get("doc_hashes", {}))),
+             "source_hashes": dict(scan.get("source_hashes", {})),
+             "doc_hashes": dict(scan.get("doc_hashes", {})),
++            "changed_docs": list(scan.get("changed_docs", []) or []),
++            "added_docs": list(scan.get("added_docs", []) or []),
++            "deleted_docs": list(scan.get("deleted_docs", []) or []),
+             "changed_sources": list(scan.get("changed_sources", []) or []),
+             "deleted_sources": list(scan.get("deleted_sources", []) or []),
+             "changed_units": list(scan.get("changed_units", []) or []),
+diff --git a/skills/documentledger/SKILL.md b/skills/documentledger/SKILL.md
+index 1f4fe51..5a46038 100644
+--- a/skills/documentledger/SKILL.md
++++ b/skills/documentledger/SKILL.md
+@@ -1,102 +1,67 @@
+ ---
+ name: documentledger
+-description: Maintain source-backed Markdown/Sphinx documentation and freshness using Documentledger.
++description: Maintain source-backed documentation using Documentledger capabilities, review, and freshness evidence.
++requires:
++  capabilities:
++    - review.v1
+ ---
+
+ # Documentledger documentation workflow
+
+-Use this skill when documenting or updating a repository that uses Documentledger. Documentledger tracks evidence and freshness; it does not write documentation prose for the agent. The user's requested documentation task remains primary even when a supporting ledger command fails.
++Use this skill when changing documentation in a repository that uses Documentledger.
+
+ <!-- docledger-section: skill-entry -->
+
+-## Entry and health checks
++## Capability handshake
+
+-1. Run `documentledger --json status`; inspect the inner `result.state`, `result.issues`, and coverage fields, not only the outer envelope's `ok`.
+-2. Run `documentledger --json doctor`; require `result.ok` and review every item in `result.issues`. A successful outer JSON envelope does not mean the diagnosis passed.
+-3. Run `documentledger storage where` when the configured data/artifacts mounts are unclear.
+-4. Resolve invalid source roots, missing storage, schema/binding errors, and linked-section corruption before relying on scan or link results. Use documented CLI/config workflows; never edit ledger data directly.
+-5. Decide whether this is a bootstrap (no usable baseline/link graph) or incremental documentation task.
++Start by reading the installed CLI's capability contract. Do not assume the package supports an optional workflow mentioned elsewhere.
+
+-<!-- docledger-section: skill-bootstrap -->
++```bash
++documentledger --json capabilities
++```
+
+-## Bootstrap: create and validate the documentation
++Require schema `documentledger.capabilities.v1`. Inspect `features`, `capabilities`, and `commands` before choosing a workflow. The normal path uses `review.v1`; run completion only when `finish.v1` is advertised.
+
+-Complete these phases in order. Do not jump from a baseline scan directly to link proposals or freshness.
++## Normal review and finish path
+
+-### 1. Diagnose and establish a baseline
+-
+-- Check `status` and `doctor` as above, and confirm source roots match the package being documented.
+-- Run `documentledger --json scan`. An initial scan with no changed sources is a normal baseline; it is not evidence that the docs are complete.
+-- Gather the source inventory, public API and CLI evidence. Use CLI `--help` or runtime examples where practical; do not infer public behavior from filenames alone.
+-
+-### 2. Acquire complete context
+-
+-- Prefer `documentledger --json document build-context --bootstrap` to save the context in the configured artifacts store. For small output, `documentledger document build-context --bootstrap --out -` streams raw Markdown; do not combine `--out -` with `--json`.
+-- Read the complete output. Inspect `truncated`, `omitted`, unit counts, completeness banners/manifests, and any `next_cursor` or continuation selector. Retrieve every chunk/unit needed for the requested API or CLI topic before writing claims.
+-- Resume with `--cursor NEXT_CURSOR` until `next_cursor` is null; adjust `--page-size` or `--max-bytes` when a page cannot fit. `--strict` rejects incomplete output and returns actionable cursor details. Never silently treat a partial page as complete.
+-- If an output target is unwritable, keep the requested destination semantics: use the configured artifacts output, raw stdout when suitable, or another explicitly writable path. Do not stop the main documentation task after a support-tool failure; recover and resume.
+-
+-### 3. Inventory the requested docs and build
+-
+-Read the actual implementation/public API, relevant CLI definitions and help, README, user requirements, existing Markdown headings/navigation, `docs/conf.py`, `docs/requirements.txt`, and any existing `docs/changelog.md`. Record:
+-
+-- Which pages the user requested and which are optional supplements.
+-- Existing docs/headings, missing pages, dangling toctree targets, and stale package/config names.
+-- The Sphinx extensions/theme in use and whether the requirements file supplies them.
+-- Public APIs/CLI commands/options and source identifiers that support the documentation.
+-- Generated or separately owned files. A releaseledger-owned changelog is read-only unless the user explicitly asks to change its contents.
+-
+-### 4. Author Markdown and Sphinx pages before linking
+-
+-- Create or update `docs/index.md` and the relevant user-requested pages under `docs/` (for example installation, quickstart, CLI/API, configuration, examples, or troubleshooting when applicable). Use valid MyST Markdown and Sphinx directives; do not create generic pages that the package does not need.
+-- Repair `docs/conf.py` for the actual package and ensure imports/build configuration are valid.
+-- Update the Sphinx toctree to include every requested page. If `docs/changelog.md` is requested, include `changelog` in navigation so the existing page appears in the built site.
+-- Preserve releaseledger-owned changelog bytes, marker, and release entries. Inclusion means linking the existing page in the toctree, not copying, regenerating, or rewriting it.
+-
+-### 5. Reconcile headings and review mapping proposals
++<!-- docledger-section: skill-incremental -->
+
+-- After authoring, run `documentledger --json scan` again and inspect the new document headings and source inventory.
+-- Only then run `documentledger --json link propose --all-docs` (omit `--out-dir` to use the configured artifacts store). Review every returned proposal file and `proposal-manifest.yaml` entry; a proposal is a candidate, not proof of correctness.
+-- Correct proposals using source-backed evidence. Explicitly resolve documents with no candidates as intentional no-ops or unresolved review items; they have empty proposal files and remain reviewable.
+-- After inspection and edits, seal the selected content with `documentledger --json link import-map --directory DIR --review` (or `--file PATH --review` for a subset). This explicit review action records content hashes; edits after review invalidate them.
+-- Import only reviewed manifest entries with `--directory DIR --check-and-apply`, or pass explicitly selected standalone files with `--file`. Directory import ignores and reports unlisted YAML and refuses a stale scan-bound manifest.
+-- To regenerate into a directory that already has a manifest, pass `--replace-owned-proposals`; only manifest-owned outputs may be replaced. Unowned files are preserved. Never import every YAML file from a reused directory containing stale or user-owned files.
+-- Run `documentledger --json link audit` and `documentledger --json coverage`. Classify every configured document and review uncovered/omitted source units; do not use `--allow-unlinked --all` as a default shortcut.
++1. Run `documentledger --json status` and `documentledger --json doctor`. Inspect the inner `result`, including issues and storage bindings. Stop on linked missing sections, missing source units, invalid roots, schema errors, invalid bindings, or other link corruption.
++2. If `review.v1` is advertised, run `documentledger review`. The command runs or reuses the incremental scan, reports affected sections and relevant unmapped changes, and applies only exact policy-approved references. Default JSON is bounded; use `--details` only when the complete arrays are needed.
++3. Update the listed documentation claims from source evidence. Treat ambiguous matches as review items, not mappings to accept automatically. Use `--doc PATH` to scope a review when useful.
++4. If `finish.v1` is advertised, run the completion command below after updating the documentation. Use explicit decisions for unchanged reviewed claims and verified generated references.
+
+-### 6. Validate the actual current docs
++<!-- requires-capability: finish.v1 -->
+
+-- Use the dependencies in `docs/requirements.txt` in the intended project environment; confirm extensions referenced by `docs/conf.py` are installed.
+-- For a Sphinx project, run `python -m sphinx -b html -n -W --keep-going docs docs/_build/html`. Do not suppress warnings merely to obtain a pass. Verify the expected HTML pages exist and that the built navigation includes the requested changelog and other pages.
+-- Run package-relevant docs checks. A skipped or failing required build is a blocker, not a successful validation.
++```bash
++documentledger finish
++```
+
+-### 7. Freshness, completion gate, and final response
++The finish command reconciles sections, audits links, and runs configured validation before writing any freshness dispositions. Pass `--reviewed-no-change DOC#SECTION=REASON` when an affected section remains accurate, or `--generated-verified DOC#SECTION=REASON` for a generated reference. A failed gate leaves freshness unchanged.
+
+-- Mark only reviewed, authored, validated documentation fresh; use a scoped `document mark-fresh` command and a truthful reason. Never mark fresh after a failed or skipped required build.
+-- Run link audit, coverage, `documentledger --json check`, `documentledger --json status`, and the strict documentation-completion gate when available. A clean doctor, baseline scan, link audit, ordinary check, or `freshness_state: clean` alone does not prove documentation completion.
+-- Confirm completion evidence is current for the authored docs and build configuration. If any gate fails, retain the incomplete status and explain the blocker.
+-- Report the pages created/updated, changelog preservation/navigation, build and test commands with results, coverage decisions, final Documentledger status, and any outstanding gaps.
++If `finish.v1` is unavailable, keep the work incomplete until the supported fallback gates pass: run configured documentation validation, `documentledger --json link audit`, and `documentledger --json check`; then use a scoped `documentledger document mark-fresh --doc PATH --section SECTION_ID --reason "Validated update."` command with a truthful reason and finish with `documentledger --json status`.
+
+-<!-- docledger-section: skill-incremental -->
++## Bootstrap and advanced mapping
+
+-## Incremental documentation updates
++If `review.v1` is unavailable, retain the lower-level workflow rather than using unsupported flags:
+
+-1. Run `documentledger --json scan` and `documentledger --json document affected`.
+-2. Inspect affected section/source-unit evidence and complete any truncated context before editing.
+-3. Update affected sections, expanding to new docs when changed public APIs or CLI symbols are not yet mapped. Do not assume unchanged linked sections cover a newly added public interface.
+-4. Reconcile changed headings with another scan and review/import only current, explicit proposal files.
+-5. Run the configured docs validation; for Sphinx use the strict command above and verify output pages/navigation.
+-6. Review link audit, coverage and completion gates. Only then mark the validated sections fresh and run `check` and `status`.
++```bash
++documentledger --json scan
++documentledger document build-context --bootstrap
++documentledger link propose --all-docs --out-dir PATH
++documentledger link import-map --file PATH --apply
++documentledger --json link audit
++documentledger --json coverage
++```
+
+-During a scan, current Markdown owns section existence and metadata. Harmless removed unlinked entries may be reconciled automatically; a removed linked section remains an actionable orphan. Move its edge to a current section with `link add-section`, or remove it with `link remove-section --section SECTION_ID`, then rerun `link audit`.
++Review proposal evidence before applying it. Do not assume proposal manifests, context pagination, or import-map review unless the capability contract advertises them. Test-only changes are not product documentation requirements by default; explicit test links remain meaningful.
+
+ <!-- docledger-section: skill-precision -->
+
+ ## Precision, portability, and safety
+
+-- Prefer `documentledger link add-section` evidence edges over broad file links. Never invent edges to improve coverage.
+-- Never assume a global temporary directory exists or is writable. Prefer the ledgercore-resolved artifacts mount or a writable, explicitly selected project path.
+-- A failure in a supporting tool must not replace the user's requested documentation work with a repair-report-only task. Try a supported output alternative and resume; record a repair observation only after recovery or after explaining a genuine block.
+-- Do not edit `.ledger/` records manually, add timestamps to deterministic ledger state, bypass ledgercore atomic writes, migrate storage as a side effect of doc generation, or delete user-owned proposal files.
+-- Do not rewrite a releaseledger-generated changelog unless the user explicitly requested a content change.
+-- Do not weaken lint, Sphinx, type-check, or documentation validation settings solely to pass a completion gate. Fix content/configuration issues or report the blocker.
+-- Compatibility aliases (`docledger`, plural command groups, root `mark-fresh`, and legacy storage wrappers) are for existing callers. Use `documentledger` and canonical singular command paths in new automation.
++Prefer `documentledger link add-section` evidence edges over broad file links. Never invent edges to improve coverage. Do not edit `.ledger/` records manually, add timestamps, migrate storage as a side effect, or treat a clean scan as proof that documentation is complete. Preserve user-owned files and use the configured validation environment.
++
++## Compatibility
++
++`docledger`, plural command groups, root `mark-fresh`, and legacy storage wrappers remain compatibility interfaces. Use canonical `documentledger` commands for new automation.
+diff --git a/tests/test_doc_record_reconciliation.py b/tests/test_doc_record_reconciliation.py
+index ab425c0..d0cb054 100644
+--- a/tests/test_doc_record_reconciliation.py
++++ b/tests/test_doc_record_reconciliation.py
+@@ -183,3 +183,115 @@ def test_linked_orphan_is_retained_audited_and_repairable(project: Path, runner:
+     )
+     assert not any(section["links"] for section in removed["result"]["sections"] if section["section_id"] == orphan["section_id"])
+     assert invoke_json(runner, ["link", "audit"])["result"]["ok"] is True
++
++
++def test_high_confidence_heading_rename_preserves_links_freshness_and_pending_hash(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    write_precision_sample(project)
++    (project / "docs" / "generated.md").write_text(
++        "# Guide\n\n## Old overview\n\nThis section describes the current public command behavior in detail.\n\n"
++        "## Keep\n\nThis section remains stable.\n",
++        encoding="utf-8",
++    )
++    invoke_json(runner, ["scan"])
++    invoke_json(
++        runner,
++        [
++            "link",
++            "add-section",
++            "--doc",
++            "docs/generated.md",
++            "--section",
++            "old-overview",
++            "--source-unit",
++            "py:function:documentledger/cli.py::doctor",
++            "--coverage",
++            "cli-command",
++            "--impact",
++            "behavior",
++            "--reason",
++            "Documents the doctor command.",
++        ],
++    )
++    invoke_json(runner, ["scan"])
++    invoke_json(
++        runner,
++        [
++            "document",
++            "mark-fresh",
++            "--doc",
++            "docs/generated.md",
++            "--section",
++            "old-overview",
++            "--reason",
++            "Reviewed baseline.",
++        ],
++    )
++    before = load_doc_record(load_workspace(start=project), "docs/generated.md")
++    old_section = next(section for section in before["sections"] if section["section_id"].endswith("::old-overview"))
++    (project / "docs" / "generated.md").write_text(
++        (project / "docs" / "generated.md").read_text(encoding="utf-8").replace("Old overview", "New overview"),
++        encoding="utf-8",
++    )
++
++    result = invoke_json(runner, ["scan"])["result"]
++    after = load_doc_record(load_workspace(start=project), "docs/generated.md")
++    renamed = next(section for section in after["sections"] if section["section_id"].endswith("::new-overview"))
++
++    assert result["reconciliation"]["sections_renamed"] == 1
++    assert result["reconciliation"]["possible_section_rename_count"] == 0
++    assert renamed["links"] == old_section["links"]
++    assert renamed["freshness"] == old_section["freshness"]
++    assert renamed["pending_section_hash"] == old_section["section_hash"]
++    assert invoke_json(runner, ["link", "audit"])["result"]["ok"] is True
++
++
++def test_ambiguous_heading_renames_are_reported_without_moving_links(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    write_precision_sample(project)
++    shared_body = "Both sections describe the same shared behavior and cannot be distinguished by content alone."
++    doc = project / "docs" / "generated.md"
++    doc.write_text(f"# Guide\n\n## First mechanism\n\n{shared_body}\n\n## Second mechanism\n\n{shared_body}\n", encoding="utf-8")
++    invoke_json(runner, ["scan"])
++    for section, source in (("first-mechanism", "scan"), ("second-mechanism", "doctor")):
++        invoke_json(
++            runner,
++            [
++                "link",
++                "add-section",
++                "--doc",
++                "docs/generated.md",
++                "--section",
++                section,
++                "--source-unit",
++                f"py:function:documentledger/cli.py::{source}",
++                "--coverage",
++                "cli-command",
++                "--impact",
++                "behavior",
++                "--reason",
++                f"Documents {source}.",
++            ],
++        )
++    invoke_json(runner, ["scan"])
++    doc.write_text(
++        doc.read_text(encoding="utf-8").replace("First mechanism", "Renamed first").replace("Second mechanism", "Renamed second"),
++        encoding="utf-8",
++    )
++
++    result = invoke_json(runner, ["scan"])["result"]
++    record = load_doc_record(load_workspace(start=project), "docs/generated.md")
++    linked_ids = {section["section_id"] for section in record["sections"] if section["links"]}
++
++    assert result["reconciliation"]["sections_renamed"] == 0
++    assert result["reconciliation"]["possible_section_rename_count"] > 0
++    possible_renames = result["reconciliation"]["possible_section_renames"]
++    assert any(
++        item["old_section_id"] == "md:section:docs/generated.md::first-mechanism"
++        and item["candidate_section_id"].endswith("::renamed-first")
++        for item in possible_renames
++    )
++    assert {"md:section:docs/generated.md::first-mechanism", "md:section:docs/generated.md::second-mechanism"} <= linked_ids
++    assert all(
++        not section["links"] for section in record["sections"] if section["section_id"].endswith(("::renamed-first", "::renamed-second"))
++    )
+diff --git a/tests/test_docs.py b/tests/test_docs.py
+index 84b4100..9dbc325 100644
+--- a/tests/test_docs.py
++++ b/tests/test_docs.py
+@@ -38,8 +38,10 @@ def test_mark_fresh_updates_fields(project: Path, runner: CliRunner) -> None:
+     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
+     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
+     assert data["result"]["updated_docs"] == ["README.md"]
+-    assert record["schema"] == "documentledger.doc_record.v4"
++    assert record["schema"] == "documentledger.doc_record.v5"
+     assert record["last_fresh_scan_version"] == scan_version
++    assert record["sections"][0]["freshness"]["disposition"] == "reviewed-no-change"
++    assert record["sections"][0]["freshness"]["source_scan_version"] == scan_version
+     assert record["version"] == storage["state_version"]
+     assert_no_timestamp_keys(record)
+
+diff --git a/tests/test_finish.py b/tests/test_finish.py
+new file mode 100644
+index 0000000..bf8bfba
+--- /dev/null
++++ b/tests/test_finish.py
+@@ -0,0 +1,244 @@
++from __future__ import annotations
++
++from copy import deepcopy
++from pathlib import Path
++
++import yaml
++from typer.testing import CliRunner
++
++from documentledger.storage import load_workspace, normalize_doc_record, save_doc_record
++from tests.conftest import invoke_json, invoke_json_may_fail, load_yaml, write_precision_sample
++
++
++def _setup_linked_project(project: Path, runner: CliRunner, *, generated: bool = False) -> None:
++    invoke_json(runner, ["init"])
++    write_precision_sample(project)
++    invoke_json(runner, ["scan"])
++    for section, source, coverage in (
++        ("usage", "scan", "generated-reference" if generated else "cli-command"),
++        ("usage-run-scan", "scan", "generated-reference" if generated else "cli-command"),
++        ("usage-validate-ledger-state", "doctor", "cli-command"),
++    ):
++        invoke_json(
++            runner,
++            [
++                "link",
++                "add-section",
++                "--doc",
++                "docs/usage.md",
++                "--section",
++                section,
++                "--source-unit",
++                f"py:function:documentledger/cli.py::{source}",
++                "--coverage",
++                coverage,
++                "--impact",
++                "behavior",
++                "--reason",
++                f"Documents the {source} command.",
++            ],
++        )
++    invoke_json(runner, ["scan"])
++    invoke_json(runner, ["review"])
++
++
++def _change_scan_signature(project: Path) -> None:
++    path = project / "documentledger" / "cli.py"
++    path.write_text(
++        path.read_text(encoding="utf-8").replace(
++            "def scan(ctx: typer.Context) -> None:",
++            "def scan(ctx: typer.Context, full: bool = False) -> None:",
++        ),
++        encoding="utf-8",
++    )
++
++
++def _record_path(project: Path) -> Path:
++    return next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml"))
++
++
++def _section_freshness(project: Path, slug: str = "usage-run-scan") -> dict[str, object] | None:
++    record = load_yaml(_record_path(project))
++    section = next(section for section in record["sections"] if section["section_id"].endswith(f"::{slug}"))
++    return section.get("freshness")
++
++
++def test_finish_records_updated_after_source_and_section_edit(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    _change_scan_signature(project)
++    doc = project / "docs" / "usage.md"
++    doc.write_text(
++        doc.read_text(encoding="utf-8").replace("Run `docledger scan`.", "Run `docledger scan` and inspect the result."),
++        encoding="utf-8",
++    )
++
++    result = invoke_json(
++        runner,
++        [
++            "finish",
++            "--reviewed-no-change",
++            "docs/usage.md#usage=Overview remains accurate.",
++        ],
++    )["result"]
++
++    freshness = _section_freshness(project)
++    assert freshness is not None
++    assert freshness["disposition"] == "updated"
++    assert freshness["source_scan_version"] == result["scan_version"]
++    assert freshness["section_hash"]
++    assert any(item["section_id"].endswith("::usage-run-scan") for item in result["freshness"])
++    assert invoke_json(runner, ["document", "affected"])["result"]["affected_sections"] == []
++
++
++def test_finish_requires_decision_for_unchanged_affected_section(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    _change_scan_signature(project)
++
++    exit_code, result = invoke_json_may_fail(runner, ["finish"])
++
++    assert exit_code != 0
++    assert result["error"]["code"] == "freshness-decision-required"
++    assert _section_freshness(project) is None
++
++
++def test_finish_records_reviewed_no_change_reason(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    _change_scan_signature(project)
++
++    invoke_json(
++        runner,
++        [
++            "finish",
++            "--reviewed-no-change",
++            "docs/usage.md#usage=Overview remains accurate.",
++            "--reviewed-no-change",
++            "docs/usage.md#usage-run-scan=Behavior remains accurate.",
++        ],
++    )
++
++    freshness = _section_freshness(project)
++    assert freshness is not None
++    assert freshness["disposition"] == "reviewed-no-change"
++    assert freshness["reason"] == "Behavior remains accurate."
++
++
++def test_finish_requires_and_records_generated_verification(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner, generated=True)
++    _change_scan_signature(project)
++
++    exit_code, missing_decision = invoke_json_may_fail(runner, ["finish"])
++    assert exit_code != 0
++    assert missing_decision["error"]["code"] == "freshness-decision-required"
++    assert _section_freshness(project) is None
++
++    invoke_json(
++        runner,
++        [
++            "finish",
++            "--generated-verified",
++            "docs/usage.md#usage=Generated reference verified.",
++            "--generated-verified",
++            "docs/usage.md#usage-run-scan=Generated reference verified.",
++        ],
++    )
++
++    freshness = _section_freshness(project)
++    assert freshness is not None
++    assert freshness["disposition"] == "generated-verified"
++    assert freshness["reason"] == "Generated reference verified."
++
++
++def test_finish_validation_failure_does_not_record_freshness(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    _change_scan_signature(project)
++    config = project / ".ledger" / "documentledger" / "config.toml"
++    config.write_text(
++        config.read_text(encoding="utf-8").replace("commands = []", "commands = [\"python -c 'import sys; sys.exit(3)'\"]"),
++        encoding="utf-8",
++    )
++
++    exit_code, result = invoke_json_may_fail(
++        runner,
++        [
++            "finish",
++            "--reviewed-no-change",
++            "docs/usage.md#usage=Overview remains accurate.",
++            "--reviewed-no-change",
++            "docs/usage.md#usage-run-scan=Behavior remains accurate.",
++        ],
++    )
++
++    assert exit_code != 0
++    assert result["error"]["code"] == "validation-subprocess-failed"
++    assert _section_freshness(project) is None
++
++
++def test_finish_validation_retry_preserves_edited_section_baseline(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    _change_scan_signature(project)
++    record = load_yaml(_record_path(project))
++    section = next(item for item in record["sections"] if item["section_id"].endswith("::usage-run-scan"))
++    original_hash = section["section_hash"]
++    doc = project / "docs" / "usage.md"
++    doc.write_text(
++        doc.read_text(encoding="utf-8").replace("Run `docledger scan`.", "Run `docledger scan` and inspect the result."),
++        encoding="utf-8",
++    )
++    config = project / ".ledger" / "documentledger" / "config.toml"
++    config.write_text(
++        config.read_text(encoding="utf-8").replace("commands = []", "commands = [\"python -c 'import sys; sys.exit(3)'\"]"),
++        encoding="utf-8",
++    )
++
++    exit_code, result = invoke_json_may_fail(
++        runner,
++        ["finish", "--reviewed-no-change", "docs/usage.md#usage=Overview remains accurate."],
++    )
++
++    assert exit_code != 0
++    assert result["error"]["code"] == "validation-subprocess-failed"
++    assert _section_freshness(project) is None
++    failed_record = load_yaml(_record_path(project))
++    failed_section = next(item for item in failed_record["sections"] if item["section_id"].endswith("::usage-run-scan"))
++    assert failed_section["pending_section_hash"] == original_hash
++
++    config.write_text(
++        config.read_text(encoding="utf-8").replace(
++            "commands = [\"python -c 'import sys; sys.exit(3)'\"]",
++            "commands = []",
++        ),
++        encoding="utf-8",
++    )
++    invoke_json(runner, ["finish", "--reviewed-no-change", "docs/usage.md#usage=Overview remains accurate."])
++
++    assert _section_freshness(project)["disposition"] == "updated"
++
++
++def test_finish_link_audit_failure_does_not_record_freshness(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    (project / "documentledger" / "cli.py").unlink()
++    invoke_json(runner, ["scan"])
++
++    exit_code, result = invoke_json_may_fail(runner, ["finish"])
++
++    assert exit_code != 0
++    assert result["error"]["code"] == "link-audit-failed"
++    assert _section_freshness(project) is None
++
++
++def test_legacy_doc_record_upgrades_without_losing_links(project: Path, runner: CliRunner) -> None:
++    _setup_linked_project(project, runner)
++    path = _record_path(project)
++    raw_record = load_yaml(path)
++    links = deepcopy(raw_record["sections"][0]["links"])
++    raw_record["schema"] = "documentledger.doc_record.v4"
++    path.write_text(yaml.safe_dump(raw_record, sort_keys=False), encoding="utf-8")
++
++    workspace = load_workspace(start=project)
++    normalized = normalize_doc_record(workspace, raw_record)
++    save_doc_record(workspace, raw_record)
++
++    migrated = load_yaml(path)
++    assert normalized["schema"] == "documentledger.doc_record.v5"
++    assert migrated["schema"] == "documentledger.doc_record.v5"
++    assert migrated["sections"][0]["links"] == links
+diff --git a/tests/test_link_proposal_specificity.py b/tests/test_link_proposal_specificity.py
+new file mode 100644
+index 0000000..0e61117
+--- /dev/null
++++ b/tests/test_link_proposal_specificity.py
+@@ -0,0 +1,107 @@
++from __future__ import annotations
++
++from documentledger.links import _proposal_links_for_section
++from documentledger.source_index import index_python_source
++
++READIO_SOURCE = """
++class Readio:
++    def speak(self):
++        return None
++
++    def render(self):
++        return None
++
++    def install_model(self):
++        return None
++
++    def update_model(self):
++        return None
++
++    def remove_model(self):
++        return None
++"""
++
++
++def _inventory(source: str = READIO_SOURCE, path: str = "readio/api/service.py") -> dict[str, dict[str, object]]:
++    return {unit.source_id: unit.to_record() for unit in index_python_source(path, source)}
++
++
++def _propose(text: str, inventory: dict[str, dict[str, object]] | None = None):
++    return _proposal_links_for_section(text, inventory or _inventory())
++
++
++def test_exact_function_reference_suppresses_module_dependency() -> None:
++    inventory = _inventory("def do_work():\n    return None\n", "readio/api/service.py")
++    proposals, stats = _propose("Use `readio/api/service.py::do_work()`.\n", inventory)
++
++    assert [item["source_unit"] for item in proposals] == ["py:function:readio/api/service.py::do_work"]
++    assert stats["dominated_ancestors"] == 2
++
++
++def test_exact_member_reference_suppresses_class_body_dependency() -> None:
++    proposals, stats = _propose("## Engine model management\nUse `Readio.update_model()`.\n")
++
++    assert [item["source_unit"] for item in proposals] == ["py:method:readio/api/service.py::Readio.update_model"]
++    assert proposals[0]["coverage"] == "api-autodoc"
++    assert proposals[0]["tracked_hashes"] == ["signature_hash", "docstring_hash", "public_contract_hash"]
++    assert stats["dominated_ancestors"] == 1
++
++
++def test_two_exact_member_references_produce_only_member_links() -> None:
++    proposals, _ = _propose("Use `Readio.install_model(), Readio.update_model()`.\n")
++
++    assert {item["source_unit"] for item in proposals} == {
++        "py:method:readio/api/service.py::Readio.install_model",
++        "py:method:readio/api/service.py::Readio.update_model",
++    }
++    assert not any(item["source_unit"] == "py:class:readio/api/service.py::Readio" for item in proposals)
++
++
++def test_independent_class_claim_keeps_class_dependency() -> None:
++    proposals, _ = _propose("The Readio facade owns engine and model lifecycle operations.\n\nUse `Readio.update_model()`.\n")
++
++    assert {item["source_unit"] for item in proposals} == {
++        "py:class:readio/api/service.py::Readio",
++        "py:method:readio/api/service.py::Readio.update_model",
++    }
++    class_link = next(item for item in proposals if item["source_unit"].startswith("py:class:"))
++    assert class_link["tracked_hashes"] == ["body_hash", "public_contract_hash"]
++
++
++def test_ambiguous_unqualified_symbol_is_reported_without_a_guess() -> None:
++    source = """
++class First:
++    def refresh(self):
++        return None
++
++class Second:
++    def refresh(self):
++        return None
++"""
++    proposals, stats = _propose("Use `refresh()`.\n", _inventory(source))
++
++    assert proposals == []
++    assert stats["ambiguous_matches"] == 1
++
++
++def test_exact_source_directive_resolves_and_selects_hash_dimension() -> None:
++    source_id = "py:method:readio/api/service.py::Readio.update_model"
++    text = f'<!-- documentledger:\ndepends-on="{source_id}"\nwatch="public_contract"\n-->\n'
++
++    proposals, _ = _propose(text)
++
++    assert len(proposals) == 1
++    assert proposals[0]["source_unit"] == source_id
++    assert proposals[0]["tracked_hashes"] == ["public_contract_hash"]
++    assert proposals[0]["confidence"] == "exact"
++
++
++def test_test_units_are_excluded_unless_explicitly_enabled() -> None:
++    test_inventory = _inventory("def test_public_api():\n    return None\n", "tests/test_api.py")
++
++    excluded, stats = _propose("Use `test_public_api()`.\n", test_inventory)
++    included, _ = _proposal_links_for_section("Use `test_public_api()`.\n", test_inventory, include_tests=True)
++
++    assert excluded == []
++    assert stats["excluded_test_units"] > 0
++    assert any("tests/test_api.py" in item["source_unit"] for item in included)
+diff --git a/tests/test_links.py b/tests/test_links.py
+index 867e1cf..87ad222 100644
+--- a/tests/test_links.py
++++ b/tests/test_links.py
+@@ -22,7 +22,7 @@ def test_add_link_idempotent(project: Path, runner: CliRunner) -> None:
+     record = load_yaml(next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml")))
+     storage = load_yaml(project / ".ledger" / "documentledger" / "data" / "storage.yaml")
+     assert data["result"]["linked_sources"] == ["documentledger/cli.py"]
+-    assert record["schema"] == "documentledger.doc_record.v4"
++    assert record["schema"] == "documentledger.doc_record.v5"
+     assert record["last_fresh_scan_version"] == 0
+     assert "last_fresh_scan_id" not in record
+     assert record["version"] == 2
+diff --git a/tests/test_render.py b/tests/test_render.py
+index 293348e..74e42e7 100644
+--- a/tests/test_render.py
++++ b/tests/test_render.py
+@@ -91,6 +91,7 @@ def test_affected_context_includes_only_target_section_and_source_unit(project:
+     result = runner.invoke(__import__("documentledger.cli").cli.app, ["docs", "build-context", "--affected", "--print"])
+     assert result.exit_code == 0
+     assert "docs/usage.md :: Usage / Validate ledger state" in result.output
++    assert "Review action: update_required" in result.output
+     assert "py:function:documentledger/cli.py::doctor" in result.output
+     assert "py:function:documentledger/cli.py::scan" not in result.output
+     assert 'def doctor(ctx: typer.Context, json: bool = typer.Option(False, "--json"))' in result.output
+diff --git a/tests/test_review.py b/tests/test_review.py
+new file mode 100644
+index 0000000..0b40a09
+--- /dev/null
++++ b/tests/test_review.py
+@@ -0,0 +1,112 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++from typer.testing import CliRunner
++
++from documentledger.impact import review_action_for
++from documentledger.models import ChangedEvidence, MappingSuggestion, ReviewItem, ReviewPlan
++from tests.conftest import invoke_json
++
++
++def test_review_auto_links_only_exact_candidates_and_is_idempotent(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    (project / "documentledger" / "core.py").write_text("def create_report():\n    return 1\n", encoding="utf-8")
++    (project / "docs").mkdir()
++    (project / "docs" / "api.md").write_text(
++        "## Report API\n\nUse `py:function:documentledger/core.py::create_report`.\n",
++        encoding="utf-8",
++    )
++
++    first = invoke_json(runner, ["review"])["result"]
++    second = invoke_json(runner, ["review"])["result"]
++
++    assert first["schema"] == "documentledger.review.v1"
++    assert first["mapping"]["auto_applied"] == 1
++    assert first["mapping"]["auto_applied_edges"][0]["confidence"] == "exact"
++    assert first["mapping"]["review_required"] == 0
++    assert second["mapping"]["auto_applied"] == 0
++
++
++def test_review_surfaces_ambiguous_symbol_candidates_without_linking_them(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    (project / "documentledger" / "first.py").write_text("def convert(value):\n    return value\n", encoding="utf-8")
++    (project / "documentledger" / "second.py").write_text("def convert(value):\n    return str(value)\n", encoding="utf-8")
++    (project / "docs").mkdir()
++    (project / "docs" / "api.md").write_text("## Conversion\n\nUse `convert(value)` here.\n", encoding="utf-8")
++
++    result = invoke_json(runner, ["review"])["result"]
++
++    assert result["mapping"]["auto_applied"] == 0
++    assert result["mapping"]["ambiguous_matches"] == 1
++    assert result["mapping"]["ambiguous_items"][0]["evidence"] == "convert"
++    assert result["mapping"]["review_required"] == 1
++
++
++def test_review_reports_ignored_test_changes_without_mapping_review(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    (project / "tests").mkdir()
++    test_source = project / "tests" / "test_helpers.py"
++    test_source.write_text("def helper():\n    return 1\n", encoding="utf-8")
++    invoke_json(runner, ["scan"])
++    test_source.write_text("def helper():\n    return 2\n", encoding="utf-8")
++
++    result = invoke_json(runner, ["review"])["result"]
++
++    assert result["ignored_changes"] == {"test": 1}
++    assert result["unmapped_relevant_total"] == 0
++    assert result["state"] == "clean"
++
++
++def test_review_output_bounds_default_arrays() -> None:
++    evidence = ChangedEvidence("py:function:pkg.py::f", "pkg.py", ("body_hash",), "production")
++    affected = tuple(
++        ReviewItem("docs/api.md", f"section-{index}", "API", "review_required", "medium", (evidence,) * 100, ("Check it.",))
++        for index in range(1000)
++    )
++    suggestions = tuple(
++        MappingSuggestion(
++            "docs/api.md",
++            f"section-{index}",
++            f"py:function:pkg.py::f{index}",
++            "high",
++            "api",
++            "public-api",
++            "Mentioned.",
++            "f",
++        )
++        for index in range(1000)
++    )
++    plan = ReviewPlan(
++        scan_version=3,
++        state="review_required",
++        affected=affected,
++        unmapped_relevant=(evidence,) * 1000,
++        mapping_suggestions=suggestions,
++        auto_applied=(),
++        ambiguous_items=(),
++        ambiguous_match_count=0,
++        ignored_change_counts={},
++        next_action={"kind": "review_mappings", "command": "finish"},
++    )
++
++    result = plan.to_record()
++
++    assert len(result["affected"]) == 40
++    assert len(result["unmapped_relevant"]) == 40
++    assert len(result["mapping"]["suggestions"]) == 40
++    assert len(result["affected"][0]["changed_units"]) == 40
++    assert result["affected"][0]["changed_units_omitted"] == 60
++    assert result["omitted"] == {
++        "affected": 960,
++        "unmapped_relevant": 960,
++        "suggestions": 960,
++        "auto_applied_edges": 0,
++        "ambiguous_items": 0,
++    }
++
++
++def test_review_action_classifies_public_internal_and_generated_changes() -> None:
++    assert review_action_for([{"coverage": "api-autodoc", "changed_hashes": ["signature_hash"]}]) == "generated_verify"
++    assert review_action_for([{"coverage": "architecture", "changed_hashes": ["body_hash"]}]) == "review_required"
++    assert review_action_for([{"coverage": "api", "changed_hashes": ["signature_hash"]}]) == "update_required"
+diff --git a/tests/test_skill_files.py b/tests/test_skill_files.py
+index 5a78b75..1eb8d4d 100644
+--- a/tests/test_skill_files.py
++++ b/tests/test_skill_files.py
+@@ -1,13 +1,120 @@
+ from __future__ import annotations
+
++import re
++import shlex
+ from pathlib import Path
++from typing import Any
+
++from documentledger.capabilities import capability_record
++from documentledger.command_catalog import COMMAND_INVENTORY
++from tests.conftest import invoke_json
+
+-def test_skill_mentions_canonical_documentation_workflow() -> None:
+-    text = Path("skills/documentledger/SKILL.md").read_text(encoding="utf-8")
+-    assert "documentledger --json status" in text
+-    assert "documentledger --json scan" in text
+-    assert "documentledger --json document affected" in text
+-    assert "documentledger document build-context" in text
+-    assert "Do not edit `.ledger/`" in text
+-    assert "validation before `mark-fresh`" in text or "Never mark fresh after a failed or skipped required build" in text
++SKILL_PATH = Path("skills/documentledger/SKILL.md")
++
++
++def _skill_invocations(text: str) -> list[tuple[str, str | None]]:
++    invocations: list[tuple[int, str, str | None]] = []
++    masked = list(text)
++    gated_blocks = re.compile(
++        r"(?m)(?:<!--\s*requires-capability:\s*([\w.-]+)\s*-->\s*\n)?```bash[^\n]*\n(.*?)\n```",
++        flags=re.DOTALL,
++    )
++    for match in gated_blocks.finditer(text):
++        required = match.group(1)
++        for line in match.group(2).splitlines():
++            command = line.strip().removeprefix("$ ")
++            if command.startswith("documentledger "):
++                invocations.append((match.start(2), command, required))
++        masked[match.start() : match.end()] = " " * (match.end() - match.start())
++    masked_text = "".join(masked)
++    for match in re.finditer(r"`([^`\n]+)`", masked_text):
++        command = match.group(1).strip()
++        if command.startswith("documentledger "):
++            invocations.append((match.start(1), command, None))
++    return [(command, required) for _, command, required in sorted(invocations)]
++
++
++def _option_names(command: Any) -> set[str]:
++    return {
++        option for parameter in command.params for option in (*getattr(parameter, "opts", []), *getattr(parameter, "secondary_opts", []))
++    }
++
++
++def _resolve_cli_command(root: Any, command_path: str) -> Any:
++    command = root
++    for part in command_path.split():
++        command = command.get_command(None, part)
++        assert command is not None, f"CLI command is not registered: {command_path}"
++    return command
++
++
++def _validate_invocation(invocation: str, root: Any, command_paths: set[str], root_options: set[str]) -> None:
++    tokens = shlex.split(invocation)
++    assert tokens and tokens[0] == "documentledger", invocation
++    tokens = tokens[1:]
++    while tokens and tokens[0].startswith("--") and tokens[0].split("=", 1)[0] in root_options:
++        option = tokens.pop(0).split("=", 1)[0]
++        if option == "--root" and tokens and not tokens[0].startswith("-"):
++            tokens.pop(0)
++    path = next(
++        (" ".join(tokens[:size]) for size in range(len(tokens), 0, -1) if " ".join(tokens[:size]) in command_paths),
++        None,
++    )
++    assert path is not None, f"Skill references an unsupported command: {invocation}"
++    command = _resolve_cli_command(root, path)
++    allowed_options = root_options | _option_names(command)
++    for token in tokens[len(path.split()) :]:
++        if token.startswith("--"):
++            option = token.split("=", 1)[0]
++            assert option in allowed_options, f"Skill references unsupported option {option}: {invocation}"
++
++
++def test_skill_starts_with_capability_handshake() -> None:
++    invocations = _skill_invocations(SKILL_PATH.read_text(encoding="utf-8"))
++    assert invocations[0][0] == "documentledger --json capabilities"
++
++
++def test_capability_contract_matches_package_and_command_catalog(runner) -> None:
++    result = invoke_json(runner, ["capabilities"])["result"]
++    catalog_paths = sorted(entry.path for entry in COMMAND_INVENTORY.entries)
++
++    assert result["schema"] == "documentledger.capabilities.v1"
++    from documentledger import __version__
++    from documentledger.storage import STORAGE_SCHEMA_VERSION
++
++    assert set(result) == {"schema", "version", "storage_schema", "features", "capabilities", "commands"}
++    assert result["version"] == __version__
++    assert result["storage_schema"] == STORAGE_SCHEMA_VERSION
++    assert result["storage_schema"] > 0
++    assert result["commands"] == catalog_paths
++    assert result["features"]["review"] is ("review" in catalog_paths)
++    assert result["features"]["finish"] is ("finish" in catalog_paths)
++    assert result["features"]["proposal_manifest"] is False
++    assert result["features"]["context_pagination"] is False
++    assert result["features"]["import_map_review"] is False
++    expected_capabilities = [
++        capability
++        for capability, enabled in (
++            ("review.v1", result["features"]["review"]),
++            ("finish.v1", result["features"]["finish"]),
++        )
++        if enabled
++    ]
++    assert result["capabilities"] == sorted(expected_capabilities)
++
++
++def test_skill_commands_and_options_exist_or_are_capability_gated() -> None:
++    from typer.main import get_command
++
++    from documentledger.cli import app
++
++    skill_text = SKILL_PATH.read_text(encoding="utf-8")
++    root = get_command(app)
++    command_paths = {entry.path for entry in COMMAND_INVENTORY.entries}
++    root_options = _option_names(root)
++    supported_capabilities = set(capability_record()["capabilities"])
++
++    for invocation, required_capability in _skill_invocations(skill_text):
++        if required_capability is not None and required_capability not in supported_capabilities:
++            continue
++        _validate_invocation(invocation, root, command_paths, root_options)
+diff --git a/tests/test_source_roles.py b/tests/test_source_roles.py
+new file mode 100644
+index 0000000..1c59561
+--- /dev/null
++++ b/tests/test_source_roles.py
+@@ -0,0 +1,135 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++from typer.testing import CliRunner
++
++from documentledger.source_roles import classify_source_role
++from tests.conftest import invoke_json, write_precision_sample
++
++
++@pytest.mark.parametrize(
++    ("unit", "expected"),
++    [
++        ("package/api.py", "production"),
++        ("tests/test_api.py", "test"),
++        ("test_api.py", "test"),
++        ("package/api_test.py", "test"),
++        ("package/generated/schema.py", "generated"),
++        ("scripts/docs/build.py", "documentation-support"),
++        ("package/internal/helper.py", "private"),
++        ({"path": "package/api.py", "kind": "function", "qualname": "_helper"}, "private"),
++        ({"path": "data/schema.json", "kind": "file"}, "unknown"),
++    ],
++)
++def test_classifies_source_roles(unit: str | dict[str, str], expected: str) -> None:
++    assert classify_source_role(unit) == expected
++
++
++def _link_production_section(project: Path, runner: CliRunner) -> None:
++    write_precision_sample(project)
++    (project / "documentledger" / "api.py").write_text("def do_thing():\n    return 1\n", encoding="utf-8")
++    invoke_json(
++        runner,
++        [
++            "link",
++            "add-section",
++            "--doc",
++            "docs/usage.md",
++            "--section",
++            "usage-validate-ledger-state",
++            "--source-unit",
++            "py:function:documentledger/api.py::do_thing",
++            "--coverage",
++            "api-autodoc",
++            "--impact",
++            "public-api",
++            "--reason",
++            "Documents the public API.",
++        ],
++    )
++    invoke_json(runner, ["scan"])
++
++
++def test_unmapped_test_changes_do_not_require_mapping_by_default(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    _link_production_section(project, runner)
++    tests_dir = project / "tests"
++    tests_dir.mkdir()
++    (tests_dir / "test_behavior.py").write_text("def behavior_check():\n    return True\n", encoding="utf-8")
++
++    scan = invoke_json(runner, ["scan"])["result"]
++    status = invoke_json(runner, ["status"])["result"]
++
++    assert scan["unlinked_changed_sources"] == ["tests/test_behavior.py"]
++    assert status["mapping_state"] == "complete"
++    assert status["coverage_review_required"] is False
++    assert status["ignored_change_counts"]["test"] >= 1
++
++
++def test_production_unmapped_change_still_requires_mapping_review(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    _link_production_section(project, runner)
++    (project / "documentledger" / "unmapped.py").write_text("value = 2\n", encoding="utf-8")
++
++    invoke_json(runner, ["scan"])
++    status = invoke_json(runner, ["status"])["result"]
++
++    assert status["mapping_state"] == "review_required"
++    assert status["relevant_unmapped_changed_unit_count"] > 0
++
++
++def test_explicit_test_link_still_affects_documentation(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    write_precision_sample(project)
++    tests_dir = project / "tests"
++    tests_dir.mkdir()
++    test_source = tests_dir / "test_behavior.py"
++    test_source.write_text("def behavior_check():\n    return True\n", encoding="utf-8")
++    invoke_json(
++        runner,
++        [
++            "link",
++            "add-section",
++            "--doc",
++            "docs/usage.md",
++            "--section",
++            "usage-validate-ledger-state",
++            "--source-unit",
++            "py:function:tests/test_behavior.py::behavior_check",
++            "--coverage",
++            "implementation-note",
++            "--impact",
++            "implementation-note",
++            "--reason",
++            "Documents an explicitly mapped test contract.",
++        ],
++    )
++    invoke_json(runner, ["scan"])
++    test_source.write_text("def behavior_check():\n    return False\n", encoding="utf-8")
++
++    scan = invoke_json(runner, ["scan"])["result"]
++
++    assert scan["stale_docs"] == ["docs/usage.md"]
++    assert scan["affected_sections"][0]["changed_units"][0]["source_id"] == ("py:function:tests/test_behavior.py::behavior_check")
++
++
++def test_config_can_opt_tests_into_mapping_review(project: Path, runner: CliRunner) -> None:
++    invoke_json(runner, ["init"])
++    _link_production_section(project, runner)
++    config_path = project / ".ledger" / "documentledger" / "config.toml"
++    config = config_path.read_text(encoding="utf-8")
++    config_path.write_text(
++        config.replace('mapping_review_roles = ["production"]', 'mapping_review_roles = ["production", "test"]'),
++        encoding="utf-8",
++    )
++    tests_dir = project / "tests"
++    tests_dir.mkdir()
++    (tests_dir / "test_behavior.py").write_text("def behavior_check():\n    return True\n", encoding="utf-8")
++
++    invoke_json(runner, ["scan"])
++    status = invoke_json(runner, ["status"])["result"]
++
++    assert status["mapping_state"] == "review_required"
++    assert status["relevant_unmapped_changed_unit_count"] > 0
+diff --git a/tests/test_status.py b/tests/test_status.py
+index fac6d80..c1c7230 100644
+--- a/tests/test_status.py
++++ b/tests/test_status.py
+@@ -29,11 +29,12 @@ def test_status_recommendations_use_canonical_commands_and_separate_freshness(pr
+     before_scan = invoke_json(runner, ["status"])["result"]
+     assert before_scan["recommended_command"] == "documentledger scan"
+     assert before_scan["freshness_state"] == "clean"
+-    assert before_scan["mapping_state"] == "review_required"
++    assert before_scan["mapping_state"] == "bootstrap_required"
+     invoke_json(runner, ["scan"])
+     after_scan = invoke_json(runner, ["status"])["result"]
+     assert ".ledger/documentledger/data" not in after_scan["recommended_command"]
+     assert "docledger" not in after_scan["recommended_command"]
++    assert after_scan["recommended_command"] == "documentledger review"
+
+
+ def test_status_reports_missing_workspace(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:
