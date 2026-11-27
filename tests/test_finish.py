@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-from documentledger.storage import load_workspace, normalize_doc_record, save_doc_record
+from documentledger.storage import doc_record_path, load_workspace, normalize_doc_record, save_doc_record
 from tests.conftest import invoke_json, invoke_json_may_fail, load_yaml, write_precision_sample
 
 
@@ -74,7 +74,7 @@ def _change_scan_signature(project: Path) -> None:
 
 
 def _record_path(project: Path) -> Path:
-    return next((project / ".ledger" / "documentledger" / "data" / "docs").glob("*.yaml"))
+    return doc_record_path(load_workspace(start=project), "docs/usage.md")
 
 
 def _section_freshness(project: Path, slug: str = "usage-run-scan") -> dict[str, object] | None:
