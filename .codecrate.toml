@@ -4,10 +4,9 @@ keep_docstrings = true
 dedupe = true
 respect_gitignore = true
 # exclude = ["*/.venv/*", "integration_tests", "examples", "docs"]
-gitignore_allow = ["documentledger/_version.py"]
 exclude = ["*/.venv/*", "integration_tests", "todo.md"]
 include = [
-  "**/*.py", "**/*.toml", "**/*.yaml", "**/*.yml",
+  "**/*.py", "**/*.toml", "**/*.json", "**/*.yaml", "**/*.yml", "LICENSE*",
   "**/*.rst", "**/*.md", "**/*.typed",
   "**/*.js", "**/*.css", "**/*.html", "**/*.conf",
   "**/*.sh", "**/*.txt", "**/Makefile",

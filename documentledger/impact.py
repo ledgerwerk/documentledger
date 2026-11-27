@@ -20,6 +20,14 @@ def review_action_for(changed_links: list[dict[str, Any]]) -> str:
     return "review_required"
 
 
+def legacy_action_for(review_action: str) -> str:
+    return "verify-generated-reference" if review_action == "generated_verify" else "rewrite-section"
+
+
+def with_legacy_action(section: dict[str, Any]) -> dict[str, Any]:
+    return section | {"action": legacy_action_for(str(section.get("review_action", "review_required")))}
+
+
 def link_mismatches(
     link: dict[str, Any],
     source_units: dict[str, dict[str, Any]],
@@ -73,6 +81,12 @@ def resolve_affected_sections(
     changed_sources = set(scan_record.get("changed_sources", []) or [])
     deleted_sources = set(scan_record.get("deleted_sources", []) or [])
     source_units = dict(scan_record.get("source_units", {}))
+    scan_version = int(scan_record.get("version", 0))
+    delta_units = [*(scan_record.get("changed_units", []) or []), *(scan_record.get("added_units", []) or [])]
+    delta_units_by_id = {str(unit.get("source_id", "")): unit for unit in delta_units}
+    delta_units_by_path: dict[str, list[dict[str, Any]]] = {}
+    for unit in delta_units:
+        delta_units_by_path.setdefault(str(unit.get("path", "")), []).append(unit)
     affected: list[dict[str, Any]] = []
     for record in iter_doc_records(workspace):
         doc_path = str(record.get("doc_path", ""))
@@ -81,18 +95,35 @@ def resolve_affected_sections(
         for section in record.get("sections", []) or []:
             if section_id is not None and str(section.get("heading_slug")) != section_id and str(section.get("section_id")) != section_id:
                 continue
-            changed_links = [
-                mismatch
-                for mismatch in (
-                    link_mismatches(dict(link), source_units, changed_sources, deleted_sources) for link in (section.get("links", []) or [])
-                )
-                if mismatch is not None
-            ]
+            freshness = dict(section.get("freshness", {}) or {})
+            freshness_scan_version = int(freshness.get("source_scan_version", 0) or 0)
+            needs_current_delta_review = freshness_scan_version < scan_version
+            changed_links: list[dict[str, Any]] = []
+            for link in section.get("links", []) or []:
+                link_record = dict(link)
+                mismatch = link_mismatches(link_record, source_units, changed_sources, deleted_sources)
+                if mismatch is None and needs_current_delta_review:
+                    source_id = str(link_record.get("source_id", ""))
+                    source_path = str(link_record.get("source_path", ""))
+                    delta_unit = delta_units_by_id.get(source_id)
+                    if delta_unit is None and source_id.startswith("py:file:"):
+                        path_units = delta_units_by_path.get(source_path, [])
+                        delta_unit = path_units[0] if path_units else None
+                    if delta_unit is not None:
+                        mismatch = {
+                            "source_id": source_id,
+                            "source_path": source_path,
+                            "coverage": str(link_record.get("coverage", "")),
+                            "impact": str(link_record.get("impact", "")),
+                            "reason": str(link_record.get("reason", "")),
+                            "change_type": str(delta_unit.get("change_type", "modified")),
+                            "changed_hashes": list(delta_unit.get("changed_hashes", []) or ["file_hash"]),
+                            "line_span": list(delta_unit.get("new_line_span", [0, 0])),
+                        }
+                if mismatch is not None:
+                    changed_links.append(mismatch)
             if not changed_links:
                 continue
-            action = (
-                "verify-generated-reference" if all(link["coverage"] in GENERATED_COVERAGE for link in changed_links) else "rewrite-section"
-            )
             review_action = review_action_for(changed_links)
             affected.append(
                 {
@@ -103,7 +134,6 @@ def resolve_affected_sections(
                     "line_span": list(section.get("line_span", [0, 0])),
                     "section_hash": str(section.get("section_hash", "")),
                     "summary": str(section.get("summary", "")),
-                    "action": action,
                     "review_action": review_action,
                     "changed_units": changed_links,
                 }
@@ -125,8 +155,8 @@ def stale_doc_details(workspace: Workspace, scan: dict[str, Any] | None = None) 
                 "section_id": item["section_id"],
                 "heading_path": item["heading_path"],
                 "line_span": item["line_span"],
-                "action": item["action"],
-                "review_action": item.get("review_action", ""),
+                "action": legacy_action_for(str(item["review_action"])),
+                "review_action": item["review_action"],
             }
         )
         for unit in item.get("changed_units", []) or []:

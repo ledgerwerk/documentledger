@@ -7,31 +7,43 @@ from typing import Any
 
 from documentledger.capabilities import capability_record
 from documentledger.command_catalog import COMMAND_INVENTORY
+from documentledger.proposal_manifest import PROPOSAL_MANIFEST_SCHEMA
 from tests.conftest import invoke_json
 
 SKILL_PATH = Path("skills/documentledger/SKILL.md")
 
 
-def _skill_invocations(text: str) -> list[tuple[str, str | None]]:
-    invocations: list[tuple[int, str, str | None]] = []
+def _skill_invocations(text: str) -> list[tuple[str, tuple[str, ...] | None]]:
+    invocations: list[tuple[int, str, tuple[str, ...] | None]] = []
     masked = list(text)
     gated_blocks = re.compile(
-        r"(?m)(?:<!--\s*requires-capability:\s*([\w.-]+)\s*-->\s*\n)?```bash[^\n]*\n(.*?)\n```",
+        r"(?m)(?:<!--\s*requires-capability:\s*([\w.-]+(?:\s*,\s*[\w.-]+)*)\s*-->\s*\n)?```bash[^\n]*\n(.*?)\n```",
         flags=re.DOTALL,
     )
     for match in gated_blocks.finditer(text):
-        required = match.group(1)
-        for line in match.group(2).splitlines():
-            command = line.strip().removeprefix("$ ")
-            if command.startswith("documentledger "):
-                invocations.append((match.start(2), command, required))
+        required = tuple(part.strip() for part in match.group(1).split(",")) if match.group(1) else None
+        position = match.start(2)
+        pending = ""
+        pending_position = position
+        for raw_line in match.group(2).splitlines(keepends=True):
+            line = raw_line.strip().removeprefix("$ ")
+            if not pending:
+                pending_position = position
+            if line.endswith("\\"):
+                pending += line[:-1].rstrip() + " "
+            else:
+                command = (pending + line).strip()
+                if command.startswith("documentledger "):
+                    invocations.append((pending_position, command, required))
+                pending = ""
+            position += len(raw_line)
         masked[match.start() : match.end()] = " " * (match.end() - match.start())
     masked_text = "".join(masked)
     for match in re.finditer(r"`([^`\n]+)`", masked_text):
         command = match.group(1).strip()
         if command.startswith("documentledger "):
             invocations.append((match.start(1), command, None))
-    return [(command, required) for _, command, required in sorted(invocations)]
+    return [(command, required) for _, command, required in sorted(invocations, key=lambda item: item[0])]
 
 
 def _option_names(command: Any) -> set[str]:
@@ -88,15 +100,24 @@ def test_capability_contract_matches_package_and_command_catalog(runner) -> None
     assert result["storage_schema"] > 0
     assert result["commands"] == catalog_paths
     assert result["features"]["review"] is ("review" in catalog_paths)
-    assert result["features"]["finish"] is ("finish" in catalog_paths)
-    assert result["features"]["proposal_manifest"] is False
-    assert result["features"]["context_pagination"] is False
-    assert result["features"]["import_map_review"] is False
+    assert result["features"]["finish"] is ("finish" in catalog_paths and "document validate" in catalog_paths)
+    assert result["features"]["proposal_manifest"] is (
+        PROPOSAL_MANIFEST_SCHEMA == "documentledger.proposal_manifest.v1"
+        and "link propose" in catalog_paths
+        and "link import-map" in catalog_paths
+    )
+    assert result["features"]["context_pagination"] is True
+    assert result["features"]["import_map_review"] is True
+    assert result["features"]["validation"] is ("document validate" in catalog_paths)
     expected_capabilities = [
         capability
         for capability, enabled in (
             ("review.v1", result["features"]["review"]),
             ("finish.v1", result["features"]["finish"]),
+            ("proposal_manifest.v1", result["features"]["proposal_manifest"]),
+            ("context_pagination.v1", result["features"]["context_pagination"]),
+            ("import_map_review.v1", result["features"]["import_map_review"]),
+            ("validation.v1", result["features"]["validation"]),
         )
         if enabled
     ]
@@ -108,13 +129,18 @@ def test_skill_commands_and_options_exist_or_are_capability_gated() -> None:
 
     from documentledger.cli import app
 
-    skill_text = SKILL_PATH.read_text(encoding="utf-8")
+    workflow_texts = [
+        SKILL_PATH.read_text(encoding="utf-8"),
+        Path("docs/quickstart.md").read_text(encoding="utf-8"),
+        Path("docs/bootstrap.md").read_text(encoding="utf-8"),
+    ]
     root = get_command(app)
     command_paths = {entry.path for entry in COMMAND_INVENTORY.entries}
     root_options = _option_names(root)
     supported_capabilities = set(capability_record()["capabilities"])
 
-    for invocation, required_capability in _skill_invocations(skill_text):
-        if required_capability is not None and required_capability not in supported_capabilities:
-            continue
-        _validate_invocation(invocation, root, command_paths, root_options)
+    for workflow_text in workflow_texts:
+        for invocation, required_capabilities in _skill_invocations(workflow_text):
+            if required_capabilities is not None and not set(required_capabilities) <= supported_capabilities:
+                continue
+            _validate_invocation(invocation, root, command_paths, root_options)

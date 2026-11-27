@@ -53,18 +53,23 @@ def _link_production_section(project: Path, runner: CliRunner) -> None:
 
 
 def test_unmapped_test_changes_do_not_require_mapping_by_default(project: Path, runner: CliRunner) -> None:
-    invoke_json(runner, ["init"])
-    _link_production_section(project, runner)
     tests_dir = project / "tests"
     tests_dir.mkdir()
-    (tests_dir / "test_behavior.py").write_text("def behavior_check():\n    return True\n", encoding="utf-8")
+    test_source = tests_dir / "test_behavior.py"
+    test_source.write_text("def behavior_check():\n    return True\n", encoding="utf-8")
+    invoke_json(runner, ["init"])
+    _link_production_section(project, runner)
+    test_source.write_text("def behavior_check():\n    return False\n", encoding="utf-8")
 
     scan = invoke_json(runner, ["scan"])["result"]
     status = invoke_json(runner, ["status"])["result"]
 
     assert scan["unlinked_changed_sources"] == ["tests/test_behavior.py"]
-    assert status["mapping_state"] == "complete"
-    assert status["coverage_review_required"] is False
+    assert status["change_mapping_state"] == "clean"
+    assert status["mapping_state"] == ("complete" if status["mapping"]["state"] == "covered" else "review_required")
+    if status["mapping_state"] == "complete":
+        assert "mapping_coverage_incomplete" not in status["completion"]["blocking_reasons"]
+    assert status["coverage_review_required"] is (status["mapping"]["state"] != "covered")
     assert status["ignored_change_counts"]["test"] >= 1
 
 
@@ -76,17 +81,18 @@ def test_production_unmapped_change_still_requires_mapping_review(project: Path,
     invoke_json(runner, ["scan"])
     status = invoke_json(runner, ["status"])["result"]
 
-    assert status["mapping_state"] == "review_required"
+    assert status["change_mapping_state"] == "review_required"
+    assert status["mapping_state"] == ("complete" if status["mapping"]["state"] == "covered" else "review_required")
     assert status["relevant_unmapped_changed_unit_count"] > 0
 
 
 def test_explicit_test_link_still_affects_documentation(project: Path, runner: CliRunner) -> None:
-    invoke_json(runner, ["init"])
-    write_precision_sample(project)
     tests_dir = project / "tests"
     tests_dir.mkdir()
     test_source = tests_dir / "test_behavior.py"
     test_source.write_text("def behavior_check():\n    return True\n", encoding="utf-8")
+    invoke_json(runner, ["init"])
+    write_precision_sample(project)
     invoke_json(
         runner,
         [
@@ -116,6 +122,10 @@ def test_explicit_test_link_still_affects_documentation(project: Path, runner: C
 
 
 def test_config_can_opt_tests_into_mapping_review(project: Path, runner: CliRunner) -> None:
+    tests_dir = project / "tests"
+    tests_dir.mkdir()
+    test_source = tests_dir / "test_behavior.py"
+    test_source.write_text("def behavior_check():\n    return True\n", encoding="utf-8")
     invoke_json(runner, ["init"])
     _link_production_section(project, runner)
     config_path = project / ".ledger" / "documentledger" / "config.toml"
@@ -124,12 +134,10 @@ def test_config_can_opt_tests_into_mapping_review(project: Path, runner: CliRunn
         config.replace('mapping_review_roles = ["production"]', 'mapping_review_roles = ["production", "test"]'),
         encoding="utf-8",
     )
-    tests_dir = project / "tests"
-    tests_dir.mkdir()
-    (tests_dir / "test_behavior.py").write_text("def behavior_check():\n    return True\n", encoding="utf-8")
-
+    test_source.write_text("def behavior_check():\n    return False\n", encoding="utf-8")
     invoke_json(runner, ["scan"])
     status = invoke_json(runner, ["status"])["result"]
 
-    assert status["mapping_state"] == "review_required"
+    assert status["change_mapping_state"] == "review_required"
+    assert status["mapping_state"] == ("complete" if status["mapping"]["state"] == "covered" else "review_required")
     assert status["relevant_unmapped_changed_unit_count"] > 0

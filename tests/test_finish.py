@@ -13,7 +13,27 @@ from tests.conftest import invoke_json, invoke_json_may_fail, load_yaml, write_p
 def _setup_linked_project(project: Path, runner: CliRunner, *, generated: bool = False) -> None:
     invoke_json(runner, ["init"])
     write_precision_sample(project)
+    (project / "documentledger" / "overview.py").write_text("OVERVIEW = 'stable'\n", encoding="utf-8")
     invoke_json(runner, ["scan"])
+    invoke_json(
+        runner,
+        [
+            "link",
+            "add-section",
+            "--doc",
+            "README.md",
+            "--section",
+            "docs",
+            "--source-unit",
+            "py:file:documentledger/overview.py",
+            "--coverage",
+            "broad-file-fallback",
+            "--impact",
+            "unknown",
+            "--reason",
+            "Maps the project overview.",
+        ],
+    )
     for section, source, coverage in (
         ("usage", "scan", "generated-reference" if generated else "cli-command"),
         ("usage-run-scan", "scan", "generated-reference" if generated else "cli-command"),
@@ -169,7 +189,7 @@ def test_finish_validation_failure_does_not_record_freshness(project: Path, runn
     )
 
     assert exit_code != 0
-    assert result["error"]["code"] == "validation-subprocess-failed"
+    assert result["error"]["code"] == "validation-command-failed"
     assert _section_freshness(project) is None
 
 
@@ -196,7 +216,7 @@ def test_finish_validation_retry_preserves_edited_section_baseline(project: Path
     )
 
     assert exit_code != 0
-    assert result["error"]["code"] == "validation-subprocess-failed"
+    assert result["error"]["code"] == "validation-command-failed"
     assert _section_freshness(project) is None
     failed_record = load_yaml(_record_path(project))
     failed_section = next(item for item in failed_record["sections"] if item["section_id"].endswith("::usage-run-scan"))
@@ -212,6 +232,68 @@ def test_finish_validation_retry_preserves_edited_section_baseline(project: Path
     invoke_json(runner, ["finish", "--reviewed-no-change", "docs/usage.md#usage=Overview remains accurate."])
 
     assert _section_freshness(project)["disposition"] == "updated"
+
+
+def test_finish_creates_current_validation_attestation(project: Path, runner: CliRunner) -> None:
+    _setup_linked_project(project, runner)
+    _change_scan_signature(project)
+    config = project / ".ledger" / "documentledger" / "config.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            "commands = []",
+            "commands = [\"python -c 'import sys; sys.exit(0)'\"]",
+        ),
+        encoding="utf-8",
+    )
+
+    result = invoke_json(
+        runner,
+        [
+            "finish",
+            "--reviewed-no-change",
+            "docs/usage.md#usage=Overview remains accurate.",
+            "--reviewed-no-change",
+            "docs/usage.md#usage-run-scan=Behavior remains accurate.",
+        ],
+    )["result"]
+    documentation = invoke_json(runner, ["status"])["result"]["documentation"]
+
+    assert result["state"] == "clean"
+    assert len(result["validation"]) == 1
+    assert documentation["validation_state"] == "passed_current"
+    assert documentation["validation_verified_for_current_content"] is True
+
+
+def test_finish_rejects_validation_that_mutates_docs(project: Path, runner: CliRunner) -> None:
+    _setup_linked_project(project, runner)
+    _change_scan_signature(project)
+    (project / "mutate_docs.py").write_text(
+        "from pathlib import Path\npath = Path('docs/usage.md')\npath.write_text(path.read_text() + 'mutated during validation')\n",
+        encoding="utf-8",
+    )
+    config = project / ".ledger" / "documentledger" / "config.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("commands = []", 'commands = ["python mutate_docs.py"]'),
+        encoding="utf-8",
+    )
+
+    exit_code, result = invoke_json_may_fail(
+        runner,
+        [
+            "finish",
+            "--reviewed-no-change",
+            "docs/usage.md#usage=Overview remains accurate.",
+            "--reviewed-no-change",
+            "docs/usage.md#usage-run-scan=Behavior remains accurate.",
+        ],
+    )
+    documentation = invoke_json(runner, ["status"])["result"]["documentation"]
+
+    assert exit_code != 0
+    assert result["error"]["code"] == "validation-command-failed"
+    assert _section_freshness(project) is None
+    assert documentation["validation_state"] == "failed"
+    assert documentation["validation_verified_for_current_content"] is False
 
 
 def test_finish_link_audit_failure_does_not_record_freshness(project: Path, runner: CliRunner) -> None:

@@ -15,6 +15,7 @@ from documentledger.errors import DocumentledgerError
 from documentledger.identity import normalize_repo_path
 from documentledger.links import audit_links, current_source_inventory
 from documentledger.scanner import collect_files, hash_paths
+from documentledger.source_roles import SOURCE_ROLES, classify_source_role, mapping_review_roles
 from documentledger.storage import (
     iter_doc_records,
     latest_scan,
@@ -273,6 +274,22 @@ def coverage_metrics(workspace: Any) -> dict[str, Any]:
     inventory = current_source_inventory(workspace)
     known_ids = set(inventory)
     linked_known_ids = {source_id for source_id in linked_source_ids if source_id in known_ids}
+    required_roles = mapping_review_roles(workspace)
+    by_role = {
+        role: {"units": 0, "units_linked": 0, "units_unlinked": 0, "mapping_required": role in required_roles}
+        for role in sorted(SOURCE_ROLES)
+    }
+    for source_id, unit in inventory.items():
+        role = classify_source_role(unit)
+        role_counts = by_role[role]
+        role_counts["units"] += 1
+        if source_id in linked_known_ids:
+            role_counts["units_linked"] += 1
+        else:
+            role_counts["units_unlinked"] += 1
+    relevant_units = sum(by_role[role]["units"] for role in required_roles)
+    relevant_units_linked = sum(by_role[role]["units_linked"] for role in required_roles)
+    relevant_units_unlinked = sum(by_role[role]["units_unlinked"] for role in required_roles)
     source_files = {str(unit.get("path", "")) for unit in inventory.values() if unit.get("path")}
     linked_files = {path for path in linked_sources if path}
     sources_total = len(source_files)
@@ -297,6 +314,10 @@ def coverage_metrics(workspace: Any) -> dict[str, Any]:
             "units": len(inventory),
             "units_linked": len(linked_known_ids),
             "units_unlinked": max(len(inventory) - len(linked_known_ids), 0),
+            "units_relevant": relevant_units,
+            "units_relevant_linked": relevant_units_linked,
+            "units_relevant_unlinked": relevant_units_unlinked,
+            "by_role": by_role,
         },
         "issues": [],
     }
@@ -484,8 +505,8 @@ def completion_status(
         and coverage["documents"]["without_records"] == 0
         and coverage["sections"]["total"] > 0
         and coverage["documents"]["unresolved"] == 0
-        and coverage["sources"]["units"] > 0
-        and coverage["sources"]["units_unlinked"] == 0
+        and coverage["sources"]["units_relevant"] > 0
+        and coverage["sources"]["units_relevant_unlinked"] == 0
         and linked_count > 0
     )
     mapping = {

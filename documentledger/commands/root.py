@@ -226,7 +226,10 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
         1 for record in iter_doc_records(workspace) for section in (record.get("sections", []) or []) if section.get("links")
     )
     freshness_state = "clean" if affected_count == 0 else "affected"
-    coverage_review_required = linked_sections <= 0 or bool(relevant_unmapped)
+    readiness = _readiness_fields(workspace, _doctor_issues(workspace))
+    mapping_complete = readiness["mapping"]["state"] == "covered"
+    change_mapping_state = "bootstrap_required" if linked_sections <= 0 else "review_required" if relevant_unmapped else "clean"
+    coverage_review_required = not mapping_complete
     result = {
         "initialized": True,
         "state": state,
@@ -246,7 +249,9 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
         "recommended_command": command,
         "recommended_reason": reason,
         "freshness_state": freshness_state,
-        "mapping_state": "bootstrap_required" if linked_sections <= 0 else "review_required" if relevant_unmapped else "complete",
+        "mapping_state": "complete" if mapping_complete else "review_required",
+        "change_mapping_state": change_mapping_state,
+        "change_mapping_review_required": change_mapping_state != "clean",
         "coverage_review_required": coverage_review_required,
         "relevant_unmapped_changed_unit_count": len(relevant_unmapped),
         "ignored_change_counts": ignored_counts,
@@ -256,7 +261,7 @@ def _status_result(workspace: Any | None) -> dict[str, Any]:
         },
         "issues": issues,
     }
-    result.update(_readiness_fields(workspace, _doctor_issues(workspace)))
+    result.update(readiness)
     if paths is not None:
         result.update(
             {
@@ -462,6 +467,7 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
     def scan(ctx: typer.Context) -> None:
         started_at = perf_counter()
         state = get_state(ctx)
+        from documentledger.impact import with_legacy_action
         from documentledger.scanner import run_scan
 
         result_obj = run_scan(load_workspace(start=state.root))
@@ -473,7 +479,7 @@ def register_root_commands(app: typer.Typer) -> None:  # noqa: C901
             "changed_units": result_obj.changed_units,
             "added_units": result_obj.added_units,
             "deleted_units": result_obj.deleted_units,
-            "affected_sections": result_obj.affected_sections,
+            "affected_sections": [with_legacy_action(item) for item in result_obj.affected_sections],
             "stale_docs": result_obj.stale_docs,
             "unlinked_changed_sources": result_obj.unlinked_changed_sources,
             "unmapped_changed_units": result_obj.unmapped_changed_units,

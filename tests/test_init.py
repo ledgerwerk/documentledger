@@ -142,6 +142,24 @@ def test_existing_project_source_config_is_not_overwritten(tmp_path: Path, runne
     assert config_path.read_bytes() == before
 
 
+def test_explicit_source_roots_do_not_expand_after_later_packages_appear(tmp_path: Path, runner: CliRunner, monkeypatch) -> None:
+    _write_package_project(tmp_path, "selected")
+    monkeypatch.chdir(tmp_path)
+    invoke_json(runner, ["init", "--source-root", "selected"])
+
+    config_path = tmp_path / ".ledger" / "documentledger" / "config.toml"
+    assert load_tool_config_v2(config_path).source_roots == ("selected",)
+    later_package = tmp_path / "later_package"
+    later_package.mkdir()
+    (later_package / "__init__.py").write_text("\n", encoding="utf-8")
+    (later_package / "extra.py").write_text("VALUE = 2\n", encoding="utf-8")
+    invoke_json(runner, ["scan"])
+
+    assert load_tool_config_v2(config_path).source_roots == ("selected",)
+    source_ids = invoke_json(runner, ["source", "list", "--ids-only", "--limit", "100"])["result"]["sources"]
+    assert not any("later_package" in source_id for source_id in source_ids)
+
+
 def test_doctor_reports_exact_package_root_remediation(tmp_path: Path, runner: CliRunner, monkeypatch) -> None:
     _write_package_project(tmp_path, "audioexport")
     (tmp_path / "tests").mkdir()

@@ -95,6 +95,17 @@ def test_affected_context_includes_only_target_section_and_source_unit(project: 
     assert "py:function:documentledger/cli.py::doctor" in result.output
     assert "py:function:documentledger/cli.py::scan" not in result.output
     assert 'def doctor(ctx: typer.Context, json: bool = typer.Option(False, "--json"))' in result.output
+    counts = invoke_json(runner, ["document", "build-context", "--affected"])["result"]
+    assert counts["source_units"] == 1
+    from documentledger.impact import resolve_affected_sections
+    from documentledger.storage import load_workspace
+
+    internal = resolve_affected_sections(load_workspace(start=project))
+    assert internal[0]["review_action"] == "update_required"
+    assert "action" not in internal[0]
+    boundary = invoke_json(runner, ["document", "affected"])["result"]["affected_sections"][0]
+    assert boundary["review_action"] == "update_required"
+    assert boundary["action"] == "rewrite-section"
 
 
 def test_doc_and_all_context_resolve_live_source_spans_and_excerpts(project: Path, runner: CliRunner) -> None:

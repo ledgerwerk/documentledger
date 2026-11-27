@@ -486,6 +486,36 @@ def _proposal_links_for_section(
     return proposals, stats
 
 
+def _initialize_canonical_proposal_artifacts(
+    workspace: Workspace,
+    out_dir: str | None,
+    artifacts_dir: Path | None,
+    output_dir: Path,
+) -> None:
+    if not (
+        out_dir is None
+        and artifacts_dir is not None
+        and workspace.paths is not None
+        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
+        and not artifacts_dir.exists()
+    ):
+        return
+    import ledgercore
+
+    from documentledger.project import resolve_canonical_project
+
+    canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
+    try:
+        ledgercore.initialize_storage_binding(cast(Any, canonical.layout).mounts["artifacts"], require_empty=True)
+    except (OSError, AtomicWriteError) as exc:
+        raise_output_write_error(
+            output_dir / PROPOSAL_MANIFEST_NAME,
+            command="link propose",
+            cause=exc,
+            managed_artifact=True,
+        )
+
+
 def propose_mappings(
     workspace: Workspace,
     *,
@@ -504,27 +534,7 @@ def propose_mappings(
     output_dir = (
         Path(out_dir) if out_dir else ((artifacts_dir / "proposals") if artifacts_dir else workspace.config.storage_dir / "proposals")
     )
-    if (
-        out_dir is None
-        and artifacts_dir is not None
-        and workspace.paths is not None
-        and getattr(workspace.paths, "layout_source", "legacy") == "canonical"
-        and not artifacts_dir.exists()
-    ):
-        import ledgercore
-
-        from documentledger.project import resolve_canonical_project
-
-        canonical = resolve_canonical_project(workspace.paths.project_root, require_data=True)
-        try:
-            ledgercore.initialize_storage_binding(cast(Any, canonical.layout).mounts["artifacts"], require_empty=True)
-        except (OSError, AtomicWriteError) as exc:
-            raise_output_write_error(
-                output_dir / PROPOSAL_MANIFEST_NAME,
-                command="link propose",
-                cause=exc,
-                managed_artifact=True,
-            )
+    _initialize_canonical_proposal_artifacts(workspace, out_dir, artifacts_dir, output_dir)
 
     manifest_path = output_dir / PROPOSAL_MANIFEST_NAME
     owned_names = existing_owned_filenames(output_dir)
@@ -577,6 +587,7 @@ def propose_mappings(
     }
     events: list[dict[str, Any]] = []
 
+    documents_without_candidates: list[str] = []
     for doc_path in docs:
         sections_payload: list[dict[str, Any]] = []
         linked_source_paths: set[str] = set()

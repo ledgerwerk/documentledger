@@ -70,6 +70,19 @@ def test_build_context_include_unlinked_bootstrap(project: Path, runner: CliRunn
     assert "documentledger/cli.py" in result.output
 
 
+def test_build_context_affected_include_unlinked_sources_without_stale_sections(project: Path, runner: CliRunner) -> None:
+    invoke_json(runner, ["init"])
+    invoke_json(runner, ["scan"])
+    (project / "documentledger" / "new.py").write_text("x = 1\n", encoding="utf-8")
+    invoke_json(runner, ["scan"])
+
+    result = runner.invoke(app, ["document", "build-context", "--affected", "--include-unlinked", "--print"])
+    assert result.exit_code == 0
+    assert "No sections matched the selector." in result.output
+    assert "Unlinked sources (bootstrap)" in result.output
+    assert "documentledger/new.py" in result.output
+
+
 def test_error_envelope_preserves_command_name(tmp_path: Path, monkeypatch, runner: CliRunner) -> None:
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["--json", "scan"])

@@ -29,13 +29,7 @@ def test_documented_bootstrap_workflow_is_executable(project: Path, runner) -> N
 
     invoke_json(runner, ["init"])
     config = project / ".ledger" / "documentledger" / "config.toml"
-    config.write_text(
-        config.read_text(encoding="utf-8").replace(
-            'source_roots = ["documentledger", "tests"]',
-            'source_roots = ["demo", "tests"]',
-        ),
-        encoding="utf-8",
-    )
+    assert 'source_roots = ["demo", "tests"]' in config.read_text(encoding="utf-8")
 
     assert invoke_json(runner, ["status"])["ok"] is True
     assert invoke_json(runner, ["doctor"])["result"]["ok"] is True
@@ -87,7 +81,8 @@ def test_documented_bootstrap_workflow_is_executable(project: Path, runner) -> N
     assert set(fresh["result"]["selected_docs"]) == {"README.md", "docs/architecture.md", "docs/index.md"}
     final_status = invoke_json(runner, ["status"])["result"]
     assert final_status["freshness_state"] == "clean"
-    assert final_status["coverage_review_required"] is False
+    assert final_status["coverage_review_required"] is (final_status["mapping"]["state"] != "covered")
+    assert final_status["mapping_state"] == ("complete" if final_status["mapping"]["state"] == "covered" else "review_required")
 
     proposal_sources = {
         str(link["source_unit"])

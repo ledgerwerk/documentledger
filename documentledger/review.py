@@ -15,7 +15,7 @@ from documentledger.links import (
     add_section_link,
     current_source_inventory,
 )
-from documentledger.models import AmbiguousMatch, ChangedEvidence, MappingSuggestion, ReviewItem, ReviewPlan, Workspace
+from documentledger.models import AmbiguousMatch, ChangedEvidence, CoverageGap, MappingSuggestion, ReviewItem, ReviewPlan, Workspace
 from documentledger.scanner import collect_files, run_scan
 from documentledger.source_roles import classify_source_role
 from documentledger.storage import iter_doc_records, latest_scan
@@ -33,10 +33,10 @@ def _evidence(record: dict[str, Any]) -> ChangedEvidence:
 
 
 def _review_item(record: dict[str, Any]) -> ReviewItem:
-    action = str(record.get("review_action", "review_required"))
-    if action not in {"update_required", "review_required", "generated_verify"}:
-        action = "review_required"
-    severity = {"update_required": "high", "review_required": "medium", "generated_verify": "low"}[action]
+    review_action = str(record.get("review_action", "review_required"))
+    if review_action not in {"update_required", "review_required", "generated_verify"}:
+        review_action = "review_required"
+    severity = {"update_required": "high", "review_required": "medium", "generated_verify": "low"}[review_action]
     reasons = {
         "update_required": "Public contract or linked source changed. Update the section and its claims.",
         "review_required": "Tracked implementation changed. Verify that the section remains accurate.",
@@ -46,10 +46,10 @@ def _review_item(record: dict[str, Any]) -> ReviewItem:
         doc_path=str(record.get("doc_path", "")),
         section_id=str(record.get("section_id", "")),
         section_title=str(record.get("summary", "")),
-        action=action,  # type: ignore[arg-type]
+        review_action=review_action,  # type: ignore[arg-type]
         severity=severity,  # type: ignore[arg-type]
         evidence=tuple(_evidence(item) for item in record.get("changed_units", []) or []),
-        reasons=(reasons[action],),
+        reasons=(reasons[review_action],),
     )
 
 
@@ -113,6 +113,7 @@ def build_review_plan(
     auto_applied: list[MappingSuggestion] = []
     suggestions: dict[tuple[str, str, str], MappingSuggestion] = {}
     ambiguous_items: dict[tuple[str, str, str, int, int], AmbiguousMatch] = {}
+    coverage_gaps: dict[tuple[str, str], CoverageGap] = {}
 
     for path in doc_paths:
         sections = doc_sections_for_file(workspace.config.root / path, path)
@@ -132,6 +133,13 @@ def build_review_plan(
                 doc_path=path,
                 section_id=section.section_id,
             )
+            if is_unlinked and not proposals and not int(stats.get("ambiguous_matches", 0)):
+                coverage_gaps[(path, section.section_id)] = CoverageGap(
+                    path,
+                    section.section_id,
+                    section.summary,
+                    "No source dependency could be inferred for this documentation section.",
+                )
             ambiguous_matches += int(stats.get("ambiguous_matches", 0))
             for match in stats.get("ambiguous_evidence", []):
                 span = tuple(int(value) for value in match["span"])
@@ -175,10 +183,12 @@ def build_review_plan(
                 else:
                     suggestions[(path, section.section_id, source_id)] = suggestion
 
+    affected_records = resolve_affected_sections(workspace, scan=scan, docs=doc_paths)
+    affected_items = tuple(_review_item(item) for item in affected_records)
     unmapped_records = relevant_unmapped_changed_units(workspace, scan=scan)
     ignored_counts = ignored_changed_unit_counts(workspace, scan=scan)
-    state = "review_required" if affected_items or unmapped_records or suggestions or ambiguous_matches else "clean"
-    if affected_items and (unmapped_records or suggestions or ambiguous_matches):
+    state = "review_required" if affected_items or unmapped_records or suggestions or ambiguous_matches or coverage_gaps else "clean"
+    if affected_items and (unmapped_records or suggestions or ambiguous_matches or coverage_gaps):
         next_action = {
             "kind": "review_and_update",
             "command": "resolve mapping suggestions, update affected sections, then run `documentledger finish`",
@@ -188,7 +198,7 @@ def build_review_plan(
             "kind": "update_docs",
             "command": "update affected sections, then run `documentledger finish`",
         }
-    elif unmapped_records or suggestions or ambiguous_matches:
+    elif unmapped_records or suggestions or ambiguous_matches or coverage_gaps:
         next_action = {
             "kind": "review_mappings",
             "command": "review mapping suggestions, then run `documentledger finish`",
@@ -202,6 +212,7 @@ def build_review_plan(
         affected=affected_items,
         unmapped_relevant=tuple(_evidence(item) for item in unmapped_records),
         mapping_suggestions=tuple(suggestions[key] for key in sorted(suggestions)),
+        coverage_gaps=tuple(coverage_gaps[key] for key in sorted(coverage_gaps)),
         auto_applied=tuple(auto_applied),
         ambiguous_items=tuple(ambiguous_items[key] for key in sorted(ambiguous_items)),
         ambiguous_match_count=ambiguous_matches,
@@ -214,10 +225,13 @@ def review_human_summary(plan: ReviewPlan) -> str:
     lines = [f"Review: {plan.state} (scan {plan.scan_version})"]
     lines.append(
         f"Affected sections: {len(plan.affected)}. Relevant unmapped changes: {len(plan.unmapped_relevant)}. "
-        f"Exact links added: {len(plan.auto_applied)}. Suggestions requiring review: {len(plan.mapping_suggestions)}."
+        f"Exact links added: {len(plan.auto_applied)}. Suggestions requiring review: {len(plan.mapping_suggestions)}. "
+        f"Unmapped sections: {len(plan.coverage_gaps)}."
     )
     for item in plan.affected[:REVIEW_OUTPUT_LIMIT]:
-        lines.append(f"  {item.action}: {item.doc_path} [{item.section_title}]")
+        lines.append(f"  {item.review_action}: {item.doc_path} [{item.section_title}]")
+    for gap in plan.coverage_gaps[:REVIEW_OUTPUT_LIMIT]:
+        lines.append(f"  unresolved coverage: {gap.doc_path} [{gap.section_title}]")
     for suggestion in plan.mapping_suggestions[:REVIEW_OUTPUT_LIMIT]:
         lines.append(f"  mapping review: {suggestion.doc_path} -> {suggestion.source_id} ({suggestion.confidence})")
     if plan.ambiguous_match_count:

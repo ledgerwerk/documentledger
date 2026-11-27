@@ -23,6 +23,8 @@ Global options may appear before the command path:
 
 Initialize Documentledger storage for a project.
 
+Initialization discovers source roots once and records them in configuration. Use repeatable `--source-root` options when detection is ambiguous or a different explicit set is required.
+
 - **Effect:** `workspace-write`
 - **Audience:** `agent`
 - **Workspace required:** `no`
@@ -37,21 +39,25 @@ documentledger init
 
 ### Arguments and options
 
-| Parameter              | Required | Default     | Type      |
-| ---------------------- | -------- | ----------- | --------- |
-| `--project-name`       | no       | ``          | `str`     |
-| `--source-root`        | no       | ``          | `str`     |
-| `--documentledger-dir` | no       | `'.ledger'` | `str`     |
-| `--hidden-config`      | no       | ``          | `boolean` |
+| Parameter              | Required | Default     | Type        |
+| ---------------------- | -------- | ----------- | ----------- |
+| `--project-name`       | no       | ``          | `str`       |
+| `--source-root`        | no       | ``          | `list[str]` |
+| `--documentledger-dir` | no       | `'.ledger'` | `str`       |
+| `--hidden-config`      | no       | ``          | `boolean`   |
 
 ### JSON result and errors
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
-documentledger init
+documentledger init --project-name example
+```
+
+```bash
+documentledger init --source-root src/example --source-root tests
 ```
 
 ## status
@@ -78,7 +84,7 @@ documentledger status
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger status
@@ -108,7 +114,7 @@ documentledger info
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger info
@@ -140,7 +146,7 @@ documentledger doctor
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger doctor
@@ -149,6 +155,8 @@ documentledger doctor
 ## check
 
 Run deterministic CI validation gate.
+
+Use `--complete` for the strict completion gate. It checks global role-aware mapping coverage, documentation navigation, freshness, link integrity, and current validation attestations.
 
 - **Effect:** `read`
 - **Audience:** `agent`
@@ -164,20 +172,20 @@ documentledger check
 
 ### Arguments and options
 
-| Parameter             | Required | Default | Type      |
-| --------------------- | -------- | ------- | --------- |
-| `--complete`          | no       | ``      | `boolean` |
-| `--required-page`     | no       | ``      | `str`     |
-| `--navigation-target` | no       | ``      | `str`     |
+| Parameter             | Required | Default | Type        |
+| --------------------- | -------- | ------- | ----------- |
+| `--complete`          | no       | ``      | `boolean`   |
+| `--required-page`     | no       | ``      | `list[str]` |
+| `--navigation-target` | no       | ``      | `list[str]` |
 
 ### JSON result and errors
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
-documentledger check
+documentledger check --complete
 ```
 
 ## next-action
@@ -204,7 +212,7 @@ documentledger next-action
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger next-action
@@ -234,7 +242,7 @@ documentledger scan
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger scan
@@ -243,6 +251,8 @@ documentledger scan
 ## review
 
 Review changed source, affected documentation, and safe exact mappings.
+
+Runs or reuses an incremental scan, proposes only exact policy-approved mappings, and reports affected sections and unresolved coverage gaps. Review does not mark sections fresh.
 
 - **Effect:** `workspace-write`
 - **Audience:** `agent`
@@ -254,22 +264,34 @@ Review changed source, affected documentation, and safe exact mappings.
 
 ```bash
 documentledger review
-documentledger review --doc docs/api.md
-documentledger review --details
 ```
 
 ### Arguments and options
 
-- `--doc PATH`: Limit review to one documentation path.
-- `--details`: Include complete review arrays in JSON output.
+| Parameter   | Required | Default | Type      |
+| ----------- | -------- | ------- | --------- |
+| `--doc`     | no       | ``      | `str`     |
+| `--details` | no       | ``      | `boolean` |
 
 ### JSON result and errors
 
-With `--json`, returns `documentledger.review.v1` with bounded affected sections, relevant unmapped changes, mapping candidates, ignored counts, and a next action. `--details` disables array limits.
+With `--json`, returns `documentledger.review.v1` with affected sections, relevant unmapped changes, mapping candidates, ignored changes, and a next action. Output arrays are bounded by default; `--details` removes the limits.
+
+### Examples
+
+```bash
+documentledger review
+```
+
+```bash
+documentledger review --doc docs/api.md --details
+```
 
 ## finish
 
 Audit links, run configured validation, and record section freshness dispositions.
+
+Audits links, runs configured validation through the canonical verification pipeline, and records freshness only after all checks pass. Unchanged affected sections require an explicit review decision.
 
 - **Effect:** `workspace-write`
 - **Audience:** `agent`
@@ -281,22 +303,38 @@ Audit links, run configured validation, and record section freshness disposition
 
 ```bash
 documentledger finish
-documentledger finish --reviewed-no-change docs/usage.md#usage-run-scan="Claims remain accurate."
-documentledger finish --generated-verified docs/api.md#api-client="Generated reference verified."
 ```
 
 ### Arguments and options
 
-- `--reviewed-no-change DOC#SECTION=REASON`: Record an explicit no-change review for an affected section.
-- `--generated-verified DOC#SECTION=REASON`: Verify an affected generated-reference section.
+| Parameter              | Required | Default | Type        |
+| ---------------------- | -------- | ------- | ----------- |
+| `--reviewed-no-change` | no       | ``      | `list[str]` |
+| `--generated-verified` | no       | ``      | `list[str]` |
 
 ### JSON result and errors
 
-With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and configured validation results. Freshness is written only after mappings are resolved, the link audit passes, and all configured validation commands succeed. Changed sections are recorded as `updated`; unchanged sections require an explicit decision.
+With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and validation results. Validation failure or content mutation leaves freshness unchanged.
+
+### Examples
+
+```bash
+documentledger finish
+```
+
+```bash
+documentledger finish --reviewed-no-change "docs/api.md#api=The claim remains accurate."
+```
+
+```bash
+documentledger finish --generated-verified "docs/api.md#reference=Generated output verified."
+```
 
 ## coverage
 
 Compute documentation coverage metrics.
+
+Reports global documentation and source coverage. Source units are grouped by role; only configured mapping-review roles block completion by remaining unlinked.
 
 - **Effect:** `read`
 - **Audience:** `both`
@@ -318,15 +356,17 @@ documentledger coverage
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
-documentledger coverage
+documentledger --json coverage
 ```
 
 ## capabilities
 
 Report versioned features and the canonical command surface.
+
+Probe this command before choosing optional automation. Each advertised capability is versioned and corresponds to an available workflow in the installed package.
 
 - **Effect:** `read`
 - **Audience:** `agent`
@@ -338,16 +378,21 @@ Report versioned features and the canonical command surface.
 
 ```bash
 documentledger capabilities
-documentledger --json capabilities
 ```
 
 ### Arguments and options
 
 - None.
 
-### JSON result
+### JSON result and errors
 
-Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, capability identifiers, and canonical command paths.
+Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, versioned capability identifiers, and canonical command paths.
+
+### Examples
+
+```bash
+documentledger --json capabilities
+```
 
 ## commands
 
@@ -373,7 +418,7 @@ documentledger commands
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger commands
@@ -397,15 +442,15 @@ documentledger help
 
 ### Arguments and options
 
-| Parameter      | Required | Default | Type  |
-| -------------- | -------- | ------- | ----- |
-| `command_path` | no       | `[]`    | `str` |
+| Parameter      | Required | Default | Type        |
+| -------------- | -------- | ------- | ----------- |
+| `command_path` | no       | `[]`    | `list[str]` |
 
 ### JSON result and errors
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger help
@@ -435,7 +480,7 @@ documentledger config show
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger config show
@@ -467,7 +512,7 @@ documentledger config validate
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger config validate
@@ -497,7 +542,7 @@ documentledger schema list
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger schema list
@@ -529,7 +574,7 @@ documentledger schema show
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger schema show
@@ -561,7 +606,7 @@ documentledger schema values
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger schema values
@@ -591,7 +636,7 @@ documentledger document list
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger document list
@@ -626,7 +671,7 @@ documentledger document sections
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger document sections
@@ -658,7 +703,7 @@ documentledger document affected
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger document affected
@@ -688,7 +733,7 @@ documentledger document stale
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger document stale
@@ -697,6 +742,8 @@ documentledger document stale
 ## document build-context
 
 Build a bounded documentation update context.
+
+Builds bounded source-backed context for bootstrap or documentation updates. When pagination is advertised, continue with `--cursor NEXT_CURSOR` until the result is not truncated; do not treat omitted evidence as reviewed.
 
 - **Effect:** `workspace-write`
 - **Audience:** `agent`
@@ -733,15 +780,21 @@ documentledger document build-context
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
-documentledger document build-context
+documentledger document build-context --affected --include-unlinked --out -
+```
+
+```bash
+documentledger --json document build-context --bootstrap --page-size 40 --out -
 ```
 
 ## document validate
 
 Run configured validation and record a current-content attestation.
+
+Runs the configured documentation validation commands and records an attestation for the current source, documentation, configuration, and scan snapshot.
 
 - **Effect:** `workspace-write`
 - **Audience:** `agent`
@@ -757,16 +810,16 @@ documentledger document validate
 
 ### Arguments and options
 
-| Parameter             | Required | Default | Type  |
-| --------------------- | -------- | ------- | ----- |
-| `--required-page`     | no       | ``      | `str` |
-| `--navigation-target` | no       | ``      | `str` |
+| Parameter             | Required | Default | Type        |
+| --------------------- | -------- | ------- | ----------- |
+| `--required-page`     | no       | ``      | `list[str]` |
+| `--navigation-target` | no       | ``      | `list[str]` |
 
 ### JSON result and errors
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger document validate
@@ -803,7 +856,7 @@ documentledger document mark-fresh
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger document mark-fresh
@@ -827,23 +880,23 @@ documentledger source list
 
 ### Arguments and options
 
-| Parameter          | Required | Default | Type      |
-| ------------------ | -------- | ------- | --------- |
-| `--kind`           | no       | ``      | `str`     |
-| `--path`           | no       | ``      | `str`     |
-| `--path-prefix`    | no       | ``      | `str`     |
-| `--qualname`       | no       | ``      | `str`     |
-| `--query`          | no       | ``      | `str`     |
-| `--ids-only`       | no       | ``      | `boolean` |
-| `--include-hashes` | no       | ``      | `boolean` |
-| `--limit`          | no       | `100`   | `int`     |
-| `--cursor`         | no       | ``      | `str`     |
+| Parameter          | Required | Default | Type        |
+| ------------------ | -------- | ------- | ----------- |
+| `--kind`           | no       | ``      | `list[str]` |
+| `--path`           | no       | ``      | `str`       |
+| `--path-prefix`    | no       | ``      | `str`       |
+| `--qualname`       | no       | ``      | `str`       |
+| `--query`          | no       | ``      | `str`       |
+| `--ids-only`       | no       | ``      | `boolean`   |
+| `--include-hashes` | no       | ``      | `boolean`   |
+| `--limit`          | no       | `100`   | `int`       |
+| `--cursor`         | no       | ``      | `str`       |
 
 ### JSON result and errors
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger source list
@@ -875,7 +928,7 @@ documentledger source show
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger source show
@@ -905,7 +958,7 @@ documentledger link list
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger link list
@@ -939,7 +992,7 @@ documentledger link add
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger link add
@@ -972,7 +1025,7 @@ documentledger link remove
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger link remove
@@ -1009,7 +1062,7 @@ documentledger link add-section
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger link add-section
@@ -1043,7 +1096,7 @@ documentledger link remove-section
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger link remove-section
@@ -1052,6 +1105,8 @@ documentledger link remove-section
 ## link import-map
 
 Import a mapping batch of links.
+
+For manifest-owned proposal directories, review the scan-bound batch before applying it. `--check-and-apply` accepts only files recorded as reviewed. Standalone mapping files can be validated or applied separately.
 
 - **Effect:** `workspace-write`
 - **Audience:** `agent`
@@ -1067,24 +1122,32 @@ documentledger link import-map
 
 ### Arguments and options
 
-| Parameter           | Required | Default | Type      |
-| ------------------- | -------- | ------- | --------- |
-| `--file`            | no       | ``      | `str`     |
-| `--directory`       | no       | ``      | `str`     |
-| `--validate`        | no       | ``      | `boolean` |
-| `--apply`           | no       | ``      | `boolean` |
-| `--check-and-apply` | no       | ``      | `boolean` |
-| `--review`          | no       | ``      | `boolean` |
-| `--replace-section` | no       | ``      | `boolean` |
+| Parameter           | Required | Default | Type        |
+| ------------------- | -------- | ------- | ----------- |
+| `--file`            | no       | ``      | `list[str]` |
+| `--directory`       | no       | ``      | `str`       |
+| `--validate`        | no       | ``      | `boolean`   |
+| `--apply`           | no       | ``      | `boolean`   |
+| `--check-and-apply` | no       | ``      | `boolean`   |
+| `--review`          | no       | ``      | `boolean`   |
+| `--replace-section` | no       | ``      | `boolean`   |
 
 ### JSON result and errors
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
-documentledger link import-map
+documentledger --json link import-map --directory ./proposals --review
+```
+
+```bash
+documentledger --json link import-map --directory ./proposals --check-and-apply
+```
+
+```bash
+documentledger --json link import-map --file ./mapping.yaml --validate
 ```
 
 ## link audit
@@ -1111,7 +1174,7 @@ documentledger link audit
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger link audit
@@ -1120,6 +1183,8 @@ documentledger link audit
 ## link propose
 
 Propose new links from source inventory.
+
+Generates deterministic evidence-ranked mappings from a completed scan and writes a scan-bound manifest for the proposal batch. Documents without confident candidates remain represented in that manifest.
 
 - **Effect:** `workspace-write`
 - **Audience:** `agent`
@@ -1146,10 +1211,10 @@ documentledger link propose
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
-documentledger link propose
+documentledger link propose --all-docs --out-dir ./proposals
 ```
 
 ## storage where
@@ -1176,7 +1241,7 @@ documentledger storage where
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger storage where
@@ -1208,7 +1273,7 @@ documentledger storage validate
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger storage validate
@@ -1238,7 +1303,7 @@ documentledger migrate status
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger migrate status
@@ -1275,7 +1340,7 @@ documentledger migrate plan
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger migrate plan
@@ -1311,7 +1376,7 @@ documentledger migrate apply
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger migrate apply
@@ -1344,7 +1409,7 @@ documentledger migrate recover
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger migrate recover
@@ -1381,7 +1446,7 @@ documentledger migrate cleanup
 
 With `--json`, the command returns `ok`, `command`, a command-specific `result`, and `events`. Failures return the normalized `error` object with `code`, `message`, `remediation`, and `details.domain_code`. Invalid workspace, selector, cursor, link, or migration state is reported before a write when applicable.
 
-### Example
+### Examples
 
 ```bash
 documentledger migrate cleanup

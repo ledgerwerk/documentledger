@@ -13,7 +13,7 @@ from documentledger.impact import resolve_affected_sections, stale_doc_details
 from documentledger.links import current_source_inventory
 from documentledger.models import Workspace
 from documentledger.source_roles import classify_source_role
-from documentledger.storage import iter_doc_records, latest_scan, workspace_root
+from documentledger.storage import iter_doc_records, latest_scan, state_version, workspace_root
 
 
 def stale_details(workspace: Workspace) -> list[dict[str, Any]]:
@@ -74,7 +74,6 @@ def linked_sections(workspace: Workspace, docs: list[str] | None = None, section
                     "line_span": list(section.get("line_span", [0, 0])),
                     "section_hash": str(section.get("section_hash", "")),
                     "summary": str(section.get("summary", "")),
-                    "action": "review-section",
                     "changed_units": [
                         {
                             "source_id": str(link.get("source_id", "")),
@@ -113,7 +112,6 @@ def selected_doc_sections(workspace: Workspace, docs: list[str], section_id: str
                     "line_span": [section.line_span[0], section.line_span[1]],
                     "section_hash": section.section_hash,
                     "summary": section.summary,
-                    "action": "review-section",
                     "changed_units": [
                         {
                             "source_id": str(link.get("source_id", "")),
@@ -316,7 +314,7 @@ def _section_context_lines(workspace: Workspace, item: dict[str, Any], max_sourc
         "",
         f"Section id: {item['section_id']}",
         f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
-        f"Action: {item['action']}",
+        *review_action_lines(item),
         "",
         "Linked source units:",
         "",
@@ -556,48 +554,22 @@ def render_context(  # noqa: C901
                 specs.append({"unit_id": source_id, "unit_type": "source", "role": role, "source_unit": unit})
     else:
         for item in selected_sections:
-            doc_path = str(item["doc_path"])
-            heading_path = " / ".join(item.get("heading_path", []) or []) or str(item["section_id"])
-            block = [
-                f"### {doc_path} :: {heading_path}",
-                "",
-                f"Section id: {item['section_id']}",
-                f"Lines: {item['line_span'][0]}-{item['line_span'][1]}",
-                f"Action: {item['action']}",
-                *review_action_lines(item),
-                "",
-                "Linked source units:",
-                "",
-            ]
-            for unit in item.get("changed_units", []) or []:
-                source_unit_count += 1
-                block.extend(
-                    [
-                        f"- {unit['source_id']}",
-                        f"  - path: {unit['source_path']}",
-                        f"  - status: {'missing' if unit.get('missing') else 'live'}",
-                        *([f"  - kind: {unit['kind']}", f"  - signature: `{unit['signature']}`"] if not unit.get("missing") else []),
-                        f"  - lines: {unit['line_span'][0]}-{unit['line_span'][1]}",
-                        f"  - changed: {', '.join(unit.get('changed_hashes', []) or ['file_hash'])}",
-                        f"  - reason: {unit['reason'] or 'No recorded reason.'}",
-                        "",
-                        "  Current relevant source:",
-                        "",
-                    ]
+            specs.append(
+                {
+                    "unit_id": f"section:{item['doc_path']}::{item['section_id']}",
+                    "unit_type": "section",
+                    "section": item,
+                }
+            )
+        if include_unlinked:
+            for source_path in bootstrap_sources:
+                specs.append(
+                    {
+                        "unit_id": f"unlinked-source:{source_path}",
+                        "unit_type": "unlinked-source",
+                        "source_path": source_path,
+                    }
                 )
-                snippet = source_snippet(
-                    workspace_root(workspace),
-                    str(unit["source_path"]),
-                    list(unit.get("line_span", [0, 0])),
-                    max_lines=max_source_lines,
-                )
-                block.extend(f"  {line}" for line in trim_lines(snippet, max_lines=max_source_lines))
-                block.append("")
-            block.extend(["Current section text:", ""])
-            block.extend(trim_lines(str(item.get("text", "")).strip("\n"), max_lines=max_section_lines))
-            block.append("")
-            append_block(f"section:{item['doc_path']}::{item['section_id']}", block)
-
     manifest_hash = _context_manifest_hash(workspace, specs, [*bootstrap_sources, *bootstrap_docs])
     request_offset = _context_offset(
         cursor,

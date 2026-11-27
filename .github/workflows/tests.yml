@@ -17,6 +17,9 @@ jobs:
       run: |
         pip install pytest
         pip install -e ".[docs]"
+    - name: Check generated CLI reference
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+      run: python scripts/generate_cli_reference.py --check
     - name: Run tests
       if: runner.os != 'Windows'
       run: python -m pytest

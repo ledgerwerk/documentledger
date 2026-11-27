@@ -131,17 +131,18 @@ def register_document_commands(app: typer.Typer, docs_app: typer.Typer) -> None:
     def document_affected(ctx: typer.Context, doc: str | None = typer.Option(None, "--doc")) -> None:
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
-        from documentledger.impact import resolve_affected_sections
+        from documentledger.impact import resolve_affected_sections, with_legacy_action
 
         docs = [normalize_repo_path(doc)] if doc else None
         affected = resolve_affected_sections(workspace, docs=docs)
+        affected_output = [with_legacy_action(item) for item in affected]
         human = ["Affected documentation sections:"]
         if not affected:
             human.append("- None")
         for item in affected:
             heading = " / ".join(item["heading_path"]) or item["section_id"]
             human.append(f"- {item['doc_path']} :: {heading}")
-        emit_success(ctx, "document affected", {"affected_sections": affected}, "\n".join(human))
+        emit_success(ctx, "document affected", {"affected_sections": affected_output}, "\n".join(human))
 
     @docs_app.command("stale")
     @handle_command_error("document stale")

@@ -250,19 +250,20 @@ def _register_docs_aliases() -> None:
     @handle_command_error("docs affected")
     def docs_affected(ctx: typer.Context, doc: str | None = typer.Option(None, "--doc")) -> None:
         from documentledger.identity import normalize_repo_path
-        from documentledger.impact import resolve_affected_sections
+        from documentledger.impact import resolve_affected_sections, with_legacy_action
 
         state = get_state(ctx)
         workspace = load_workspace(start=state.root)
         docs = [normalize_repo_path(doc)] if doc else None
         affected = resolve_affected_sections(workspace, docs=docs)
+        affected_output = [with_legacy_action(item) for item in affected]
         human = ["Affected documentation sections:"]
         if not affected:
             human.append("- None")
         for item in affected:
             heading = " / ".join(item["heading_path"]) or item["section_id"]
             human.append(f"- {item['doc_path']} :: {heading}")
-        emit_success(ctx, "document affected", {"affected_sections": affected}, "\n".join(human))
+        emit_success(ctx, "document affected", {"affected_sections": affected_output}, "\n".join(human))
 
     # docs stale -> document stale
     @docs_alias.command("stale")

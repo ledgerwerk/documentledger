@@ -34,17 +34,23 @@ mapping_review_roles = ["production"]
 
 ## Fields
 
-| Field                            | Type and default                     | Normalization and validation                   | Effect                                                     |
-| -------------------------------- | ------------------------------------ | ---------------------------------------------- | ---------------------------------------------------------- |
-| `config_version`                 | integer, required, `2`               | Must be exactly 2; unknown versions fail       | Selects the tool schema.                                   |
-| `ledger.code`                    | non-empty string, default `dl`       | Must be a string                               | Prefix used by project-local ledger conventions.           |
-| `scan.source_roots`              | array of strings, default empty      | Paths are interpreted relative to project root | Files collected for source indexing.                       |
-| `scan.doc_roots`                 | array of strings, default empty      | Paths are interpreted relative to project root | Files collected and parsed as documentation.               |
-| `scan.source_extensions`         | array of strings, default empty      | Extension filters are explicit                 | Limits source collection.                                  |
-| `scan.doc_extensions`            | array of strings, default empty      | Extension filters are explicit                 | Limits documentation collection.                           |
-| `validation.commands`            | array of strings, default empty      | Preserved as ordered commands                  | Commands used by context and `check`.                      |
-| `policy.require_doc_frontmatter` | boolean, default `false`             | Non-boolean values fail                        | Requires front matter during validation.                   |
-| `policy.mapping_review_roles`    | string array, default ["production"] | Supported role names only                      | Unmapped changes in selected roles require mapping review. |
+| Field                            | Type and default                     | Normalization and validation                   | Effect                                                       |
+| -------------------------------- | ------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------ |
+| `config_version`                 | integer, required, `2`               | Must be exactly 2; unknown versions fail       | Selects the tool schema.                                     |
+| `ledger.code`                    | non-empty string, default `dl`       | Must be a string                               | Prefix used by project-local ledger conventions.             |
+| `scan.source_roots`              | array of strings, default empty      | Paths are interpreted relative to project root | Configured at init; later roots are not added automatically. |
+| `scan.doc_roots`                 | array of strings, default empty      | Paths are interpreted relative to project root | Files collected and parsed as documentation.                 |
+| `scan.source_extensions`         | array of strings, default empty      | Extension filters are explicit                 | Limits source collection.                                    |
+| `scan.doc_extensions`            | array of strings, default empty      | Extension filters are explicit                 | Limits documentation collection.                             |
+| `validation.commands`            | array of strings, default empty      | Preserved as ordered commands                  | Commands used by context and `check`.                        |
+| `policy.require_doc_frontmatter` | boolean, default `false`             | Non-boolean values fail                        | Requires front matter during validation.                     |
+| `policy.mapping_review_roles`    | string array, default ["production"] | Supported role names only                      | Unmapped changes in selected roles require mapping review.   |
+
+## Source-root discovery
+
+`documentledger init` discovers production roots from project metadata, then falls back to a single conventional package or top-level module when metadata does not identify one. Ambiguous package roots require an explicit repeatable `--source-root PATH` selection. The `tests` root is appended only when it already contains Python files at initialization.
+
+Discovery is a one-time initialization decision. The selected roots are written to `scan.source_roots`; later package or test directories do not change the configuration. When `--source-root` is supplied, the explicit list is stored without adding other discovered roots. Edit `scan.source_roots` deliberately to change the indexed roots.
 
 Unknown tables and fields fail with `unsupported_tool_config_field`; wrong types fail with `invalid_tool_config`; unsupported versions fail with `unsupported_tool_config_version`.
 

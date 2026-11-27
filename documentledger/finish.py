@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import shlex
-import subprocess
 from typing import Any
 
 from documentledger.errors import DocumentledgerError
@@ -14,6 +12,7 @@ from documentledger.links import audit_links
 from documentledger.models import FinishResult, FreshnessResolution, ReviewDecision, ValidationResult, Workspace
 from documentledger.review import build_review_plan
 from documentledger.storage import doc_record_path, iter_doc_records, latest_scan, read_yaml
+from documentledger.verification import documentation_status, run_validation
 
 _VALID_DECISIONS = {"reviewed-no-change", "generated-verified"}
 
@@ -28,27 +27,6 @@ def _decision_key(decision: ReviewDecision) -> tuple[str, str]:
     if not section_id.startswith("md:section:"):
         section_id = f"md:section:{doc_path}::{section_id}"
     return doc_path, section_id
-
-
-def _run_validation(workspace: Workspace) -> tuple[ValidationResult, ...]:
-    results: list[ValidationResult] = []
-    for command in workspace.config.validation_commands:
-        try:
-            argv = shlex.split(command)
-            if not argv:
-                continue
-            completed = subprocess.run(
-                argv,
-                cwd=workspace.config.root,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
-            results.append(ValidationResult(command, completed.returncode, output[-4000:], len(output) > 4000))
-        except OSError as exc:
-            results.append(ValidationResult(command, 127, str(exc)[:4000], len(str(exc)) > 4000))
-    return tuple(results)
 
 
 def _section_hashes(records: list[dict[str, Any]]) -> dict[tuple[str, str], tuple[str, str]]:
@@ -96,6 +74,7 @@ def finish_review(workspace: Workspace, decisions: tuple[ReviewDecision, ...] = 
         "unmapped_changed_units": list(pending_unmapped.values()),
         "suggestions": [item.to_record() for item in plan.mapping_suggestions],
         "ambiguous_evidence": [item.to_record() for item in plan.ambiguous_items],
+        "coverage_gaps": [item.to_record() for item in plan.coverage_gaps],
     }
     if any(unresolved_mappings.values()):
         raise DocumentledgerError(
@@ -120,7 +99,7 @@ def finish_review(workspace: Workspace, decisions: tuple[ReviewDecision, ...] = 
         key = (str(item.get("doc_path", "")), str(item.get("section_id", "")))
         actions[key] = str(item.get("review_action", "review_required"))
     for item in plan.affected:
-        actions[(item.doc_path, item.section_id)] = item.action
+        actions[(item.doc_path, item.section_id)] = item.review_action
 
     decision_map: dict[tuple[str, str], ReviewDecision] = {}
     for decision in decisions:
@@ -168,15 +147,21 @@ def finish_review(workspace: Workspace, decisions: tuple[ReviewDecision, ...] = 
             f"No unchanged affected section requires the supplied decision: {key[0]} [{key[1]}].",
         )
 
-    validation = _run_validation(workspace)
-    failures = [item.to_record() for item in validation if item.exit_code != 0]
-    if failures:
+    validation_result = run_validation(workspace)
+    attestation = dict(validation_result.get("attestation", {}))
+    documentation = documentation_status(workspace)
+    if documentation["validation_required"] and not documentation["validation_verified_for_current_content"]:
         raise DocumentledgerError(
-            "validation_subprocess_failed",
-            "Configured validation failed; no freshness dispositions were recorded.",
-            ["Fix the reported validation failures and retry finish."],
-            details={"validation": failures},
+            "validation_not_configured",
+            "Finish requires a current validation attestation for this documentation project.",
+            ["Configure and run the required documentation validation command before retrying finish."],
+            details={"attestation_result": attestation.get("result"), "issues": attestation.get("issues", [])},
         )
+    validation = tuple(
+        ValidationResult(str(item["command"]), int(item.get("exit_code") or 0), "")
+        for item in attestation.get("command_results", [])
+        if "command" in item
+    )
 
     resolved = tuple(resolutions)
     record_freshness_resolutions(workspace, resolved)

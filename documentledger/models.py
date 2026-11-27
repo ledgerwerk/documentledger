@@ -145,7 +145,7 @@ class ReviewItem:
     doc_path: str
     section_id: str
     section_title: str
-    action: Literal["update_required", "review_required", "generated_verify"]
+    review_action: Literal["update_required", "review_required", "generated_verify"]
     severity: Literal["high", "medium", "low"]
     evidence: tuple[ChangedEvidence, ...]
     reasons: tuple[str, ...]
@@ -157,7 +157,8 @@ class ReviewItem:
             "doc": self.doc_path,
             "section_id": self.section_id,
             "title": self.section_title,
-            "action": self.action,
+            "action": "verify-generated-reference" if self.review_action == "generated_verify" else "rewrite-section",
+            "review_action": self.review_action,
             "severity": self.severity,
             "changed_units": [item.to_record() for item in changed_units],
             "changed_units_total": len(evidence),
@@ -211,6 +212,22 @@ class AmbiguousMatch:
 
 
 @dataclass(frozen=True)
+class CoverageGap:
+    doc_path: str
+    section_id: str
+    section_title: str
+    reason: str
+
+    def to_record(self) -> dict[str, Any]:
+        return {
+            "doc": self.doc_path,
+            "section_id": self.section_id,
+            "title": self.section_title,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
 class ReviewPlan:
     scan_version: int
     state: str
@@ -222,6 +239,7 @@ class ReviewPlan:
     ambiguous_match_count: int
     ignored_change_counts: dict[str, int]
     next_action: dict[str, str]
+    coverage_gaps: tuple[CoverageGap, ...] = ()
 
     def to_record(self, *, details: bool = False, limit: int = 40) -> dict[str, Any]:
         cap = None if details else limit
@@ -230,7 +248,8 @@ class ReviewPlan:
         suggestions = list(self.mapping_suggestions)
         applied = list(self.auto_applied)
         ambiguous = list(self.ambiguous_items)
-        pending_count = len(self.unmapped_relevant) + len(self.mapping_suggestions) + self.ambiguous_match_count
+        coverage_gaps = list(self.coverage_gaps)
+        pending_count = len(self.unmapped_relevant) + len(self.mapping_suggestions) + len(coverage_gaps) + self.ambiguous_match_count
         return {
             "schema": "documentledger.review.v1",
             "state": self.state,
@@ -246,6 +265,8 @@ class ReviewPlan:
                 "suggestions": [item.to_record() for item in suggestions[:cap]],
                 "ambiguous_matches": self.ambiguous_match_count,
                 "ambiguous_items": [item.to_record() for item in ambiguous[:cap]],
+                "coverage_gaps": [item.to_record() for item in coverage_gaps[:cap]],
+                "coverage_gaps_total": len(coverage_gaps),
             },
             "ignored_changes": dict(self.ignored_change_counts),
             "next_action": dict(self.next_action),
@@ -255,6 +276,7 @@ class ReviewPlan:
                 "suggestions": max(len(suggestions) - len(suggestions[:cap]), 0) if cap is not None else 0,
                 "auto_applied_edges": max(len(applied) - len(applied[:cap]), 0) if cap is not None else 0,
                 "ambiguous_items": max(len(ambiguous) - len(ambiguous[:cap]), 0) if cap is not None else 0,
+                "coverage_gaps": max(len(coverage_gaps) - len(coverage_gaps[:cap]), 0) if cap is not None else 0,
             },
         }
 

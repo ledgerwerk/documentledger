@@ -6,6 +6,8 @@ Used by: commands, help, generated CLI reference, drift tests.
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 from ledgercore.cli import CommandInventory, CommandMetadata
 
 # All canonical commands with their metadata.
@@ -310,6 +312,116 @@ _COMMANDS: tuple[CommandMetadata, ...] = (
         targeting="migration-name",
     ),
 )
+
+
+class CommandReferenceDetails(TypedDict, total=False):
+    extended_description: str
+    json_result: str
+    examples: tuple[str, ...]
+
+
+COMMAND_REFERENCE_DETAILS: dict[str, CommandReferenceDetails] = {
+    "init": {
+        "extended_description": (
+            "Initialization discovers source roots once and records them in configuration. "
+            "Use repeatable `--source-root` options when detection is ambiguous or a different explicit set is required."
+        ),
+        "examples": (
+            "documentledger init --project-name example",
+            "documentledger init --source-root src/example --source-root tests",
+        ),
+    },
+    "check": {
+        "extended_description": (
+            "Use `--complete` for the strict completion gate. It checks global role-aware mapping coverage, documentation navigation, "
+            "freshness, link integrity, and current validation attestations."
+        ),
+        "examples": ("documentledger check --complete",),
+    },
+    "review": {
+        "extended_description": (
+            "Runs or reuses an incremental scan, proposes only exact policy-approved mappings, and reports affected sections "
+            "and unresolved coverage gaps. Review does not mark sections fresh."
+        ),
+        "json_result": (
+            "With `--json`, returns `documentledger.review.v1` with affected sections, relevant unmapped changes, mapping candidates, "
+            "ignored changes, and a next action. Output arrays are bounded by default; `--details` removes the limits."
+        ),
+        "examples": (
+            "documentledger review",
+            "documentledger review --doc docs/api.md --details",
+        ),
+    },
+    "finish": {
+        "extended_description": (
+            "Audits links, runs configured validation through the canonical verification pipeline, and records freshness only "
+            "after all checks pass. Unchanged affected sections require an explicit review decision."
+        ),
+        "json_result": (
+            "With `--json`, returns `documentledger.finish.v1` with freshness dispositions, link-audit state, and validation results. "
+            "Validation failure or content mutation leaves freshness unchanged."
+        ),
+        "examples": (
+            "documentledger finish",
+            'documentledger finish --reviewed-no-change "docs/api.md#api=The claim remains accurate."',
+            'documentledger finish --generated-verified "docs/api.md#reference=Generated output verified."',
+        ),
+    },
+    "capabilities": {
+        "extended_description": (
+            "Probe this command before choosing optional automation. Each advertised capability is versioned and corresponds to "
+            "an available workflow in the installed package."
+        ),
+        "json_result": (
+            "Returns `documentledger.capabilities.v1`, the package version, storage schema, feature flags, versioned capability "
+            "identifiers, and canonical command paths."
+        ),
+        "examples": ("documentledger --json capabilities",),
+    },
+    "document build-context": {
+        "extended_description": (
+            "Builds bounded source-backed context for bootstrap or documentation updates. When pagination is advertised, continue "
+            "with `--cursor NEXT_CURSOR` until the result is not truncated; do not treat omitted evidence as reviewed."
+        ),
+        "examples": (
+            "documentledger document build-context --affected --include-unlinked --out -",
+            "documentledger --json document build-context --bootstrap --page-size 40 --out -",
+        ),
+    },
+    "document validate": {
+        "extended_description": (
+            "Runs the configured documentation validation commands and records an attestation for the current source, documentation, "
+            "configuration, and scan snapshot."
+        ),
+        "examples": ("documentledger document validate",),
+    },
+    "link import-map": {
+        "extended_description": (
+            "For manifest-owned proposal directories, review the scan-bound batch before applying it. `--check-and-apply` accepts "
+            "only files recorded as reviewed. Standalone mapping files can be validated or applied separately."
+        ),
+        "examples": (
+            "documentledger --json link import-map --directory ./proposals --review",
+            "documentledger --json link import-map --directory ./proposals --check-and-apply",
+            "documentledger --json link import-map --file ./mapping.yaml --validate",
+        ),
+    },
+    "link propose": {
+        "extended_description": (
+            "Generates deterministic evidence-ranked mappings from a completed scan and writes a scan-bound manifest for the proposal "
+            "batch. Documents without confident candidates remain represented in that manifest."
+        ),
+        "examples": ("documentledger link propose --all-docs --out-dir ./proposals",),
+    },
+    "coverage": {
+        "extended_description": (
+            "Reports global documentation and source coverage. Source units are grouped by role; only configured mapping-review roles "
+            "block completion by remaining unlinked."
+        ),
+        "examples": ("documentledger --json coverage",),
+    },
+}
+
 
 # Build the inventory (validates no duplicates or shadow conflicts).
 COMMAND_INVENTORY = CommandInventory(_COMMANDS)

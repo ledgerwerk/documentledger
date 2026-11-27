@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
+from documentledger import verification
 from tests.conftest import invoke_json, invoke_json_may_fail
 
 
@@ -183,6 +185,11 @@ def test_sphinx_completion_gate_requires_navigation_coverage_and_current_validat
     assert checked["readiness"]["mapping"]["state"] == "covered"
     assert checked["readiness"]["documentation"]["navigation_ready"] is True
     assert checked["readiness"]["completion"]["ready"] is True
+    status = invoke_json(runner, ["status"])["result"]
+    assert status["mapping_state"] == "complete"
+    assert status["mapping"]["state"] == "covered"
+    assert status["coverage_review_required"] is False
+    assert "mapping_coverage_incomplete" not in status["completion"]["blocking_reasons"]
     assert (project / "docs" / "changelog.md").read_bytes() == changelog_before
 
 
@@ -198,3 +205,59 @@ def test_skipped_sphinx_validation_cannot_attest_completion(project: Path, runne
     assert exit_code != 0
     assert checked["error"]["code"] == "check-failed"
     assert "validation_not_configured" in checked["error"]["details"]["readiness"]["completion"]["blocking_reasons"]
+
+
+def test_mapping_coverage_uses_configured_source_roles(monkeypatch, tmp_path: Path) -> None:
+    section = SimpleNamespace(section_id="api")
+    record = {
+        "doc_path": "docs/api.md",
+        "sections": [{"section_id": "api", "links": [{"source_id": "production-unit", "source_path": "package/api.py"}]}],
+    }
+    inventory = {
+        "production-unit": {"source_id": "production-unit", "path": "package/api.py", "kind": "function", "qualname": "api"},
+        "test-unit": {"source_id": "test-unit", "path": "tests/test_api.py", "kind": "function", "qualname": "test_api"},
+        "private-unit": {"source_id": "private-unit", "path": "package/private/helper.py", "kind": "function", "qualname": "helper"},
+        "generated-unit": {"source_id": "generated-unit", "path": "package/generated/schema.py", "kind": "function", "qualname": "schema"},
+    }
+    workspace = SimpleNamespace(
+        config=SimpleNamespace(
+            root=tmp_path,
+            doc_roots=["docs"],
+            doc_extensions=[".md"],
+            mapping_review_roles=["production"],
+        ),
+        metadata={},
+    )
+    monkeypatch.setattr(verification, "collect_files", lambda *_args: ["docs/api.md"])
+    monkeypatch.setattr(verification, "doc_sections_for_file", lambda *_args: [section])
+    monkeypatch.setattr(verification, "iter_doc_records", lambda _workspace: [record])
+    monkeypatch.setattr(verification, "current_source_inventory", lambda _workspace: inventory)
+    monkeypatch.setattr(verification, "latest_scan", lambda _workspace: {"version": 1})
+    monkeypatch.setattr(
+        verification,
+        "documentation_status",
+        lambda *_args, **_kwargs: {
+            "scan_matches_current": True,
+            "issues": [],
+            "validation_required": False,
+            "validation_configured": False,
+            "validation_verified_for_current_content": False,
+        },
+    )
+    monkeypatch.setattr(verification, "audit_links", lambda _workspace: {"ok": True})
+    monkeypatch.setattr("documentledger.impact.resolve_affected_sections", lambda _workspace: [])
+
+    default_status = verification.completion_status(workspace)
+    assert default_status["mapping"]["state"] == "covered"
+    assert default_status["completion"]["ready"] is True
+    assert default_status["mapping"]["sources"]["units_relevant"] == 1
+    assert default_status["mapping"]["sources"]["units_relevant_unlinked"] == 0
+    assert default_status["mapping"]["sources"]["by_role"]["test"]["units_unlinked"] == 1
+    assert default_status["mapping"]["sources"]["by_role"]["private"]["units_unlinked"] == 1
+    assert default_status["mapping"]["sources"]["by_role"]["generated"]["units_unlinked"] == 1
+
+    workspace.config.mapping_review_roles = ["production", "test"]
+    configured_status = verification.completion_status(workspace)
+    assert configured_status["mapping"]["state"] == "review_required"
+    assert configured_status["completion"]["ready"] is False
+    assert configured_status["mapping"]["sources"]["units_relevant_unlinked"] == 1

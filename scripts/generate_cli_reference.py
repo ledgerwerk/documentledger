@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args, get_origin
 
 from click import Argument, Command
 from typer.main import get_command
@@ -30,11 +30,26 @@ def _default(value: Any) -> str:
     return repr(value)
 
 
-_CANONICAL_TYPE_NAMES = {"text": "str", "integer": "int"}
+_CANONICAL_TYPE_NAMES = {"text": "str", "integer": "int", "bool": "boolean"}
 
 
 def _canonical_type_name(name: str) -> str:
     return _CANONICAL_TYPE_NAMES.get(name, name)
+
+
+def _parameter_type_name(parameter: Any) -> str:
+    parameter_type = getattr(parameter, "type", None)
+    if parameter_type is not None:
+        name = getattr(parameter_type, "name", str(parameter_type))
+    else:
+        annotation = getattr(getattr(parameter, "type_descriptor", None), "annotation", None)
+        if get_origin(annotation) is list:
+            arguments = get_args(annotation)
+            item_name = getattr(arguments[0], "__name__", str(arguments[0])) if arguments else "Any"
+            name = f"list[{item_name}]"
+        else:
+            name = getattr(annotation, "__name__", str(annotation))
+    return _canonical_type_name(name)
 
 
 def _parameters(command: Command) -> str:
@@ -46,14 +61,14 @@ def _parameters(command: Command) -> str:
             name = parameter.name
         else:
             name = ", ".join(parameter.opts)
-        kind = _canonical_type_name(getattr(parameter.type, "name", str(parameter.type)))
+        kind = _parameter_type_name(parameter)
         rows.append(f"| `{name}` | {'yes' if parameter.required else 'no'} | `{_default(parameter.default)}` | `{kind}` |")
     return "\n".join(rows)
 
 
 def render() -> str:
     from documentledger.cli import app
-    from documentledger.command_catalog import COMMAND_INVENTORY
+    from documentledger.command_catalog import COMMAND_INVENTORY, COMMAND_REFERENCE_DETAILS
 
     root = get_command(app)
     canonical_reference_intro = (
@@ -94,11 +109,19 @@ def render() -> str:
         command = _command_for(root, entry.path)
         aliases = ", ".join(f"`{alias}`" for alias in entry.aliases) or "None"
         workspace = "yes" if entry.requires_workspace else "no"
+        details = COMMAND_REFERENCE_DETAILS.get(entry.path, {})
+        extended_description = details.get("extended_description")
+        json_result = details.get("json_result", json_contract_description)
+        examples = details.get("examples", (f"documentledger {entry.path}",))
+        summary_lines = [entry.summary]
+        if extended_description:
+            summary_lines.extend(["", extended_description])
+        example_lines = [line for example in examples for line in ("```bash", *example.splitlines(), "```", "")]
         lines.extend(
             [
                 f"## {entry.path}",
                 "",
-                entry.summary,
+                *summary_lines,
                 "",
                 f"- **Effect:** `{entry.effect}`",
                 f"- **Audience:** `{entry.audience}`",
@@ -116,12 +139,11 @@ def render() -> str:
                 "",
                 "### JSON result and errors",
                 "",
-                json_contract_description,
+                json_result,
                 "",
-                "### Example",
+                "### Examples",
                 "",
-                f"```bash\ndocumentledger {entry.path}\n```",
-                "",
+                *example_lines,
             ]
         )
     lines.extend(
